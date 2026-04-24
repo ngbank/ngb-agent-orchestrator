@@ -1,0 +1,21 @@
+# Agent Orchestrator Dependencies
+
+# CLI Framework
+click>=8.1.7
+
+# Environment Management
+python-dotenv>=1.0.0
+
+# Data Validation
+pydantic>=2.0.0
+
+# Database
+sqlalchemy>=2.0.0
+
+# JIRA Integration
+jira>=3.5.0
+
+# Goose Integration
+# Note: Install Goose separately following official documentation
+# Goose is typically installed via: pip install goose-toolkit
+# or as a standalone CLI tool
