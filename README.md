@@ -69,7 +69,11 @@ venv\Scripts\activate     # On Windows
 ### Step 3: Install Dependencies (3 min)
 
 ```bash
+# Install core dependencies
 pip install -r requirements.txt
+
+# Optional: Install development dependencies (for testing)
+pip install -r requirements-dev.txt
 ```
 
 This installs:
@@ -79,6 +83,12 @@ This installs:
 - SQLAlchemy (database ORM)
 - jira (JIRA API client)
 - goose-ai (Goose integration)
+
+**Development dependencies** (optional):
+- pytest (testing framework)
+- pytest-cov (coverage reporting)
+- pytest-mock (mocking utilities)
+- black, flake8, mypy, isort (code quality tools)
 
 ### Step 4: Configure Environment (5 min)
 
@@ -140,17 +150,22 @@ python dispatcher/cli.py goose
 ngb-agent-orchestrator/
 ├── dispatcher/              # Python CLI and workflow orchestration logic
 │   ├── __init__.py         # Package initialization
-│   └── cli.py              # Main CLI entry point
+│   ├── cli.py              # Main CLI entry point
+│   └── jira_client.py      # JIRA ticket fetching module
 ├── recipes/                 # Goose YAML recipe files
 │   └── .gitkeep            # Keeps directory in git
 ├── schemas/                 # JSON schemas for WorkPlan and validation
 │   └── .gitkeep            
 ├── state/                   # SQLite database for orchestration state
 │   └── .gitkeep            # (directory is gitignored)
+├── tests/                   # Test suite
+│   ├── __init__.py         # Test package initialization
+│   └── test_jira_client.py # JIRA client tests
 ├── .env.example            # Template for environment variables
 ├── .env                    # Your local credentials (DO NOT COMMIT)
 ├── .gitignore              # Git ignore rules
 ├── requirements.txt        # Python dependencies
+├── requirements-dev.txt    # Development/testing dependencies
 └── README.md               # This file
 ```
 
@@ -158,10 +173,11 @@ ngb-agent-orchestrator/
 
 | Directory    | Purpose                                                    |
 |--------------|------------------------------------------------------------|
-| `dispatcher/` | Core Python orchestration logic and CLI commands          |
+| `dispatcher/` | Core Python orchestration logic, CLI commands, and JIRA integration |
 | `recipes/`    | Goose YAML recipes for AI-powered automation workflows   |
 | `schemas/`    | JSON schemas for validating WorkPlans and workflow data   |
 | `state/`      | SQLite database files for persistent state (gitignored)   |
+| `tests/`      | Comprehensive test suite for all modules                  |
 
 ---
 
@@ -241,7 +257,132 @@ python dispatcher/cli.py status --help
 
 ---
 
+### JIRA Client Module
+
+The orchestrator includes a Python module for fetching JIRA tickets programmatically. This module provides structured access to JIRA ticket data for building planning context and workflow automation.
+
+#### Basic Usage
+
+```python
+from dispatcher.jira_client import get_ticket, JiraTicketNotFoundError
+
+try:
+    # Fetch a JIRA ticket by key
+    ticket = get_ticket('AOS-34')
+    
+    # Access ticket fields
+    print(f"Title: {ticket.title}")
+    print(f"Status: {ticket.status}")
+    print(f"Description: {ticket.description}")
+    print(f"Labels: {', '.join(ticket.labels)}")
+    
+except JiraTicketNotFoundError as e:
+    print(f"Error: {e}")
+```
+
+#### Ticket Data Structure
+
+The `JiraTicket` dataclass provides structured access to ticket information:
+
+```python
+@dataclass
+class JiraTicket:
+    key: str              # Ticket key (e.g., 'AOS-34')
+    title: str            # Ticket summary/title
+    description: str      # Full ticket description
+    labels: List[str]     # List of labels
+    status: str           # Current status (e.g., 'To Do', 'In Progress')
+```
+
+#### Advanced Usage
+
+For more control, use the `JiraClient` class directly:
+
+```python
+from dispatcher.jira_client import JiraClient, JiraConfigurationError
+
+try:
+    # Create a client instance
+    client = JiraClient()
+    
+    # Fetch multiple tickets
+    ticket1 = client.get_ticket('AOS-34')
+    ticket2 = client.get_ticket('AOS-35')
+    
+    # Process tickets
+    for ticket in [ticket1, ticket2]:
+        print(f"{ticket.key}: {ticket.title} [{ticket.status}]")
+        
+except JiraConfigurationError as e:
+    print(f"Configuration error: {e}")
+```
+
+#### Error Handling
+
+The JIRA client provides specific exception types for different error scenarios:
+
+- **`JiraConfigurationError`**: Missing or invalid environment variables
+- **`JiraAuthenticationError`**: Authentication failures or invalid credentials
+- **`JiraTicketNotFoundError`**: Ticket does not exist (404)
+
+```python
+from dispatcher.jira_client import (
+    get_ticket,
+    JiraConfigurationError,
+    JiraAuthenticationError,
+    JiraTicketNotFoundError
+)
+
+try:
+    ticket = get_ticket('INVALID-999')
+except JiraConfigurationError as e:
+    # Handle missing JIRA_URL, JIRA_EMAIL, or JIRA_API_TOKEN
+    print(f"Configuration error: {e}")
+except JiraAuthenticationError as e:
+    # Handle authentication failures
+    print(f"Authentication error: {e}")
+except JiraTicketNotFoundError as e:
+    # Handle non-existent tickets
+    print(f"Ticket not found: {e}")
+```
+
+#### Requirements
+
+The JIRA client requires the following environment variables to be set in your `.env` file:
+
+- `JIRA_URL`: Your JIRA instance URL
+- `JIRA_EMAIL`: Your JIRA account email
+- `JIRA_API_TOKEN`: Your JIRA API token
+
+See the [Configuration](#configuration) section for details on obtaining these credentials.
+
+---
+
 ## 🛠️ Development
+
+### Running Tests
+
+The project includes a comprehensive test suite for the JIRA client module:
+
+```bash
+# Install development dependencies
+pip install -r requirements-dev.txt
+
+# Run all tests
+pytest tests/ -v
+
+# Run specific test file
+pytest tests/test_jira_client.py -v
+
+# Run with coverage report
+pytest tests/ --cov=dispatcher --cov-report=term
+```
+
+The test suite includes:
+- ✅ Happy path scenarios with complete ticket data
+- ✅ Edge cases (empty descriptions, missing labels)
+- ✅ Error handling (404, authentication failures)
+- ✅ Configuration validation
 
 ### Adding New CLI Commands
 
@@ -272,16 +413,6 @@ steps:
 ### Managing State
 
 The orchestrator uses SQLite for state management. Database files are stored in `state/` and are automatically excluded from git.
-
-### Running Tests
-
-```bash
-# Install testing dependencies
-pip install pytest pytest-cov
-
-# Run tests (when test suite is added)
-pytest
-```
 
 ---
 
