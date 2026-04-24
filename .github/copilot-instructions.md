@@ -40,3 +40,4 @@ git checkout -b feature/PROJ-123+brief-summary
 git checkout main
 git pull origin main
 git branch -d feature/PROJ-123+brief-summary
+```
