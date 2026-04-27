@@ -306,8 +306,12 @@ def test_get_db_path_default(test_db):
 
 def test_get_db_path_from_env(test_db):
     """Test that DB path is read from environment."""
+    from unittest.mock import patch
+    
     custom_path = "custom/path/test.db"
     os.environ['DB_PATH'] = custom_path
     
-    db_path = state_store.get_db_path()
-    assert db_path == custom_path
+    # Mock mkdir to prevent directory creation during test
+    with patch('pathlib.Path.mkdir'):
+        db_path = state_store.get_db_path()
+        assert db_path == custom_path

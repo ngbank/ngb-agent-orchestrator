@@ -258,6 +258,121 @@ python dispatcher/cli.py status --help
 
 ---
 
+### Workflow Orchestration
+
+The orchestrator provides a main dispatcher entry point for executing complete workflows from JIRA tickets.
+
+#### Run a Workflow
+
+Execute a complete workflow for a JIRA ticket:
+
+```bash
+# Set PYTHONPATH to enable imports
+export PYTHONPATH=.
+
+# Run a workflow
+python dispatcher/run.py --ticket AOS-36
+```
+
+Output:
+```
+🚀 Starting workflow for ticket: AOS-36
+🔧 Initializing JIRA client...
+📥 Fetching ticket AOS-36...
+✅ Ticket fetched: CLI Dispatcher Entry Point
+🔍 Checking for duplicate workflows...
+📝 Creating workflow record...
+✅ Workflow created: b04fd4e0-1edc-4f95-8489-da914470b58d
+⚙️  Executing workflow stages...
+📋 Workflow created for ticket AOS-36
+   Title: CLI Dispatcher Entry Point
+   Status: In Progress
+✅ Workflow stages completed (placeholder)
+🎉 Workflow completed successfully
+```
+
+#### Dry Run Mode
+
+Preview what would happen without executing any changes:
+
+```bash
+python dispatcher/run.py --ticket AOS-36 --dry-run
+```
+
+Output:
+```
+🚀 Starting workflow for ticket: AOS-36
+[DRY RUN] Mode enabled - no changes will be made
+[DRY RUN] Would fetch ticket: AOS-36
+[DRY RUN] Would check for duplicate workflows
+[DRY RUN] Would create workflow for ticket: AOS-36
+[DRY RUN] Would execute workflow stages
+[DRY RUN] Would transition to completed
+✅ Dry run completed successfully
+```
+
+**Dry-run mode:**
+- Validates JIRA configuration
+- Does NOT call JIRA API
+- Does NOT create database records
+- Does NOT execute workflow stages
+- Perfect for testing and validation
+
+#### Duplicate Detection
+
+The dispatcher prevents running multiple workflows for the same ticket simultaneously:
+
+```bash
+# First run - succeeds
+python dispatcher/run.py --ticket AOS-36
+
+# Second run while first is in-progress - rejected
+python dispatcher/run.py --ticket AOS-36
+# Output: ❌ Workflow already in progress for AOS-36
+```
+
+**Re-running completed workflows:**
+- Completed workflows can be re-run
+- A warning is shown indicating previous runs exist
+- Each run creates a separate workflow record with full audit trail
+
+#### Workflow Lifecycle
+
+Workflows progress through the following states:
+
+1. **`pending`** - Workflow created, not yet started
+2. **`in_progress`** - Actively executing stages
+3. **`completed`** - Successfully finished all stages
+4. **`failed`** - Encountered unrecoverable error
+
+All state transitions are logged to the audit log with timestamps, actor, and reason.
+
+#### Error Handling
+
+The dispatcher provides comprehensive error handling:
+
+```bash
+# Invalid ticket format
+python dispatcher/run.py --ticket invalid
+# Output: ❌ Invalid ticket format. Expected format: PROJECT-123
+
+# Ticket not found
+python dispatcher/run.py --ticket NOTFOUND-999
+# Output: ❌ Ticket not found: Issue does not exist
+
+# Missing JIRA credentials
+python dispatcher/run.py --ticket AOS-36
+# Output: ❌ JIRA configuration error: Missing required environment variables
+```
+
+**Exception behavior:**
+- Configuration errors: Exit without creating workflow
+- Ticket errors: Create workflow, mark as failed, log to audit
+- Runtime errors: Mark workflow as failed, log exception details
+- Keyboard interrupt (Ctrl+C): Mark workflow as failed, clean exit
+
+---
+
 ### JIRA Client Module
 
 The orchestrator includes a Python module for fetching JIRA tickets programmatically. This module provides structured access to JIRA ticket data for building planning context and workflow automation.
