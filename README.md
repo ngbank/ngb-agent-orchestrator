@@ -83,6 +83,7 @@ This installs:
 - Pydantic (data validation)
 - SQLAlchemy (database ORM)
 - jira (JIRA API client)
+- litellm (model abstraction proxy layer)
 - goose-ai (Goose integration)
 
 **Development dependencies** (optional):
@@ -90,6 +91,50 @@ This installs:
 - pytest-cov (coverage reporting)
 - pytest-mock (mocking utilities)
 - black, flake8, mypy, isort (code quality tools)
+
+### Step 3.5: Start the LiteLLM Proxy
+
+LiteLLM provides a unified OpenAI-compatible API endpoint that routes model calls to your chosen LLM backend (Anthropic, OpenAI, etc.). The proxy **must be running** before any `goose run` command is executed.
+
+```bash
+# Open a dedicated terminal and start the proxy
+litellm --config config/litellm.yaml --port 4000
+```
+
+You should see:
+```
+LiteLLM: Proxy running on http://0.0.0.0:4000
+```
+
+> **Tip:** Keep this terminal open. All Goose recipe invocations route model calls through this proxy.
+
+#### Calling the Proxy Manually
+
+**Authentication** depends on whether `LITELLM_MASTER_KEY` is set in your `.env`:
+
+- **With `LITELLM_MASTER_KEY` set** (default) — all requests require an `Authorization` header:
+
+  ```bash
+  # List registered models
+  curl http://localhost:4000/models \
+    -H "Authorization: Bearer sk-local-master-key"
+
+  # Send a chat request to a specific model
+  curl http://localhost:4000/v1/chat/completions \
+    -H "Authorization: Bearer sk-local-master-key" \
+    -H "Content-Type: application/json" \
+    -d '{"model": "azure-gpt4", "messages": [{"role": "user", "content": "Hello"}]}'
+  ```
+
+- **Without `LITELLM_MASTER_KEY`** (remove it from `.env`) — no auth required:
+
+  ```bash
+  curl http://localhost:4000/models
+  ```
+
+Available model names (defined in `config/litellm.yaml`): `azure-gpt4` | `claude` | `gpt4o`
+
+---
 
 ### Step 4: Configure Environment (5 min)
 
@@ -107,7 +152,9 @@ nano .env
 1. **JIRA_URL**: Your JIRA instance URL (default: `https://mirandags.atlassian.net`)
 2. **JIRA_EMAIL**: Your JIRA email address
 3. **JIRA_API_TOKEN**: Generate at [Atlassian API Tokens](https://id.atlassian.com/manage-profile/security/api-tokens)
-4. **GOOSE_API_KEY**: Your Goose API key (if applicable)
+4. **LITELLM_MASTER_KEY**: Auth key for the local LiteLLM proxy (any string, e.g. `sk-local-master-key`)
+5. **LITELLM_MODEL**: Model identifier for your chosen backend (e.g. `anthropic/claude-3-5-sonnet-20241022`)
+6. **ANTHROPIC_API_KEY** / **OPENAI_API_KEY**: API key for your chosen LLM provider
 
 ### Step 5: Initialize and Verify (4 min)
 
@@ -188,15 +235,22 @@ ngb-agent-orchestrator/
 
 All configuration is managed through the `.env` file. **Never commit this file to version control.**
 
-| Variable           | Description                              | Required | Example                              |
-|--------------------|------------------------------------------|----------|--------------------------------------|
-| `JIRA_URL`         | Your JIRA Cloud instance URL             | Yes      | `https://mirandags.atlassian.net`   |
-| `JIRA_EMAIL`       | Your JIRA account email                  | Yes      | `user@example.com`                  |
-| `JIRA_API_TOKEN`   | JIRA API token for authentication        | Yes      | `ATATxxx...`                        |
-| `GOOSE_API_KEY`    | Goose API key (if required)              | Optional | `sk-...`                            |
-| `DATABASE_PATH`    | Path to SQLite database                  | Optional | `./state/orchestrator.db`           |
-| `DEFAULT_PROJECT_KEY` | Default JIRA project key              | Optional | `AOS`                               |
-| `LOG_LEVEL`        | Logging level                            | Optional | `INFO` / `DEBUG` / `ERROR`          |
+| Variable              | Description                                          | Required | Example                                        |
+|-----------------------|------------------------------------------------------|----------|------------------------------------------------|
+| `JIRA_URL`            | Your JIRA Cloud instance URL                         | Yes      | `https://mirandags.atlassian.net`              |
+| `JIRA_EMAIL`          | Your JIRA account email                              | Yes      | `user@example.com`                             |
+| `JIRA_API_TOKEN`      | JIRA API token for authentication                    | Yes      | `ATATxxx...`                                   |
+| `LITELLM_MASTER_KEY`  | Auth key for the LiteLLM proxy API                   | Yes      | `sk-local-master-key`                          |
+| `LITELLM_MODEL`       | Model identifier passed to the provider              | Yes      | `anthropic/claude-3-5-sonnet-20241022`         |
+| `LITELLM_BASE_URL`    | URL of the running LiteLLM proxy                     | Yes      | `http://localhost:4000`                        |
+| `ANTHROPIC_API_KEY`   | Anthropic API key (when using Anthropic backend)     | Provider | `sk-ant-...`                                   |
+| `OPENAI_API_KEY`      | OpenAI API key (when using OpenAI backend)           | Provider | `sk-...`                                       |
+| `GOOSE_PROVIDER`      | Goose model provider — point at LiteLLM              | Yes      | `openai`                                       |
+| `GOOSE_MODEL`         | Model name Goose uses (matches `model_name` in yaml) | Yes      | `default`                                      |
+| `GOOSE_BASE_URL`      | Goose model base URL — point at LiteLLM proxy        | Yes      | `http://localhost:4000`                        |
+| `DATABASE_PATH`       | Path to SQLite database                              | Optional | `./state/orchestrator.db`                      |
+| `DEFAULT_PROJECT_KEY` | Default JIRA project key                             | Optional | `AOS`                                          |
+| `LOG_LEVEL`           | Logging level                                        | Optional | `INFO` / `DEBUG` / `ERROR`                     |
 
 ### Obtaining JIRA Credentials
 

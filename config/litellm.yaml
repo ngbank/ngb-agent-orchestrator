@@ -1,0 +1,39 @@
+# LiteLLM Proxy Configuration
+# Runs as a local OpenAI-compatible endpoint (default: http://localhost:4000)
+# All sensitive values are injected from environment variables — do NOT hardcode credentials here.
+#
+# Start the proxy:
+#   litellm --config config/litellm.yaml --port 4000
+#
+# Callers select a model by passing "model": "<model_name>" in the request body.
+# GOOSE_MODEL in .env sets the default model Goose uses.
+
+model_list:
+  # Azure AI Foundry / Azure OpenAI
+  - model_name: azure-gpt4
+    litellm_params:
+      model: os.environ/AZURE_MODEL   # full string e.g. "azure/gpt-4.1"
+      api_key: os.environ/AZURE_API_KEY
+      api_base: os.environ/AZURE_API_BASE
+      api_version: os.environ/AZURE_API_VERSION
+
+  # Anthropic
+  - model_name: claude
+    litellm_params:
+      model: anthropic/claude-3-5-sonnet-20241022
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # OpenAI
+  - model_name: gpt4o
+    litellm_params:
+      model: gpt-4o
+      api_key: os.environ/OPENAI_API_KEY
+
+general_settings:
+  # master_key requires a connected PostgreSQL database for key management.
+  # For local development, auth is omitted — the proxy is only accessible on localhost.
+  # Uncomment and configure a database to enable key auth in shared/deployed environments:
+  # master_key: ${LITELLM_MASTER_KEY}
+
+litellm_settings:
+  drop_params: true  # silently drop unsupported provider params for cross-provider compatibility

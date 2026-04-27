@@ -16,6 +16,10 @@ sqlalchemy>=2.0.0
 # JIRA Integration
 jira>=3.5.0
 
+# LiteLLM — model abstraction proxy layer
+# [proxy] extras required for running the proxy server (includes websockets, etc.)
+litellm[proxy]>=1.0.0
+
 # Goose Integration
 # Note: Install Goose separately following official documentation
 # Goose is typically installed via: pip install goose-toolkit
