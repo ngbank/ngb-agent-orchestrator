@@ -30,7 +30,10 @@ model_list:
       api_key: ${OPENAI_API_KEY}
 
 general_settings:
-  master_key: ${LITELLM_MASTER_KEY}  # auth key for the proxy API
+  # master_key requires a connected PostgreSQL database for key management.
+  # For local development, auth is omitted — the proxy is only accessible on localhost.
+  # Uncomment and configure a database to enable key auth in shared/deployed environments:
+  # master_key: ${LITELLM_MASTER_KEY}
 
 litellm_settings:
   drop_params: true  # silently drop unsupported provider params for cross-provider compatibility
