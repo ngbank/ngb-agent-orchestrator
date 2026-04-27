@@ -31,6 +31,11 @@ from state.state_store import (
     get_workflow_by_ticket,
 )
 from state.workflow_status import WorkflowStatus
+from dispatcher.work_plan_validator import (
+    validate_work_plan,
+    WorkPlan,
+    WorkPlanValidationError,
+)
 
 
 def check_for_duplicate_workflow(ticket_key: str) -> Optional[str]:
@@ -63,7 +68,12 @@ def check_for_duplicate_workflow(ticket_key: str) -> Optional[str]:
     return None
 
 
-def execute_workflow(workflow_id: str, ticket: JiraTicket, dry_run: bool) -> None:
+def execute_workflow(
+    workflow_id: str,
+    ticket: JiraTicket,
+    dry_run: bool,
+    work_plan_data: dict | None = None,
+) -> None:
     """
     Execute workflow stages in sequence.
     
@@ -71,9 +81,10 @@ def execute_workflow(workflow_id: str, ticket: JiraTicket, dry_run: bool) -> Non
         workflow_id: UUID of the workflow
         ticket: JIRA ticket data
         dry_run: If True, only print actions without executing
+        work_plan_data: Raw WorkPlan dict from the planner. If provided,
+            it is validated against the schema before execution proceeds.
     
     TODO: Future tickets will implement:
-    - Plan generation (AOS-37)
     - Code execution via Goose
     - PR creation
     """
@@ -90,18 +101,44 @@ def execute_workflow(workflow_id: str, ticket: JiraTicket, dry_run: bool) -> Non
         click.echo(f"[DRY RUN] Would execute workflow stages for {ticket.key}")
         click.echo(f"[DRY RUN]   Title: {ticket.title}")
         click.echo(f"[DRY RUN]   Status: {ticket.status}")
+        if work_plan_data:
+            click.echo(f"[DRY RUN] Would validate WorkPlan against schema")
         return
-    
+
     click.echo(f"📋 Workflow {workflow_id} created for ticket {ticket.key}")
     click.echo(f"   Title: {ticket.title}")
     click.echo(f"   Status: {ticket.status}")
     click.echo(f"   Labels: {', '.join(ticket.labels) if ticket.labels else 'none'}")
-    
-    # Placeholder for future stage execution
-    # Stage 1: Generate plan (AOS-37)
-    # Stage 2: Execute code (Goose integration)
-    # Stage 3: Create PR
-    
+
+    # Stage 1: Validate WorkPlan
+    work_plan: WorkPlan | None = None
+    if work_plan_data is not None:
+        click.echo("🔍 Validating WorkPlan...")
+        try:
+            work_plan = validate_work_plan(work_plan_data)
+            click.echo(f"✅ WorkPlan validated (status: {work_plan.status})")
+            if work_plan.status == 'blocked':
+                update_status(
+                    workflow_id,
+                    WorkflowStatus.FAILED,
+                    actor='dispatcher',
+                    reason='Planner marked WorkPlan as blocked'
+                )
+                click.echo("❌ WorkPlan status is 'blocked' — workflow cannot proceed.", err=True)
+                return
+        except WorkPlanValidationError as e:
+            update_status(
+                workflow_id,
+                WorkflowStatus.FAILED,
+                actor='dispatcher',
+                reason=str(e)
+            )
+            click.echo(f"❌ {e}", err=True)
+            return
+
+    # Stage 2: Execute code (Goose integration — future ticket)
+    # Stage 3: Create PR (future ticket)
+
     click.echo("✅ Workflow stages completed (placeholder)")
 
 
