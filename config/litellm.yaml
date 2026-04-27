@@ -1,0 +1,18 @@
+# LiteLLM Proxy Configuration
+# Runs as a local OpenAI-compatible endpoint (default: http://localhost:4000)
+# All sensitive values are injected from environment variables — do NOT hardcode credentials here.
+#
+# Start the proxy:
+#   litellm --config config/litellm.yaml --port 4000
+
+model_list:
+  - model_name: default
+    litellm_params:
+      model: ${LITELLM_MODEL}        # e.g. "anthropic/claude-3-5-sonnet-20241022" or "gpt-4o"
+      api_key: ${ANTHROPIC_API_KEY}  # swap for OPENAI_API_KEY when using OpenAI backend
+
+general_settings:
+  master_key: ${LITELLM_MASTER_KEY}  # auth key for the proxy API
+
+litellm_settings:
+  drop_params: true  # silently drop unsupported provider params for cross-provider compatibility
