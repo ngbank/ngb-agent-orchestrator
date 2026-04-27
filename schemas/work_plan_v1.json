@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "work_plan_v1",
+  "title": "WorkPlan",
+  "description": "Contract between the planner (Goose) and the dispatcher. Produced by the planner recipe and validated before workflow execution proceeds.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "ticket_key",
+    "summary",
+    "approach",
+    "tasks",
+    "risks",
+    "questions_for_reviewer",
+    "status"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Schema version identifier. Must be '1.0' for this version.",
+      "enum": ["1.0"]
+    },
+    "ticket_key": {
+      "type": "string",
+      "description": "JIRA ticket key, e.g. 'MINIBANK-123'.",
+      "pattern": "^[A-Z][A-Z0-9]+-[0-9]+$"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Brief human-readable summary of the work plan.",
+      "minLength": 1
+    },
+    "approach": {
+      "type": "string",
+      "description": "Description of the overall approach the planner intends to take.",
+      "minLength": 1
+    },
+    "tasks": {
+      "type": "array",
+      "description": "Ordered list of discrete tasks to execute.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "description", "files_likely_affected"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Sequential task identifier starting from 1.",
+            "minimum": 1
+          },
+          "description": {
+            "type": "string",
+            "description": "What this task involves.",
+            "minLength": 1
+          },
+          "files_likely_affected": {
+            "type": "array",
+            "description": "List of file paths expected to be created or modified.",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "risks": {
+      "type": "array",
+      "description": "List of identified risks or concerns.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "questions_for_reviewer": {
+      "type": "array",
+      "description": "Open questions the planner has for a human reviewer.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "status": {
+      "type": "string",
+      "description": "Planner confidence signal: 'pass' = ready to proceed, 'concerns' = proceed with caution, 'blocked' = cannot proceed.",
+      "enum": ["pass", "concerns", "blocked"]
+    }
+  }
+}
