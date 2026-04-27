@@ -1,5 +1,6 @@
 """Workflow state tracking module."""
 
+from .workflow_status import WorkflowStatus
 from .state_store import (
     create_workflow,
     update_status,
@@ -10,6 +11,7 @@ from .state_store import (
 )
 
 __all__ = [
+    'WorkflowStatus',
     'create_workflow',
     'update_status',
     'get_workflow',

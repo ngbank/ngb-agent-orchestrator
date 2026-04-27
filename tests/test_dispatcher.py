@@ -9,6 +9,7 @@ from click.testing import CliRunner
 from dispatcher.run import run, check_for_duplicate_workflow, execute_workflow
 from dispatcher.jira_client import JiraTicket, JiraTicketNotFoundError, JiraConfigurationError
 from state import state_store
+from state.workflow_status import WorkflowStatus
 
 
 @pytest.fixture
@@ -76,13 +77,13 @@ def test_run_creates_workflow(test_db, mock_jira_client, cli_runner):
     workflows = state_store.get_workflow_by_ticket('TEST-123')
     assert len(workflows) == 1
     assert workflows[0]['ticket_key'] == 'TEST-123'
-    assert workflows[0]['status'] == 'completed'
+    assert workflows[0]['status'] == WorkflowStatus.COMPLETED
 
 
 def test_run_rejects_duplicate(test_db, mock_jira_client, cli_runner):
     """Test that duplicate detection prevents running workflows twice."""
     # Create an in-progress workflow
-    workflow_id = state_store.create_workflow('TEST-123', status='in_progress')
+    workflow_id = state_store.create_workflow('TEST-123', status=WorkflowStatus.IN_PROGRESS)
     
     # Try to run again
     result = cli_runner.invoke(run, ['--ticket', 'TEST-123'])
@@ -96,7 +97,7 @@ def test_run_rejects_duplicate(test_db, mock_jira_client, cli_runner):
 def test_run_allows_rerun_after_completion(test_db, mock_jira_client, cli_runner):
     """Test that completed workflows can be re-run."""
     # Create a completed workflow
-    workflow_id = state_store.create_workflow('TEST-123', status='completed')
+    workflow_id = state_store.create_workflow('TEST-123', status=WorkflowStatus.COMPLETED)
     
     # Try to run again - should succeed with warning
     result = cli_runner.invoke(run, ['--ticket', 'TEST-123'])
@@ -209,17 +210,17 @@ def test_check_for_duplicate_workflow(test_db):
     assert result is None
     
     # Create pending workflow - should return workflow_id
-    workflow_id = state_store.create_workflow('TEST-999', status='pending')
+    workflow_id = state_store.create_workflow('TEST-999', status=WorkflowStatus.PENDING)
     result = check_for_duplicate_workflow('TEST-999')
     assert result == workflow_id
     
     # Update to completed - should return None
-    state_store.update_status(workflow_id, 'completed')
+    state_store.update_status(workflow_id, WorkflowStatus.COMPLETED)
     result = check_for_duplicate_workflow('TEST-999')
     assert result is None
     
     # Create in_progress workflow - should return workflow_id
-    workflow_id2 = state_store.create_workflow('TEST-999', status='in_progress')
+    workflow_id2 = state_store.create_workflow('TEST-999', status=WorkflowStatus.IN_PROGRESS)
     result = check_for_duplicate_workflow('TEST-999')
     assert result == workflow_id2
 
@@ -234,14 +235,14 @@ def test_execute_workflow_placeholder(test_db, capsys):
         status='To Do'
     )
     
-    workflow_id = state_store.create_workflow('TEST-123', status='pending')
+    workflow_id = state_store.create_workflow('TEST-123', status=WorkflowStatus.PENDING)
     
     # Execute workflow (not dry-run)
     execute_workflow(workflow_id, ticket, dry_run=False)
     
     # Verify workflow transitioned to in_progress
     workflow = state_store.get_workflow(workflow_id)
-    assert workflow['status'] == 'in_progress'
+    assert workflow['status'] == WorkflowStatus.IN_PROGRESS
     
     # Check audit log
     audit_log = state_store.get_audit_log(workflow_id)
@@ -259,14 +260,14 @@ def test_execute_workflow_dry_run(test_db, capsys):
         status='To Do'
     )
     
-    workflow_id = state_store.create_workflow('TEST-123', status='pending')
+    workflow_id = state_store.create_workflow('TEST-123', status=WorkflowStatus.PENDING)
     
     # Execute workflow in dry-run mode
     execute_workflow(workflow_id, ticket, dry_run=True)
     
     # Verify workflow status unchanged
     workflow = state_store.get_workflow(workflow_id)
-    assert workflow['status'] == 'pending'
+    assert workflow['status'] == WorkflowStatus.PENDING
 
 
 def test_run_keyboard_interrupt(test_db, cli_runner):
