@@ -15,7 +15,9 @@ dist/
 build/
 
 # State and Database
-state/
+state/*.db
+state/*.sqlite
+state/*.sqlite3
 *.db
 *.sqlite
 *.sqlite3

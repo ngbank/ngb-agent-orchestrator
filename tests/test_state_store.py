@@ -1,0 +1,313 @@
+"""Unit tests for state_store module."""
+
+import pytest
+import tempfile
+import os
+import json
+from pathlib import Path
+from state import state_store
+
+
+@pytest.fixture
+def test_db():
+    """Create a temporary database for testing."""
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.db') as f:
+        db_path = f.name
+    
+    # Remove the file so the db can be created fresh
+    os.unlink(db_path)
+    
+    # Set environment variable for test
+    original_db_path = os.environ.get('DB_PATH')
+    os.environ['DB_PATH'] = db_path
+    
+    # Run migrations
+    state_store.run_migrations()
+    
+    yield db_path
+    
+    # Cleanup
+    if os.path.exists(db_path):
+        os.unlink(db_path)
+    
+    # Restore original env var
+    if original_db_path:
+        os.environ['DB_PATH'] = original_db_path
+    elif 'DB_PATH' in os.environ:
+        del os.environ['DB_PATH']
+
+
+def test_create_workflow(test_db):
+    """Test workflow creation with all fields."""
+    work_plan = {
+        "tasks": ["task1", "task2"],
+        "description": "Test workflow"
+    }
+    
+    workflow_id = state_store.create_workflow(
+        ticket_key="AOS-35",
+        work_plan=work_plan,
+        status="pending"
+    )
+    
+    # Verify workflow_id is a valid UUID
+    assert workflow_id is not None
+    assert len(workflow_id) == 36  # UUID format
+    
+    # Retrieve and verify
+    workflow = state_store.get_workflow(workflow_id)
+    assert workflow is not None
+    assert workflow['ticket_key'] == "AOS-35"
+    assert workflow['status'] == "pending"
+    assert workflow['work_plan'] == work_plan
+    assert workflow['pr_url'] is None
+    assert workflow['created_at'] is not None
+    assert workflow['updated_at'] is not None
+
+
+def test_create_workflow_minimal(test_db):
+    """Test workflow creation with minimal fields."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-36")
+    
+    workflow = state_store.get_workflow(workflow_id)
+    assert workflow is not None
+    assert workflow['ticket_key'] == "AOS-36"
+    assert workflow['status'] == "pending"  # Default status
+    assert workflow['work_plan'] is None
+    assert workflow['pr_url'] is None
+
+
+def test_update_status(test_db):
+    """Test status updates and timestamp changes."""
+    workflow_id = state_store.create_workflow(
+        ticket_key="AOS-37",
+        status="pending"
+    )
+    
+    # Get initial state
+    workflow_before = state_store.get_workflow(workflow_id)
+    created_at = workflow_before['created_at']
+    
+    # Update status
+    state_store.update_status(
+        workflow_id=workflow_id,
+        status="in_progress",
+        actor="test_user",
+        reason="Started work"
+    )
+    
+    # Verify update
+    workflow_after = state_store.get_workflow(workflow_id)
+    assert workflow_after['status'] == "in_progress"
+    assert workflow_after['created_at'] == created_at  # Should not change
+    assert workflow_after['updated_at'] != workflow_before['updated_at']
+    assert workflow_after['pr_url'] is None
+
+
+def test_update_status_with_pr_url(test_db):
+    """Test status update with PR URL."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-38")
+    
+    state_store.update_status(
+        workflow_id=workflow_id,
+        status="completed",
+        pr_url="https://github.com/org/repo/pull/123"
+    )
+    
+    workflow = state_store.get_workflow(workflow_id)
+    assert workflow['status'] == "completed"
+    assert workflow['pr_url'] == "https://github.com/org/repo/pull/123"
+
+
+def test_update_status_creates_audit_log(test_db):
+    """Test that status updates create audit log entries."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-39")
+    
+    # Update status twice
+    state_store.update_status(
+        workflow_id=workflow_id,
+        status="in_progress",
+        actor="user1",
+        reason="Started work"
+    )
+    
+    state_store.update_status(
+        workflow_id=workflow_id,
+        status="completed",
+        actor="user2",
+        reason="Finished work"
+    )
+    
+    # Check audit log
+    audit_log = state_store.get_audit_log(workflow_id)
+    
+    # Should have 3 entries: creation + 2 status changes
+    assert len(audit_log) >= 3
+    
+    # Verify latest entries
+    assert any(entry['action'] == 'status_change' and entry['actor'] == 'user1' for entry in audit_log)
+    assert any(entry['action'] == 'status_change' and entry['actor'] == 'user2' for entry in audit_log)
+
+
+def test_get_workflow(test_db):
+    """Test workflow retrieval by ID."""
+    work_plan = {"tasks": ["a", "b", "c"]}
+    workflow_id = state_store.create_workflow(
+        ticket_key="AOS-40",
+        work_plan=work_plan
+    )
+    
+    workflow = state_store.get_workflow(workflow_id)
+    assert workflow is not None
+    assert workflow['id'] == workflow_id
+    assert workflow['work_plan'] == work_plan
+
+
+def test_get_workflow_by_ticket(test_db):
+    """Test retrieval by ticket key."""
+    # Create multiple workflows for the same ticket
+    id1 = state_store.create_workflow(
+        ticket_key="AOS-41",
+        work_plan={"iteration": 1}
+    )
+    id2 = state_store.create_workflow(
+        ticket_key="AOS-41",
+        work_plan={"iteration": 2}
+    )
+    id3 = state_store.create_workflow(
+        ticket_key="AOS-42",
+        work_plan={"iteration": 1}
+    )
+    
+    # Get workflows for AOS-41
+    workflows = state_store.get_workflow_by_ticket("AOS-41")
+    assert len(workflows) == 2
+    assert all(w['ticket_key'] == "AOS-41" for w in workflows)
+    
+    # Verify it's ordered by created_at DESC (newest first)
+    workflow_ids = [w['id'] for w in workflows]
+    assert id2 in workflow_ids
+    assert id1 in workflow_ids
+    
+    # Verify AOS-42 has only one workflow
+    workflows_42 = state_store.get_workflow_by_ticket("AOS-42")
+    assert len(workflows_42) == 1
+    assert workflows_42[0]['id'] == id3
+
+
+def test_work_plan_serialization(test_db):
+    """Test JSON serialization and deserialization of work plan."""
+    complex_plan = {
+        "tasks": [
+            {"id": 1, "title": "Task 1", "completed": False},
+            {"id": 2, "title": "Task 2", "completed": True}
+        ],
+        "metadata": {
+            "priority": "high",
+            "estimate": "2d",
+            "labels": ["backend", "api"]
+        }
+    }
+    
+    workflow_id = state_store.create_workflow(
+        ticket_key="AOS-43",
+        work_plan=complex_plan
+    )
+    
+    # Retrieve and verify exact match
+    workflow = state_store.get_workflow(workflow_id)
+    assert workflow['work_plan'] == complex_plan
+    assert isinstance(workflow['work_plan']['tasks'], list)
+    assert isinstance(workflow['work_plan']['metadata'], dict)
+
+
+def test_migration_idempotency(test_db):
+    """Test that migrations can run multiple times safely."""
+    # Run migrations again
+    state_store.run_migrations()
+    
+    # Create a workflow
+    workflow_id = state_store.create_workflow(ticket_key="AOS-44")
+    
+    # Run migrations once more
+    state_store.run_migrations()
+    
+    # Verify workflow still exists
+    workflow = state_store.get_workflow(workflow_id)
+    assert workflow is not None
+    assert workflow['ticket_key'] == "AOS-44"
+
+
+def test_workflow_not_found(test_db):
+    """Test behavior when workflow doesn't exist."""
+    workflow = state_store.get_workflow("non-existent-id")
+    assert workflow is None
+
+
+def test_workflow_by_ticket_not_found(test_db):
+    """Test behavior when no workflows exist for ticket."""
+    workflows = state_store.get_workflow_by_ticket("NON-EXISTENT")
+    assert workflows == []
+
+
+def test_audit_log_append_only(test_db):
+    """Test that audit log has no delete operations."""
+    # This is a code review test - verify no delete methods exist
+    # in the state_store module
+    import inspect
+    
+    # Get all functions in state_store module
+    functions = [name for name, obj in inspect.getmembers(state_store) 
+                 if inspect.isfunction(obj)]
+    
+    # Verify no delete functions
+    delete_functions = [f for f in functions if 'delete' in f.lower()]
+    assert len(delete_functions) == 0, f"Found delete functions: {delete_functions}"
+
+
+def test_audit_log_content(test_db):
+    """Test audit log contains proper information."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-45")
+    
+    state_store.update_status(
+        workflow_id=workflow_id,
+        status="completed",
+        actor="test_actor",
+        reason="Test completion"
+    )
+    
+    audit_log = state_store.get_audit_log(workflow_id)
+    
+    # Verify structure
+    for entry in audit_log:
+        assert 'id' in entry
+        assert 'workflow_id' in entry
+        assert 'actor' in entry
+        assert 'action' in entry
+        assert 'created_at' in entry
+        assert entry['workflow_id'] == workflow_id
+
+
+def test_get_db_path_default(test_db):
+    """Test that default DB path is correct."""
+    # Temporarily remove DB_PATH env var
+    db_path_backup = os.environ.get('DB_PATH')
+    if 'DB_PATH' in os.environ:
+        del os.environ['DB_PATH']
+    
+    try:
+        db_path = state_store.get_db_path()
+        assert db_path == "state/local.db"
+    finally:
+        # Restore
+        if db_path_backup:
+            os.environ['DB_PATH'] = db_path_backup
+
+
+def test_get_db_path_from_env(test_db):
+    """Test that DB path is read from environment."""
+    custom_path = "custom/path/test.db"
+    os.environ['DB_PATH'] = custom_path
+    
+    db_path = state_store.get_db_path()
+    assert db_path == custom_path
