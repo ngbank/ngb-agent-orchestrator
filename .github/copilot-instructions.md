@@ -4,15 +4,44 @@ Follow these rules when working in this repository.
 
 ## Feature Branch Workflow
 
+### Implementation Plan Workflow
+
+When creating an implementation plan for a ticket:
+
+1. **Create the plan**: Generate a detailed implementation plan in a temporary file (e.g., `{TICKET_ID}-implementation-plan.md`)
+2. **Review and agree**: Discuss and refine the plan with the user
+3. **Once the plan is agreed upon**, follow the steps below to start work
+
 ### Before Starting Work on a Ticket
 
-1. **Create a feature branch** using the naming convention: `feature/{jira_id}+{summary}`
-   - Example: `feature/PROJ-123+add-authentication`
+After agreeing on an implementation plan, complete these steps in order:
+
+1. **Update the JIRA ticket description** with the implementation plan content
+   ```bash
+   acli jira workitem edit --key "TICKET-ID" --description "$(cat TICKET-ID-implementation-plan.md)" -y
+   ```
+
+2. **Delete the temporary implementation plan file** from the project
+   ```bash
+   rm TICKET-ID-implementation-plan.md
+   ```
+
+3. **Create a feature branch** using the naming convention: `feature/{jira_id}+{summary}`
+   ```bash
+   git checkout -b feature/TICKET-ID+brief-summary
+   ```
+   - Example: `feature/AOS-35+sqlite-workflow-state`
    - The branch name MUST include both the JIRA ticket ID and a brief summary
-   
-2. **Update the JIRA ticket**:
+
+4. **Update the JIRA ticket**:
    - Assign the ticket to yourself
    - Transition the ticket status to "In Progress"
+   ```bash
+   acli jira workitem assign --key "TICKET-ID" --assignee "@me" -y
+   acli jira workitem transition --key "TICKET-ID" --status "In Progress" -y
+   ```
+
+5. **Execute the implementation plan** by working through each task systematically
 
 ### Pull Request Process
 
@@ -33,11 +62,24 @@ Complete the following steps in order:
 ## Quick Reference
 
 ```bash
-# Start work on a ticket
-git checkout -b feature/PROJ-123+brief-summary
+# After agreeing on implementation plan:
+# 1. Update ticket description
+acli jira workitem edit --key "TICKET-ID" --description "$(cat TICKET-ID-implementation-plan.md)" -y
 
-# After PR is merged
+# 2. Delete temporary plan file
+rm TICKET-ID-implementation-plan.md
+
+# 3. Create feature branch
+git checkout -b feature/TICKET-ID+brief-summary
+
+# 4. Assign ticket and transition to "In Progress"
+acli jira workitem assign --key "TICKET-ID" --assignee "@me" -y
+acli jira workitem transition --key "TICKET-ID" --status "In Progress" -y
+
+# 5. Execute the implementation plan
+
+# After PR is merged:
 git checkout main
 git pull origin main
-git branch -d feature/PROJ-123+brief-summary
+git branch -d feature/TICKET-ID+brief-summary
 ```

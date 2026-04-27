@@ -14,6 +14,7 @@ A Python-based orchestration framework for managing agentic workflows, integrati
 - [Folder Structure](#folder-structure)
 - [Configuration](#configuration)
 - [Usage](#usage)
+- [State Store](#state-store)
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
 - [References](#references)
@@ -358,7 +359,58 @@ See the [Configuration](#configuration) section for details on obtaining these c
 
 ---
 
-## 🛠️ Development
+## � State Store
+
+The orchestrator includes a SQLite-based state tracking system for workflow execution. Each workflow record maps to one JIRA ticket run and stores status, timestamps, work plan (JSON blob), and PR URL.
+
+### Features
+
+- **Persistent State**: SQLite database for reliable state storage
+- **Audit Trail**: Append-only audit log for complete traceability
+- **Idempotent Migrations**: Safe schema updates
+- **Environment Configuration**: Flexible database path via `DB_PATH` env variable
+
+### Quick Start
+
+```python
+from state import create_workflow, update_status, get_workflow
+
+# Create a new workflow for a JIRA ticket
+workflow_id = create_workflow(
+    ticket_key="AOS-35",
+    work_plan={"tasks": ["task1", "task2"]},
+    status="pending"
+)
+
+# Update status (creates audit log entry)
+update_status(
+    workflow_id=workflow_id,
+    status="in_progress",
+    actor="copilot"
+)
+
+# Retrieve workflow
+workflow = get_workflow(workflow_id)
+print(f"Status: {workflow['status']}")
+```
+
+### Configuration
+
+Set the database path in your `.env` file:
+
+```bash
+DB_PATH=state/local.db
+```
+
+If not set, defaults to `state/local.db`.
+
+### Complete Documentation
+
+For detailed API documentation, schema details, and advanced usage, see [state/README.md](state/README.md).
+
+---
+
+## �🛠️ Development
 
 ### Running Tests
 
