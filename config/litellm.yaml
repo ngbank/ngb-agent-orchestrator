@@ -4,12 +4,30 @@
 #
 # Start the proxy:
 #   litellm --config config/litellm.yaml --port 4000
+#
+# Callers select a model by passing "model": "<model_name>" in the request body.
+# GOOSE_MODEL in .env sets the default model Goose uses.
 
 model_list:
-  - model_name: default
+  # Azure AI Foundry / Azure OpenAI
+  - model_name: azure-gpt4
     litellm_params:
-      model: ${LITELLM_MODEL}        # e.g. "anthropic/claude-3-5-sonnet-20241022" or "gpt-4o"
-      api_key: ${ANTHROPIC_API_KEY}  # swap for OPENAI_API_KEY when using OpenAI backend
+      model: azure/${AZURE_DEPLOYMENT_NAME}
+      api_key: ${AZURE_API_KEY}
+      api_base: ${AZURE_API_BASE}
+      api_version: ${AZURE_API_VERSION}
+
+  # Anthropic
+  - model_name: claude
+    litellm_params:
+      model: anthropic/claude-3-5-sonnet-20241022
+      api_key: ${ANTHROPIC_API_KEY}
+
+  # OpenAI
+  - model_name: gpt4o
+    litellm_params:
+      model: gpt-4o
+      api_key: ${OPENAI_API_KEY}
 
 general_settings:
   master_key: ${LITELLM_MASTER_KEY}  # auth key for the proxy API
