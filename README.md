@@ -108,6 +108,32 @@ LiteLLM: Proxy running on http://0.0.0.0:4000
 
 > **Tip:** Keep this terminal open. All Goose recipe invocations route model calls through this proxy.
 
+#### Calling the Proxy Manually
+
+**Authentication** depends on whether `LITELLM_MASTER_KEY` is set in your `.env`:
+
+- **With `LITELLM_MASTER_KEY` set** (default) — all requests require an `Authorization` header:
+
+  ```bash
+  # List registered models
+  curl http://localhost:4000/models \
+    -H "Authorization: Bearer sk-local-master-key"
+
+  # Send a chat request to a specific model
+  curl http://localhost:4000/v1/chat/completions \
+    -H "Authorization: Bearer sk-local-master-key" \
+    -H "Content-Type: application/json" \
+    -d '{"model": "azure-gpt4", "messages": [{"role": "user", "content": "Hello"}]}'
+  ```
+
+- **Without `LITELLM_MASTER_KEY`** (remove it from `.env`) — no auth required:
+
+  ```bash
+  curl http://localhost:4000/models
+  ```
+
+Available model names (defined in `config/litellm.yaml`): `azure-gpt4` | `claude` | `gpt4o`
+
 ---
 
 ### Step 4: Configure Environment (5 min)
