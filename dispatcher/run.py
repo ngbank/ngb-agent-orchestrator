@@ -30,6 +30,7 @@ from state.state_store import (
     update_status,
     get_workflow_by_ticket,
 )
+from state.workflow_status import WorkflowStatus
 
 
 def check_for_duplicate_workflow(ticket_key: str) -> Optional[str]:
@@ -46,13 +47,12 @@ def check_for_duplicate_workflow(ticket_key: str) -> Optional[str]:
     workflows = get_workflow_by_ticket(ticket_key)
     
     # Check for any pending or in_progress workflows
-    active_statuses = ['pending', 'in_progress']
     completed_count = 0
     
     for workflow in workflows:
-        if workflow['status'] in active_statuses:
+        if workflow['status'].is_active():
             return workflow['id']
-        if workflow['status'] == 'completed':
+        if workflow['status'] == WorkflowStatus.COMPLETED:
             completed_count += 1
     
     # Warn if re-running completed workflow
@@ -81,7 +81,7 @@ def execute_workflow(workflow_id: str, ticket: JiraTicket, dry_run: bool) -> Non
     if not dry_run:
         update_status(
             workflow_id,
-            'in_progress',
+            WorkflowStatus.IN_PROGRESS,
             actor='dispatcher',
             reason='Starting workflow execution'
         )
@@ -188,7 +188,7 @@ def run(ticket: str, dry_run: bool):
         workflow_id = create_workflow(
             ticket_key=ticket,
             work_plan=None,  # Will be populated by future plan generation stage
-            status='pending'
+            status=WorkflowStatus.PENDING
         )
         click.echo(f"✅ Workflow created: {workflow_id}")
         
@@ -200,7 +200,7 @@ def run(ticket: str, dry_run: bool):
         click.echo("🎉 Workflow completed successfully")
         update_status(
             workflow_id,
-            'completed',
+            WorkflowStatus.COMPLETED,
             actor='dispatcher',
             reason='All stages completed successfully'
         )
@@ -210,7 +210,7 @@ def run(ticket: str, dry_run: bool):
         if workflow_id:
             update_status(
                 workflow_id,
-                'failed',
+                WorkflowStatus.FAILED,
                 actor='dispatcher',
                 reason=f"Ticket not found: {e}"
             )
@@ -230,7 +230,7 @@ def run(ticket: str, dry_run: bool):
         if workflow_id:
             update_status(
                 workflow_id,
-                'failed',
+                WorkflowStatus.FAILED,
                 actor='dispatcher',
                 reason=f"JIRA authentication failed: {e}"
             )
@@ -241,7 +241,7 @@ def run(ticket: str, dry_run: bool):
         if workflow_id:
             update_status(
                 workflow_id,
-                'failed',
+                WorkflowStatus.FAILED,
                 actor='dispatcher',
                 reason='Workflow interrupted by user (SIGINT)'
             )
@@ -252,7 +252,7 @@ def run(ticket: str, dry_run: bool):
         if workflow_id:
             update_status(
                 workflow_id,
-                'failed',
+                WorkflowStatus.FAILED,
                 actor='dispatcher',
                 reason=f"Unhandled exception: {type(e).__name__}: {str(e)}"
             )

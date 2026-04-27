@@ -6,6 +6,7 @@ import os
 import json
 from pathlib import Path
 from state import state_store
+from state.workflow_status import WorkflowStatus
 
 
 @pytest.fixture
@@ -47,7 +48,7 @@ def test_create_workflow(test_db):
     workflow_id = state_store.create_workflow(
         ticket_key="AOS-35",
         work_plan=work_plan,
-        status="pending"
+        status=WorkflowStatus.PENDING
     )
     
     # Verify workflow_id is a valid UUID
@@ -58,7 +59,8 @@ def test_create_workflow(test_db):
     workflow = state_store.get_workflow(workflow_id)
     assert workflow is not None
     assert workflow['ticket_key'] == "AOS-35"
-    assert workflow['status'] == "pending"
+    assert workflow['status'] == WorkflowStatus.PENDING
+    assert isinstance(workflow['status'], WorkflowStatus)
     assert workflow['work_plan'] == work_plan
     assert workflow['pr_url'] is None
     assert workflow['created_at'] is not None
@@ -72,7 +74,7 @@ def test_create_workflow_minimal(test_db):
     workflow = state_store.get_workflow(workflow_id)
     assert workflow is not None
     assert workflow['ticket_key'] == "AOS-36"
-    assert workflow['status'] == "pending"  # Default status
+    assert workflow['status'] == WorkflowStatus.PENDING  # Default status
     assert workflow['work_plan'] is None
     assert workflow['pr_url'] is None
 
@@ -81,7 +83,7 @@ def test_update_status(test_db):
     """Test status updates and timestamp changes."""
     workflow_id = state_store.create_workflow(
         ticket_key="AOS-37",
-        status="pending"
+        status=WorkflowStatus.PENDING
     )
     
     # Get initial state
@@ -91,14 +93,14 @@ def test_update_status(test_db):
     # Update status
     state_store.update_status(
         workflow_id=workflow_id,
-        status="in_progress",
+        status=WorkflowStatus.IN_PROGRESS,
         actor="test_user",
         reason="Started work"
     )
     
     # Verify update
     workflow_after = state_store.get_workflow(workflow_id)
-    assert workflow_after['status'] == "in_progress"
+    assert workflow_after['status'] == WorkflowStatus.IN_PROGRESS
     assert workflow_after['created_at'] == created_at  # Should not change
     assert workflow_after['updated_at'] != workflow_before['updated_at']
     assert workflow_after['pr_url'] is None
@@ -110,12 +112,12 @@ def test_update_status_with_pr_url(test_db):
     
     state_store.update_status(
         workflow_id=workflow_id,
-        status="completed",
+        status=WorkflowStatus.COMPLETED,
         pr_url="https://github.com/org/repo/pull/123"
     )
     
     workflow = state_store.get_workflow(workflow_id)
-    assert workflow['status'] == "completed"
+    assert workflow['status'] == WorkflowStatus.COMPLETED
     assert workflow['pr_url'] == "https://github.com/org/repo/pull/123"
 
 
@@ -126,14 +128,14 @@ def test_update_status_creates_audit_log(test_db):
     # Update status twice
     state_store.update_status(
         workflow_id=workflow_id,
-        status="in_progress",
+        status=WorkflowStatus.IN_PROGRESS,
         actor="user1",
         reason="Started work"
     )
     
     state_store.update_status(
         workflow_id=workflow_id,
-        status="completed",
+        status=WorkflowStatus.COMPLETED,
         actor="user2",
         reason="Finished work"
     )
@@ -271,7 +273,7 @@ def test_audit_log_content(test_db):
     
     state_store.update_status(
         workflow_id=workflow_id,
-        status="completed",
+        status=WorkflowStatus.COMPLETED,
         actor="test_actor",
         reason="Test completion"
     )
@@ -315,3 +317,44 @@ def test_get_db_path_from_env(test_db):
     with patch('pathlib.Path.mkdir'):
         db_path = state_store.get_db_path()
         assert db_path == custom_path
+
+
+def test_workflow_status_is_enum(test_db):
+    """Test that retrieved workflow status is a WorkflowStatus instance, not a string."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-46")
+    workflow = state_store.get_workflow(workflow_id)
+    assert isinstance(workflow['status'], WorkflowStatus)
+    assert workflow['status'] == WorkflowStatus.PENDING
+
+
+def test_workflow_status_is_enum_after_update(test_db):
+    """Test that status remains a WorkflowStatus instance after an update."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-46")
+    state_store.update_status(workflow_id, WorkflowStatus.IN_PROGRESS)
+    workflow = state_store.get_workflow(workflow_id)
+    assert isinstance(workflow['status'], WorkflowStatus)
+    assert workflow['status'] == WorkflowStatus.IN_PROGRESS
+
+
+def test_get_workflow_by_ticket_status_is_enum(test_db):
+    """Test that status in get_workflow_by_ticket results is a WorkflowStatus instance."""
+    state_store.create_workflow(ticket_key="AOS-46")
+    workflows = state_store.get_workflow_by_ticket("AOS-46")
+    assert len(workflows) == 1
+    assert isinstance(workflows[0]['status'], WorkflowStatus)
+
+
+def test_is_active_helper(test_db):
+    """Test WorkflowStatus.is_active() helper."""
+    assert WorkflowStatus.PENDING.is_active() is True
+    assert WorkflowStatus.IN_PROGRESS.is_active() is True
+    assert WorkflowStatus.COMPLETED.is_active() is False
+    assert WorkflowStatus.FAILED.is_active() is False
+
+
+def test_is_terminal_helper(test_db):
+    """Test WorkflowStatus.is_terminal() helper."""
+    assert WorkflowStatus.COMPLETED.is_terminal() is True
+    assert WorkflowStatus.FAILED.is_terminal() is True
+    assert WorkflowStatus.PENDING.is_terminal() is False
+    assert WorkflowStatus.IN_PROGRESS.is_terminal() is False

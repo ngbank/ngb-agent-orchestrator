@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Optional, Dict, List
 import os
 
+from .workflow_status import WorkflowStatus
+
 
 def get_db_path() -> str:
     """Get the database path from environment or use default."""
@@ -52,7 +54,7 @@ def run_migrations() -> None:
 def create_workflow(
     ticket_key: str,
     work_plan: Optional[Dict] = None,
-    status: str = "pending"
+    status: WorkflowStatus = WorkflowStatus.PENDING
 ) -> str:
     """
     Create a new workflow record.
@@ -60,7 +62,7 @@ def create_workflow(
     Args:
         ticket_key: JIRA ticket key (e.g., "AOS-35")
         work_plan: Dictionary containing the work plan (will be JSON-serialized)
-        status: Initial status (default: "pending")
+        status: Initial status (default: WorkflowStatus.PENDING)
     
     Returns:
         workflow_id: UUID of created workflow
@@ -76,7 +78,7 @@ def create_workflow(
             INSERT INTO workflows (id, ticket_key, status, work_plan, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (workflow_id, ticket_key, status, work_plan_json, now, now)
+            (workflow_id, ticket_key, status.value, work_plan_json, now, now)
         )
         conn.commit()
         
@@ -97,7 +99,7 @@ def create_workflow(
 
 def update_status(
     workflow_id: str,
-    status: str,
+    status: WorkflowStatus,
     pr_url: Optional[str] = None,
     actor: str = "system",
     reason: Optional[str] = None
@@ -125,7 +127,7 @@ def update_status(
                 SET status = ?, pr_url = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (status, pr_url, now, workflow_id)
+                (status.value, pr_url, now, workflow_id)
             )
         else:
             conn.execute(
@@ -134,7 +136,7 @@ def update_status(
                 SET status = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (status, now, workflow_id)
+                (status.value, now, workflow_id)
             )
         
         conn.commit()
@@ -145,7 +147,7 @@ def update_status(
             workflow_id=workflow_id,
             actor=actor,
             action="status_change",
-            reason=reason or f"Status changed to {status}"
+            reason=reason or f"Status changed to {status.value}"
         )
         conn.commit()
     finally:
@@ -173,10 +175,11 @@ def get_workflow(workflow_id: str) -> Optional[Dict]:
         if row is None:
             return None
         
-        # Convert to dict and deserialize work_plan
+        # Convert to dict and deserialize work_plan and status
         workflow = dict(row)
         if workflow['work_plan']:
             workflow['work_plan'] = json.loads(workflow['work_plan'])
+        workflow['status'] = WorkflowStatus(workflow['status'])
         
         return workflow
     finally:
@@ -206,6 +209,7 @@ def get_workflow_by_ticket(ticket_key: str) -> List[Dict]:
             workflow = dict(row)
             if workflow['work_plan']:
                 workflow['work_plan'] = json.loads(workflow['work_plan'])
+            workflow['status'] = WorkflowStatus(workflow['status'])
             workflows.append(workflow)
         
         return workflows
