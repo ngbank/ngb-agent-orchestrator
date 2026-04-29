@@ -300,6 +300,66 @@ python dispatcher/cli.py goose
 python dispatcher/cli.py goose --recipe <recipe-name>
 ```
 
+##### WorkPlan Generation Recipe
+
+The `recipes/plan.yaml` recipe generates a WorkPlan JSON document from a JIRA ticket.
+
+**Prerequisites:**
+- Goose CLI installed (`~/.local/bin/goose`)
+- LiteLLM proxy running on `http://localhost:4000`
+- `acli` configured with JIRA credentials
+
+**Start LiteLLM Proxy:**
+```bash
+# In a separate terminal
+source venv/bin/activate
+litellm --config config/litellm.yaml --port 4000
+```
+
+**Run the Recipe:**
+```bash
+# Add goose to PATH if needed
+export PATH="$HOME/.local/bin:$PATH"
+
+# Generate WorkPlan for a JIRA ticket
+goose run --recipe recipes/plan.yaml \
+  --params ticket_key=AOS-48 \
+  --params output_path=workplans/AOS-48-plan.json
+```
+
+**What the Recipe Does:**
+1. Fetches JIRA ticket data using `acli jira workitem view`
+2. Analyzes repository structure to identify affected files
+3. Generates WorkPlan JSON using azure-gpt4 LLM
+4. Validates JSON against WorkPlan schema
+5. Retries up to 3 times if validation fails (with intelligent error fixing)
+6. Writes validated JSON to the specified output path
+
+**Output Example:**
+```json
+{
+  "schema_version": "1.0",
+  "ticket_key": "AOS-48",
+  "summary": "Add JWT authentication middleware to dashboard API",
+  "approach": "Implement authentication middleware...",
+  "tasks": [
+    {
+      "id": 1,
+      "description": "Create authentication middleware",
+      "files_likely_affected": ["api/middleware/auth.py"]
+    }
+  ],
+  "risks": ["Integration with existing JWT service may require changes"],
+  "questions_for_reviewer": [],
+  "status": "pass"
+}
+```
+
+**Status Values:**
+- `pass`: Clear ticket, ready to proceed
+- `concerns`: Implementable but has risks
+- `blocked`: Ticket needs clarification (see `questions_for_reviewer`)
+
 #### Get Help
 
 ```bash
@@ -619,17 +679,52 @@ def my_command(option):
 
 ### Creating Goose Recipes
 
-Add YAML files to the `recipes/` directory:
+Goose recipes are YAML files that define reusable automation workflows. See `recipes/plan.yaml` for a complete example.
 
+**Basic Recipe Structure:**
 ```yaml
-# recipes/example-recipe.yaml
-name: Example Recipe
-description: A sample Goose recipe
-steps:
-  - action: example_action
-    parameters:
-      key: value
+version: "1.0.0"
+title: "Recipe Title"
+description: "What the recipe does"
+
+parameters:
+  - key: param_name
+    input_type: string
+    requirement: required
+    description: "Parameter description"
+
+extensions:
+  - type: builtin
+    name: developer
+    timeout: 300
+    bundled: true
+
+settings:
+  goose_provider: "openai"
+  goose_model: "azure-gpt4"
+  temperature: 0.3
+
+prompt: |
+  Your instructions here...
+  Use {{ param_name }} for parameter substitution.
+
+retry:
+  max_retries: 3
+  checks:
+    - type: shell
+      command: "validation command here"
 ```
+
+**Key Features:**
+- **Parameters**: Define inputs with types (string, number, file, select, etc.)
+- **Extensions**: Specify MCP servers and built-in tools (developer, file system, etc.)
+- **Settings**: Configure LLM provider, model, and temperature
+- **Retry Logic**: Automatic retry with validation checks
+- **Response Schema**: Enforce structured JSON output
+
+**See Also:**
+- [Goose Recipes Documentation](https://goose-docs.ai/docs/tutorials/recipes-tutorial)
+- [Recipe Reference](https://goose-docs.ai/docs/guides/recipes/recipe-reference)
 
 ### Managing State
 
