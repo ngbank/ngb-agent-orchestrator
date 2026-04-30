@@ -1,0 +1,115 @@
+sequenceDiagram
+    participant User
+    participant Dispatcher as Dispatcher
+    participant JiraLib as JIRA Python Library
+    participant Goose as Goose CLI
+    participant Recipe as Plan Recipe
+    participant ACLI as JIRA CLI (acli)
+    participant FileSystem as File System
+    participant LLM as Azure GPT-4<br/>(via LiteLLM)
+    participant Validator as WorkPlan Validator
+    participant SQLite as SQLite DB
+    participant Formatter as WorkPlan Formatter
+
+    User->>Dispatcher: dispatcher run --ticket {ticket_key}
+    
+    rect rgb(230, 230, 255)
+        Note over Dispatcher,SQLite: Step 1: Initialize Workflow
+        Dispatcher->>JiraLib: Fetch ticket via JIRA API
+        JiraLib-->>Dispatcher: JiraTicket<br/>(key, title, description, labels, status)
+        Dispatcher->>SQLite: Check for duplicate workflows
+        SQLite-->>Dispatcher: No active workflows
+        Dispatcher->>SQLite: create_workflow()<br/>status: PENDING
+        SQLite-->>Dispatcher: workflow_id
+    end
+    
+    Dispatcher->>Goose: Run plan recipe with params<br/>(ticket_key, output_path)
+    Goose->>Recipe: Initialize recipe
+    
+    rect rgb(230, 240, 255)
+        Note over Recipe,ACLI: Step 2: Fetch JIRA Ticket (Recipe)
+        Recipe->>ACLI: acli jira workitem view {ticket_key}
+        ACLI-->>Recipe: Ticket details<br/>(summary, description, status)
+    end
+    
+    rect rgb(240, 255, 240)
+        Note over Recipe,FileSystem: Step 3: Analyze Repository
+        Recipe->>FileSystem: Read README.md
+        FileSystem-->>Recipe: Project structure
+        Recipe->>FileSystem: List directories<br/>(dispatcher/, schemas/, state/)
+        FileSystem-->>Recipe: File tree
+        Recipe->>FileSystem: Read relevant files<br/>(patterns, conventions)
+        FileSystem-->>Recipe: Code context
+    end
+    
+    rect rgb(255, 245, 230)
+        Note over Recipe,LLM: Step 4: Generate WorkPlan
+        Recipe->>LLM: Generate WorkPlan JSON<br/>(ticket + repo analysis)
+        LLM-->>Recipe: WorkPlan JSON draft
+    end
+    
+    rect rgb(255, 240, 245)
+        Note over Recipe,Validator: Step 5: Validate in Recipe (Retry Loop)
+        loop Max 3 attempts
+            Recipe->>FileSystem: Write to /tmp/workplan_temp.json
+            Recipe->>Validator: python work_plan_validator.py
+            alt Validation Passes
+                Validator-->>Recipe: ✅ Validation passed
+                Note over Recipe: Exit retry loop
+            else Validation Fails
+                Validator-->>Recipe: ❌ Error: {specific issue}
+                Recipe->>LLM: Fix specific issue<br/>(e.g., add missing field)
+                LLM-->>Recipe: Corrected WorkPlan JSON
+            end
+        end
+    end
+    
+    rect rgb(240, 255, 255)
+        Note over Recipe,FileSystem: Step 6: Write to File
+        Recipe->>FileSystem: mkdir -p {output_dir}
+        Recipe->>FileSystem: Write validated JSON<br/>to {output_path}
+        FileSystem-->>Recipe: File created
+        Recipe->>FileSystem: Verify file exists
+        FileSystem-->>Recipe: ✅ Confirmed
+    end
+    
+    Recipe->>Goose: ✅ WorkPlan generated
+    Goose->>Dispatcher: WorkPlan JSON returned
+    
+    rect rgb(255, 250, 230)
+        Note over Dispatcher,Validator: Step 7: Dispatcher Validates WorkPlan
+        Dispatcher->>Validator: validate_work_plan(work_plan_data)
+        alt Validation Passes
+            Validator-->>Dispatcher: ✅ WorkPlan valid
+            alt Status is "blocked"
+                Note over Dispatcher: ❌ Mark workflow FAILED<br/>Cannot proceed
+            end
+        else Validation Fails
+            Validator-->>Dispatcher: ❌ WorkPlanValidationError
+            Note over Dispatcher: Mark workflow FAILED
+        end
+    end
+    
+    rect rgb(255, 235, 245)
+        Note over Dispatcher,SQLite: Step 8: Store WorkPlan (AOS-39)
+        Dispatcher->>SQLite: update_work_plan()<br/>Store WorkPlan JSON
+        SQLite-->>Dispatcher: ✅ Stored
+    end
+    
+    rect rgb(245, 235, 255)
+        Note over Dispatcher,ACLI: Step 9: Post to Jira (AOS-39)
+        Dispatcher->>Formatter: format_work_plan_comment()<br/>(WorkPlan, ticket_key)
+        Formatter-->>Dispatcher: Formatted comment<br/>(summary, tasks, risks, approval)
+        Dispatcher->>ACLI: acli jira workitem comment add<br/>--key {ticket_key}<br/>--comment {formatted_comment}
+        alt Comment Posted Successfully
+            ACLI-->>Dispatcher: ✅ Comment added
+            Note over Dispatcher: WorkPlan visible on Jira
+        else Comment Posting Failed
+            ACLI-->>Dispatcher: ❌ Posting failed
+            Note over Dispatcher: Log error, continue<br/>(WorkPlan still in SQLite)
+        end
+    end
+    
+    Dispatcher->>User: ✅ WorkPlan generated and posted<br/>View at: {jira_url}/browse/{ticket_key}
+    
+    Note over User,Formatter: WorkPlan Status Classification:<br/>• "pass" - Clear scope, ready to implement<br/>• "concerns" - Has risks or dependencies<br/>• "blocked" - Missing info or ambiguous<br/><br/>WorkPlan Comment Sections:<br/>• Plan Summary (approach and status)<br/>• Task List (with files affected)<br/>• Risks<br/>• Questions for Reviewer<br/>• Approval Instructions<br/>  - dispatcher approve {ticket_key}<br/>  - dispatcher reject {ticket_key}
