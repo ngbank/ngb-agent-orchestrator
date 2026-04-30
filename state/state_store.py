@@ -154,6 +154,50 @@ def update_status(
         conn.close()
 
 
+def update_work_plan(
+    workflow_id: str,
+    work_plan: Dict,
+    actor: str = "system",
+    reason: Optional[str] = None
+) -> None:
+    """
+    Update workflow with a work plan.
+    Also creates an audit log entry.
+    
+    Args:
+        workflow_id: UUID of the workflow
+        work_plan: Dictionary containing the work plan (will be JSON-serialized)
+        actor: Who/what performed the update
+        reason: Reason for the update (optional)
+    """
+    now = datetime.now(UTC).isoformat()
+    work_plan_json = json.dumps(work_plan)
+    
+    conn = get_connection()
+    try:
+        conn.execute(
+            """
+            UPDATE workflows
+            SET work_plan = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (work_plan_json, now, workflow_id)
+        )
+        conn.commit()
+        
+        # Create audit log entry
+        _create_audit_log(
+            conn,
+            workflow_id=workflow_id,
+            actor=actor,
+            action="work_plan_updated",
+            reason=reason or "WorkPlan stored"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def get_workflow(workflow_id: str) -> Optional[Dict]:
     """
     Retrieve workflow by ID.

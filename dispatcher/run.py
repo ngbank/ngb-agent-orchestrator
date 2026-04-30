@@ -24,10 +24,12 @@ from dispatcher.jira_client import (
     JiraConfigurationError,
     JiraAuthenticationError,
     JiraTicketNotFoundError,
+    JiraCommentError,
 )
 from state.state_store import (
     create_workflow,
     update_status,
+    update_work_plan,
     get_workflow_by_ticket,
 )
 from state.workflow_status import WorkflowStatus
@@ -36,6 +38,7 @@ from dispatcher.work_plan_validator import (
     WorkPlan,
     WorkPlanValidationError,
 )
+from dispatcher.work_plan_formatter import format_work_plan_comment
 
 
 def check_for_duplicate_workflow(ticket_key: str) -> Optional[str]:
@@ -135,6 +138,48 @@ def execute_workflow(
             )
             click.echo(f"❌ {e}", err=True)
             return
+    
+        # Stage 1.1: Store WorkPlan to SQLite and post to Jira
+        click.echo("💾 Storing WorkPlan to database...")
+        try:
+            update_work_plan(
+                workflow_id,
+                work_plan_data,
+                actor='dispatcher',
+                reason=f'WorkPlan generated for {ticket.key}'
+            )
+            click.echo("✅ WorkPlan stored to SQLite")
+        except Exception as e:
+            update_status(
+                workflow_id,
+                WorkflowStatus.FAILED,
+                actor='dispatcher',
+                reason=f'Failed to store WorkPlan: {e}'
+            )
+            click.echo(f"❌ Failed to store WorkPlan: {e}", err=True)
+            return
+        
+        # Stage 1.2: Format and post WorkPlan comment to Jira
+        click.echo("📝 Posting WorkPlan to Jira...")
+        try:
+            comment_text = format_work_plan_comment(work_plan_data, ticket.key)
+            
+            # Post comment using JiraClient
+            jira_client = JiraClient()
+            success = jira_client.post_comment(ticket.key, comment_text)
+            
+            if success:
+                click.echo("✅ WorkPlan posted to Jira")
+                click.echo(f"   View at: {jira_client.jira_url}/browse/{ticket.key}")
+            else:
+                click.echo("⚠️  WorkPlan posted but confirmation unclear", err=True)
+        except JiraCommentError as e:
+            # Log the error but don't fail the workflow
+            # The WorkPlan is already in SQLite as the source of truth
+            click.echo(f"⚠️  Failed to post WorkPlan to Jira: {e}", err=True)
+            click.echo("   WorkPlan is stored in SQLite. You can retry posting manually.", err=True)
+        except Exception as e:
+            click.echo(f"⚠️  Unexpected error posting to Jira: {e}", err=True)
 
     # Stage 2: Execute code (Goose integration — future ticket)
     # Stage 3: Create PR (future ticket)
