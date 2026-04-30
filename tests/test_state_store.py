@@ -358,3 +358,129 @@ def test_is_terminal_helper(test_db):
     assert WorkflowStatus.FAILED.is_terminal() is True
     assert WorkflowStatus.PENDING.is_terminal() is False
     assert WorkflowStatus.IN_PROGRESS.is_terminal() is False
+
+
+def test_update_work_plan(test_db):
+    """Test updating work_plan for an existing workflow."""
+    # Create workflow without work_plan
+    workflow_id = state_store.create_workflow(
+        ticket_key="AOS-39",
+        status=WorkflowStatus.PENDING
+    )
+    
+    # Verify no work_plan initially
+    workflow_before = state_store.get_workflow(workflow_id)
+    assert workflow_before['work_plan'] is None
+    
+    # Update with work_plan
+    work_plan = {
+        "schema_version": "1.0",
+        "ticket_key": "AOS-39",
+        "summary": "Test plan",
+        "approach": "Test approach",
+        "tasks": [{"id": 1, "description": "Task 1", "files_likely_affected": []}],
+        "risks": [],
+        "questions_for_reviewer": [],
+        "status": "pass"
+    }
+    
+    state_store.update_work_plan(
+        workflow_id=workflow_id,
+        work_plan=work_plan,
+        actor='dispatcher',
+        reason='WorkPlan generated'
+    )
+    
+    # Verify work_plan was stored
+    workflow_after = state_store.get_workflow(workflow_id)
+    assert workflow_after['work_plan'] is not None
+    assert workflow_after['work_plan'] == work_plan
+    assert workflow_after['work_plan']['summary'] == "Test plan"
+    assert workflow_after['work_plan']['status'] == "pass"
+    
+    # Verify audit log entry was created
+    audit_log = state_store.get_audit_log(workflow_id)
+    work_plan_updates = [
+        entry for entry in audit_log
+        if entry['action'] == 'work_plan_updated'
+    ]
+    assert len(work_plan_updates) == 1
+    assert work_plan_updates[0]['actor'] == 'dispatcher'
+    assert 'WorkPlan generated' in work_plan_updates[0]['reason']
+
+
+def test_update_work_plan_replaces_existing(test_db):
+    """Test that update_work_plan replaces an existing work_plan."""
+    # Create workflow with initial work_plan
+    initial_plan = {
+        "summary": "Initial plan",
+        "status": "draft"
+    }
+    
+    workflow_id = state_store.create_workflow(
+        ticket_key="AOS-40",
+        work_plan=initial_plan,
+        status=WorkflowStatus.PENDING
+    )
+    
+    # Update with new work_plan
+    updated_plan = {
+        "summary": "Updated plan",
+        "status": "pass"
+    }
+    
+    state_store.update_work_plan(
+        workflow_id=workflow_id,
+        work_plan=updated_plan,
+        actor='system'
+    )
+    
+    # Verify work_plan was replaced
+    workflow = state_store.get_workflow(workflow_id)
+    assert workflow['work_plan'] == updated_plan
+    assert workflow['work_plan']['summary'] == "Updated plan"
+    assert workflow['work_plan']['status'] == "pass"
+
+
+def test_update_work_plan_complex_structure(test_db):
+    """Test storing complex work_plan with nested structures."""
+    workflow_id = state_store.create_workflow(
+        ticket_key="AOS-41",
+        status=WorkflowStatus.PENDING
+    )
+    
+    complex_plan = {
+        "schema_version": "1.0",
+        "ticket_key": "AOS-41",
+        "summary": "Complex plan",
+        "approach": "Multi-step approach with details",
+        "tasks": [
+            {
+                "id": 1,
+                "description": "First task",
+                "files_likely_affected": ["file1.py", "file2.py"]
+            },
+            {
+                "id": 2,
+                "description": "Second task",
+                "files_likely_affected": ["file3.py", "file4.py", "file5.py"]
+            }
+        ],
+        "risks": ["Risk 1", "Risk 2", "Risk 3"],
+        "questions_for_reviewer": ["Question 1", "Question 2"],
+        "status": "concerns"
+    }
+    
+    state_store.update_work_plan(
+        workflow_id=workflow_id,
+        work_plan=complex_plan
+    )
+    
+    # Verify all nested data was preserved
+    workflow = state_store.get_workflow(workflow_id)
+    assert len(workflow['work_plan']['tasks']) == 2
+    assert len(workflow['work_plan']['tasks'][0]['files_likely_affected']) == 2
+    assert len(workflow['work_plan']['tasks'][1]['files_likely_affected']) == 3
+    assert len(workflow['work_plan']['risks']) == 3
+    assert len(workflow['work_plan']['questions_for_reviewer']) == 2
+    assert workflow['work_plan']['status'] == "concerns"

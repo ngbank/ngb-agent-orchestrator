@@ -6,6 +6,7 @@ structured ticket information (title, description, labels, status).
 """
 
 import os
+import subprocess
 from dataclasses import dataclass
 from typing import List
 
@@ -25,6 +26,11 @@ class JiraAuthenticationError(Exception):
 
 class JiraTicketNotFoundError(Exception):
     """Raised when a JIRA ticket is not found (404)."""
+    pass
+
+
+class JiraCommentError(Exception):
+    """Raised when posting a comment to JIRA fails."""
     pass
 
 
@@ -128,6 +134,52 @@ class JiraClient:
                 raise JiraAuthenticationError(
                     f"Failed to fetch ticket '{ticket_key}': {e}"
                 ) from e
+    
+    def post_comment(self, ticket_key: str, comment: str) -> bool:
+        """
+        Post a comment to a JIRA ticket using ACLI.
+        
+        Args:
+            ticket_key: The JIRA ticket key (e.g., 'AOS-39')
+            comment: The comment text to post (supports Jira markdown)
+        
+        Returns:
+            bool: True if comment was posted successfully, False otherwise
+        
+        Raises:
+            JiraCommentError: If posting the comment fails
+        """
+        try:
+            # Use ACLI to post comment
+            result = subprocess.run(
+                [
+                    'acli', 'jira', 'workitem', 'comment', 'add',
+                    '--key', ticket_key,
+                    '--comment', comment,
+                    '-y'
+                ],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            # Check for success message in output
+            if '✓' in result.stdout or 'successfully' in result.stdout.lower():
+                return True
+            else:
+                raise JiraCommentError(
+                    f"Unexpected output from ACLI: {result.stdout}"
+                )
+        
+        except subprocess.CalledProcessError as e:
+            error_msg = e.stderr if e.stderr else e.stdout
+            raise JiraCommentError(
+                f"Failed to post comment to {ticket_key}: {error_msg}"
+            ) from e
+        except FileNotFoundError:
+            raise JiraCommentError(
+                "ACLI command not found. Please ensure Atlassian CLI is installed."
+            )
 
 
 def get_ticket(ticket_key: str) -> JiraTicket:
@@ -160,3 +212,29 @@ def get_ticket(ticket_key: str) -> JiraTicket:
     """
     client = JiraClient()
     return client.get_ticket(ticket_key)
+
+
+def post_comment(ticket_key: str, comment: str) -> bool:
+    """
+    Convenience function to post a comment to a JIRA ticket.
+    
+    Args:
+        ticket_key: The JIRA ticket key (e.g., 'AOS-39')
+        comment: The comment text to post (supports Jira markdown)
+    
+    Returns:
+        bool: True if comment was posted successfully
+    
+    Raises:
+        JiraCommentError: If posting the comment fails
+    
+    Example:
+        >>> from dispatcher.jira_client import post_comment, JiraCommentError
+        >>> try:
+        ...     success = post_comment('AOS-39', '# WorkPlan\\n\\nThis is a test plan.')
+        ...     print(f"Comment posted: {success}")
+        ... except JiraCommentError as e:
+        ...     print(f"Error: {e}")
+    """
+    client = JiraClient()
+    return client.post_comment(ticket_key, comment)

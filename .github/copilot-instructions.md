@@ -43,6 +43,29 @@ After agreeing on an implementation plan, complete these steps in order:
 
 5. **Execute the implementation plan** by working through each task systematically
 
+### Documentation Updates During Implementation
+
+When implementing code changes that affect the application workflow or orchestration:
+
+1. **Update the flow diagram**: If your changes impact the orchestration flow, update `docs/plan-recipe-flow.mmd`
+   - Add new participants (components, services, databases)
+   - Add new steps or modify existing steps in the sequence
+   - Update notes and annotations to reflect new behavior
+   - Document error handling paths if added
+   - Include the ticket ID in step annotations (e.g., "Step X: Description (AOS-XX)")
+
+2. **Commit documentation with code**: Include documentation updates in the same PR
+   - Documentation commits should reference the ticket ID
+   - Example: `docs(AOS-39): Update plan-recipe-flow.mmd with WorkPlan posting workflow`
+
+**When to update the flow diagram:**
+- Adding new components or services to the workflow
+- Changing the sequence of operations
+- Adding or removing integration points (JIRA, SQLite, external APIs)
+- Implementing new workflow stages or steps
+- Adding error handling or alternative paths
+- Changing data flow between components
+
 ### Pull Request Process
 
 1. **Before merging to main**: Always raise a Pull Request (PR)
@@ -77,6 +100,10 @@ acli jira workitem assign --key "TICKET-ID" --assignee "@me" -y
 acli jira workitem transition --key "TICKET-ID" --status "In Progress" -y
 
 # 5. Execute the implementation plan
+
+# During implementation:
+# - Update docs/plan-recipe-flow.mmd if workflow changes
+# - Commit documentation with code changes
 
 # After PR is merged:
 git checkout main
