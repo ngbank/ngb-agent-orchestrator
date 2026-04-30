@@ -8,7 +8,6 @@ sequenceDiagram
     participant LLM as Azure GPT-4<br/>(via LiteLLM)
     participant Validator as WorkPlan Validator
     participant SQLite as SQLite DB
-    participant SQLite as SQLite DB
     participant Formatter as WorkPlan Formatter
 
     User->>Dispatcher: dispatcher run --ticket {ticket_key}
