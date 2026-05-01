@@ -1,115 +1,130 @@
 sequenceDiagram
     participant User
-    participant Dispatcher as Dispatcher
-    participant JiraLib as JIRA Python Library
-    participant Goose as Goose CLI
-    participant Recipe as Plan Recipe
-    participant ACLI as JIRA CLI (acli)
-    participant FileSystem as File System
-    participant LLM as Azure GPT-4<br/>(via LiteLLM)
-    participant Validator as WorkPlan Validator
+    participant CLI as Dispatcher CLI<br/>(dispatcher/run.py)
+    participant Graph as Orchestrator Graph<br/>(graph/builder.py)
+    participant WP as WorkPlanner Subgraph<br/>(graph/work_planner/)
     participant SQLite as SQLite DB
+    participant JiraLib as JIRA Python Library
+    participant Goose as Goose CLI (stub)
+    participant Validator as WorkPlan Validator
     participant Formatter as WorkPlan Formatter
 
-    User->>Dispatcher: dispatcher run --ticket {ticket_key}
-    
+    User->>CLI: dispatcher run --ticket {ticket_key}
+
     rect rgb(230, 230, 255)
-        Note over Dispatcher,SQLite: Step 1: Initialize Workflow
-        Dispatcher->>JiraLib: Fetch ticket via JIRA API
-        JiraLib-->>Dispatcher: JiraTicket<br/>(key, title, description, labels, status)
-        Dispatcher->>SQLite: Check for duplicate workflows
-        SQLite-->>Dispatcher: No active workflows
-        Dispatcher->>SQLite: create_workflow()<br/>status: PENDING
-        SQLite-->>Dispatcher: workflow_id
+        Note over CLI: Dry-run fast-path (no graph invocation)
+        alt --dry-run flag set
+            CLI-->>User: [DRY RUN] Would fetch ticket / create workflow / execute stages
+        end
     end
-    
-    Dispatcher->>Goose: Run plan recipe with params<br/>(ticket_key, output_path)
-    Goose->>Recipe: Initialize recipe
-    
+
+    CLI->>Graph: graph.invoke({ticket_key, dry_run: false})
+    Graph->>WP: invoke WorkPlanner subgraph
+
     rect rgb(230, 240, 255)
-        Note over Recipe,ACLI: Step 2: Fetch JIRA Ticket (Recipe)
-        Recipe->>ACLI: acli jira workitem view {ticket_key}
-        ACLI-->>Recipe: Ticket details<br/>(summary, description, status)
-    end
-    
-    rect rgb(240, 255, 240)
-        Note over Recipe,FileSystem: Step 3: Analyze Repository
-        Recipe->>FileSystem: Read README.md
-        FileSystem-->>Recipe: Project structure
-        Recipe->>FileSystem: List directories<br/>(dispatcher/, schemas/, state/)
-        FileSystem-->>Recipe: File tree
-        Recipe->>FileSystem: Read relevant files<br/>(patterns, conventions)
-        FileSystem-->>Recipe: Code context
-    end
-    
-    rect rgb(255, 245, 230)
-        Note over Recipe,LLM: Step 4: Generate WorkPlan
-        Recipe->>LLM: Generate WorkPlan JSON<br/>(ticket + repo analysis)
-        LLM-->>Recipe: WorkPlan JSON draft
-    end
-    
-    rect rgb(255, 240, 245)
-        Note over Recipe,Validator: Step 5: Validate in Recipe (Retry Loop)
-        loop Max 3 attempts
-            Recipe->>FileSystem: Write to /tmp/workplan_temp.json
-            Recipe->>Validator: python work_plan_validator.py
-            alt Validation Passes
-                Validator-->>Recipe: ✅ Validation passed
-                Note over Recipe: Exit retry loop
-            else Validation Fails
-                Validator-->>Recipe: ❌ Error: {specific issue}
-                Recipe->>LLM: Fix specific issue<br/>(e.g., add missing field)
-                LLM-->>Recipe: Corrected WorkPlan JSON
-            end
+        Note over WP: Node 1 — validate_input (AOS-50)
+        WP->>WP: Check ticket key format
+        alt Invalid format
+            WP-->>Graph: error → route to error_handler → END
         end
     end
-    
-    rect rgb(240, 255, 255)
-        Note over Recipe,FileSystem: Step 6: Write to File
-        Recipe->>FileSystem: mkdir -p {output_dir}
-        Recipe->>FileSystem: Write validated JSON<br/>to {output_path}
-        FileSystem-->>Recipe: File created
-        Recipe->>FileSystem: Verify file exists
-        FileSystem-->>Recipe: ✅ Confirmed
+
+    rect rgb(230, 245, 255)
+        Note over WP,SQLite: Node 2 — check_duplicate (AOS-50)
+        WP->>SQLite: get_workflow_by_ticket()
+        SQLite-->>WP: Existing workflows
+        alt Active workflow found
+            WP-->>Graph: error → route to error_handler → END
+        else Completed workflows found
+            WP->>WP: Log warning "N completed workflow(s) exist"
+        end
     end
-    
-    Recipe->>Goose: ✅ WorkPlan generated
-    Goose->>Dispatcher: WorkPlan JSON returned
-    
+
+    rect rgb(230, 255, 240)
+        Note over WP,JiraLib: Node 3 — fetch_ticket (AOS-50)
+        WP->>JiraLib: get_ticket(ticket_key)
+        JiraLib-->>WP: JiraTicket<br/>(key, title, description, labels, status)
+        Note over WP: Domain exceptions (JiraConfigurationError,<br/>JiraTicketNotFoundError) bubble up to CLI
+    end
+
+    rect rgb(240, 255, 230)
+        Note over WP,SQLite: Node 4 — create_workflow_record (AOS-50)
+        WP->>SQLite: create_workflow() → status: PENDING
+        WP->>SQLite: update_status() → status: IN_PROGRESS
+        SQLite-->>WP: workflow_id
+    end
+
     rect rgb(255, 250, 230)
-        Note over Dispatcher,Validator: Step 7: Dispatcher Validates WorkPlan
-        Dispatcher->>Validator: validate_work_plan(work_plan_data)
-        alt Validation Passes
-            Validator-->>Dispatcher: ✅ WorkPlan valid
-            alt Status is "blocked"
-                Note over Dispatcher: ❌ Mark workflow FAILED<br/>Cannot proceed
+        Note over WP,Goose: Node 5 — generate_plan (AOS-50 — stub)
+        WP->>Goose: [STUB] Future: invoke plan recipe
+        Note over WP: Returns work_plan_data: None until implemented
+    end
+
+    rect rgb(255, 245, 230)
+        Note over WP,Validator: Node 6 — validate_plan (AOS-50)
+        alt work_plan_data present
+            WP->>Validator: validate_work_plan(work_plan_data)
+            alt Validation fails or status == "blocked"
+                Validator-->>WP: error → route to error_handler
+            else Passes
+                Validator-->>WP: ✅ validated WorkPlan
             end
-        else Validation Fails
-            Validator-->>Dispatcher: ❌ WorkPlanValidationError
-            Note over Dispatcher: Mark workflow FAILED
+        else No work_plan_data (stub returns None)
+            Note over WP: Skip — no plan to validate
         end
     end
-    
+
     rect rgb(255, 235, 245)
-        Note over Dispatcher,SQLite: Step 8: Store WorkPlan (AOS-39)
-        Dispatcher->>SQLite: update_work_plan()<br/>Store WorkPlan JSON
-        SQLite-->>Dispatcher: ✅ Stored
-    end
-    
-    rect rgb(245, 235, 255)
-        Note over Dispatcher,ACLI: Step 9: Post to Jira (AOS-39)
-        Dispatcher->>Formatter: format_work_plan_comment()<br/>(WorkPlan, ticket_key)
-        Formatter-->>Dispatcher: Formatted comment<br/>(summary, tasks, risks, approval)
-        Dispatcher->>ACLI: acli jira workitem comment add<br/>--key {ticket_key}<br/>--comment {formatted_comment}
-        alt Comment Posted Successfully
-            ACLI-->>Dispatcher: ✅ Comment added
-            Note over Dispatcher: WorkPlan visible on Jira
-        else Comment Posting Failed
-            ACLI-->>Dispatcher: ❌ Posting failed
-            Note over Dispatcher: Log error, continue<br/>(WorkPlan still in SQLite)
+        Note over WP,SQLite: Node 7 — store_plan (AOS-50)
+        alt work_plan_data present
+            WP->>SQLite: update_work_plan()
+            SQLite-->>WP: ✅ Stored
+        else No plan
+            Note over WP: Skip
         end
     end
-    
-    Dispatcher->>User: ✅ WorkPlan generated and posted<br/>View at: {jira_url}/browse/{ticket_key}
-    
-    Note over User,Formatter: WorkPlan Status Classification:<br/>• "pass" - Clear scope, ready to implement<br/>• "concerns" - Has risks or dependencies<br/>• "blocked" - Missing info or ambiguous<br/><br/>WorkPlan Comment Sections:<br/>• Plan Summary (approach and status)<br/>• Task List (with files affected)<br/>• Risks<br/>• Questions for Reviewer<br/>• Approval Instructions<br/>  - dispatcher approve {ticket_key}<br/>  - dispatcher reject {ticket_key}
+
+    rect rgb(245, 235, 255)
+        Note over WP,JiraLib: Node 8 — post_to_jira (AOS-50)
+        alt work_plan_data present
+            WP->>Formatter: format_work_plan_comment()
+            Formatter-->>WP: Formatted comment
+            WP->>JiraLib: post_comment(ticket_key, comment)
+            alt Posted successfully
+                JiraLib-->>WP: ✅ Comment added
+            else Failed (non-fatal)
+                JiraLib-->>WP: ⚠️  Log warning, continue
+            end
+        else No plan
+            Note over WP: Skip
+        end
+    end
+
+    WP-->>Graph: Final WorkPlannerState
+    Graph->>Graph: execute_plan node (stub — AOS-50)
+    Graph-->>CLI: Final OrchestratorState
+
+    rect rgb(235, 255, 235)
+        Note over CLI,SQLite: CLI post-graph completion
+        alt state.error set (routing error)
+            CLI-->>User: ❌ Exit 1 (error printed by node)
+        else No error
+            CLI->>SQLite: update_status() → COMPLETED
+            CLI-->>User: 🎉 Workflow completed successfully
+        end
+    end
+
+    rect rgb(255, 220, 220)
+        Note over CLI: Domain exception handlers (AOS-50)
+        alt JiraTicketNotFoundError
+            CLI-->>User: ❌ Ticket not found: {e}
+        else JiraConfigurationError
+            CLI-->>User: ❌ JIRA configuration error + env var hints
+        else JiraAuthenticationError
+            CLI-->>User: ❌ JIRA authentication error
+        else KeyboardInterrupt
+            CLI-->>User: ⚠️  Workflow interrupted (exit 130)
+        else Unhandled Exception
+            CLI-->>User: ❌ Unhandled error: {e}
+        end
+    end
