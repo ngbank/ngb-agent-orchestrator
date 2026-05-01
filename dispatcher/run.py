@@ -9,33 +9,48 @@ under ``graph/``.  This module is responsible only for:
   - Handling the dry-run fast-path
   - Invoking the top-level orchestrator graph
   - Catching domain exceptions that bubble out of the graph
-  - Marking the workflow COMPLETED on success
+  - Handling GraphInterrupt (pending-approval pause)
+  - Resuming interrupted graphs via --approve / --reject
 
 Usage:
-    python dispatcher/run.py --ticket AOS-36
-    python dispatcher/run.py --ticket AOS-36 --dry-run
+    python -m dispatcher.run --ticket AOS-36
+    python -m dispatcher.run --ticket AOS-36 --dry-run
+    python -m dispatcher.run --approve <workflow_id>
+    python -m dispatcher.run --reject <workflow_id> --reason "scope too broad"
 """
 
 import sys
+import uuid
+import getpass
 import click
 from dotenv import load_dotenv
 
 load_dotenv()
+
+from langgraph.types import Command
+from langgraph.errors import GraphInterrupt
 
 from dispatcher.jira_client import (
     JiraConfigurationError,
     JiraAuthenticationError,
     JiraTicketNotFoundError,
 )
-from state.state_store import update_status
+from state.state_store import update_status, get_workflow, get_workflow_by_ticket
 from state.workflow_status import WorkflowStatus
 from graph.builder import build_orchestrator
+
+
+def _get_actor() -> str:
+    try:
+        return getpass.getuser()
+    except Exception:
+        return "unknown"
 
 
 @click.command()
 @click.option(
     '--ticket',
-    required=True,
+    default=None,
     help='JIRA ticket key (e.g., AOS-36)',
 )
 @click.option(
@@ -43,26 +58,92 @@ from graph.builder import build_orchestrator
     is_flag=True,
     help='Print actions without executing (no API calls or database changes)',
 )
-def run(ticket: str, dry_run: bool) -> None:
+@click.option(
+    '--approve',
+    'do_approve',
+    is_flag=True,
+    help='Approve the pending WorkPlan (use with --ticket or --workflow-id)',
+)
+@click.option(
+    '--reject',
+    'do_reject',
+    is_flag=True,
+    help='Reject the pending WorkPlan (use with --ticket or --workflow-id)',
+)
+@click.option(
+    '--reason',
+    default=None,
+    help='Reason for rejection (used with --reject)',
+)
+@click.option(
+    '--workflow-id',
+    'workflow_id',
+    default=None,
+    metavar='UUID',
+    help='Target a specific workflow by ID (use with --approve or --reject)',
+)
+def run(
+    ticket: str,
+    dry_run: bool,
+    do_approve: bool,
+    do_reject: bool,
+    reason: str,
+    workflow_id: str,
+) -> None:
     """
     Main dispatcher entry point for workflow orchestration.
-
-    Fetches the specified JIRA ticket, creates a workflow record, and
-    orchestrates the complete workflow lifecycle including plan generation,
-    code execution, and PR creation.
 
     Examples:
 
         # Run a workflow for a ticket
-        python dispatcher/run.py --ticket AOS-36
+        python -m dispatcher.run --ticket AOS-36
 
         # Preview what would happen without executing
-        python dispatcher/run.py --ticket AOS-36 --dry-run
+        python -m dispatcher.run --ticket AOS-36 --dry-run
+
+        # Approve by ticket key
+        python -m dispatcher.run --approve --ticket AOS-36
+
+        # Approve by workflow ID
+        python -m dispatcher.run --approve --workflow-id <uuid>
+
+        # Reject by ticket key
+        python -m dispatcher.run --reject --ticket AOS-36 --reason "scope too broad"
+
+        # Reject by workflow ID
+        python -m dispatcher.run --reject --workflow-id <uuid> --reason "scope too broad"
     """
-    if not ticket or '-' not in ticket:
+    # --- dispatch to the right sub-command ---
+    if do_approve:
+        if not ticket and not workflow_id:
+            click.echo("❌ --approve requires --ticket or --workflow-id", err=True)
+            sys.exit(1)
+        _handle_approve(ticket, workflow_id)
+        return
+
+    if do_reject:
+        if not ticket and not workflow_id:
+            click.echo("❌ --reject requires --ticket or --workflow-id", err=True)
+            sys.exit(1)
+        _handle_reject(ticket, reason, workflow_id)
+        return
+
+    if not ticket:
+        click.echo("❌ --ticket is required when not using --approve or --reject", err=True)
+        sys.exit(1)
+
+    if '-' not in ticket:
         click.echo("❌ Invalid ticket format. Expected format: PROJECT-123", err=True)
         sys.exit(1)
 
+    _handle_run(ticket, dry_run)
+
+
+# ---------------------------------------------------------------------------
+# Sub-handlers
+# ---------------------------------------------------------------------------
+
+def _handle_run(ticket: str, dry_run: bool) -> None:
     click.echo(f"🚀 Starting workflow for ticket: {ticket}")
 
     if dry_run:
@@ -74,24 +155,40 @@ def run(ticket: str, dry_run: bool) -> None:
         click.echo("✅ Dry run completed successfully")
         return
 
+    # Pre-generate a UUID that acts as both the workflow DB ID and the
+    # LangGraph thread_id, keeping the two systems in sync.
+    workflow_id = str(uuid.uuid4())
+    thread_config = {"configurable": {"thread_id": workflow_id}}
+
     try:
         graph = build_orchestrator()
-        final_state = graph.invoke({"ticket_key": ticket, "dry_run": False})
+        final_state = graph.invoke(
+            {"ticket_key": ticket, "dry_run": False, "workflow_id": workflow_id},
+            config=thread_config,
+        )
 
         if final_state.get("error"):
-            # Error was already printed by the node that set it.
             sys.exit(1)
 
-        workflow_id = final_state.get("workflow_id")
-        if workflow_id:
-            update_status(
-                workflow_id,
-                WorkflowStatus.COMPLETED,
-                actor='dispatcher',
-                reason='All stages completed successfully',
-            )
+        wf_id = final_state.get("workflow_id", workflow_id)
+        if final_state.get("approval_decision") != "approved":
+            # Graph suspended at await_approval — instructions already printed
+            # by the node.  Nothing more to do here.
+            return
 
+        update_status(
+            wf_id,
+            WorkflowStatus.COMPLETED,
+            actor="dispatcher",
+            reason="All stages completed successfully",
+        )
         click.echo("🎉 Workflow completed successfully")
+
+    except GraphInterrupt:
+        # The graph hit interrupt() inside await_approval.  The node already
+        # printed the approval instructions and the workflow status is already
+        # PENDING_APPROVAL in the DB.
+        pass
 
     except JiraTicketNotFoundError as e:
         click.echo(f"❌ Ticket not found: {e}", err=True)
@@ -119,5 +216,103 @@ def run(ticket: str, dry_run: bool) -> None:
         sys.exit(1)
 
 
+def _handle_approve(ticket_key: str, workflow_id: str = None) -> None:
+    if workflow_id:
+        resolved_id = workflow_id
+    else:
+        pending = [
+            w for w in get_workflow_by_ticket(ticket_key)
+            if w["status"] == WorkflowStatus.PENDING_APPROVAL
+        ]
+        if not pending:
+            click.echo(f"❌ No pending-approval workflow found for ticket: {ticket_key}", err=True)
+            sys.exit(1)
+        resolved_id = pending[0]["id"]
+
+    workflow = get_workflow(resolved_id)
+    if workflow is None:
+        click.echo(f"❌ Workflow not found: {resolved_id}", err=True)
+        sys.exit(1)
+
+    if workflow["status"] == WorkflowStatus.APPROVED:
+        click.echo(f"ℹ️  Workflow {resolved_id} is already approved — nothing to do.")
+        return
+
+    if workflow["status"] != WorkflowStatus.PENDING_APPROVAL:
+        click.echo(
+            f"❌ Workflow {resolved_id} is not pending approval (status: {workflow['status'].value})",
+            err=True,
+        )
+        sys.exit(1)
+
+    thread_config = {"configurable": {"thread_id": resolved_id}}
+    actor = _get_actor()
+
+    try:
+        graph = build_orchestrator()
+        final_state = graph.invoke(
+            Command(resume={"decision": "approved"}),
+            config=thread_config,
+        )
+
+        wf_id = final_state.get("workflow_id", resolved_id)
+        update_status(
+            wf_id,
+            WorkflowStatus.COMPLETED,
+            actor=actor,
+            reason="All stages completed successfully after approval",
+        )
+        click.echo("🎉 Workflow completed successfully")
+
+    except Exception as e:
+        click.echo(f"❌ Error resuming workflow: {e}", err=True)
+        sys.exit(1)
+
+
+def _handle_reject(ticket_key: str, reason: str, workflow_id: str = None) -> None:
+    if workflow_id:
+        resolved_id = workflow_id
+    else:
+        pending = [
+            w for w in get_workflow_by_ticket(ticket_key)
+            if w["status"] == WorkflowStatus.PENDING_APPROVAL
+        ]
+        if not pending:
+            click.echo(f"❌ No pending-approval workflow found for ticket: {ticket_key}", err=True)
+            sys.exit(1)
+        resolved_id = pending[0]["id"]
+
+    workflow = get_workflow(resolved_id)
+    if workflow is None:
+        click.echo(f"❌ Workflow not found: {resolved_id}", err=True)
+        sys.exit(1)
+
+    if workflow["status"] != WorkflowStatus.PENDING_APPROVAL:
+        click.echo(
+            f"❌ Workflow {resolved_id} is not pending approval (status: {workflow['status'].value})",
+            err=True,
+        )
+        sys.exit(1)
+
+    thread_config = {"configurable": {"thread_id": resolved_id}}
+
+    try:
+        graph = build_orchestrator()
+        graph.invoke(
+            Command(resume={"decision": "rejected", "reason": reason}),
+            config=thread_config,
+        )
+        click.echo(f"🚫 Workflow {resolved_id} rejected" + (f": {reason}" if reason else ""))
+
+    except Exception as e:
+        click.echo(f"❌ Error resuming workflow: {e}", err=True)
+        sys.exit(1)
+
+    except Exception as e:
+        click.echo(f"❌ Error resuming workflow: {e}", err=True)
+        sys.exit(1)
+
+
 if __name__ == '__main__':
     run()
+

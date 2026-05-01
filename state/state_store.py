@@ -54,7 +54,8 @@ def run_migrations() -> None:
 def create_workflow(
     ticket_key: str,
     work_plan: Optional[Dict] = None,
-    status: WorkflowStatus = WorkflowStatus.PENDING
+    status: WorkflowStatus = WorkflowStatus.PENDING,
+    workflow_id: Optional[str] = None,
 ) -> str:
     """
     Create a new workflow record.
@@ -63,11 +64,12 @@ def create_workflow(
         ticket_key: JIRA ticket key (e.g., "AOS-35")
         work_plan: Dictionary containing the work plan (will be JSON-serialized)
         status: Initial status (default: WorkflowStatus.PENDING)
+        workflow_id: Optional pre-seeded UUID. Generated automatically when None.
     
     Returns:
         workflow_id: UUID of created workflow
     """
-    workflow_id = str(uuid.uuid4())
+    workflow_id = workflow_id or str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()
     work_plan_json = json.dumps(work_plan) if work_plan else None
     

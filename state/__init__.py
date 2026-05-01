@@ -7,7 +7,9 @@ from .state_store import (
     get_workflow,
     get_workflow_by_ticket,
     get_audit_log,
-    run_migrations
+    run_migrations,
+    get_connection,
+    _create_audit_log,
 )
 
 __all__ = [
@@ -17,5 +19,7 @@ __all__ = [
     'get_workflow',
     'get_workflow_by_ticket',
     'get_audit_log',
-    'run_migrations'
+    'run_migrations',
+    'get_connection',
+    '_create_audit_log',
 ]
