@@ -84,6 +84,22 @@ sequenceDiagram
         end
     end
     
-    Dispatcher->>User: ✅ WorkPlan generated and posted<br/>View at: {jira_url}/browse/{ticket_key}
-    
+    Dispatcher->>User: ⏸️ WorkPlan ready for review<br/>Workflow ID: {workflow_id}
+
+    rect rgb(255, 250, 220)
+        Note over User,SQLite: Step 8: Developer Approval Gate (AOS-40)
+        Note over Dispatcher: Graph suspended at await_approval<br/>Status → PENDING_APPROVAL in SQLite
+        User->>Dispatcher: python -m dispatcher.run --approve {workflow_id}<br/>OR<br/>python -m dispatcher.run --reject {workflow_id} --reason "..."
+        alt Approved
+            Dispatcher->>SQLite: update_status(APPROVED)<br/>audit_log: actor=local_user, action=workflow_approved
+            SQLite-->>Dispatcher: ✅ Status updated
+            Dispatcher->>Dispatcher: Resume graph → execute_plan
+            Note over Dispatcher: Status → COMPLETED
+        else Rejected
+            Dispatcher->>SQLite: update_status(REJECTED)<br/>audit_log: actor=local_user, action=workflow_rejected, reason=...
+            SQLite-->>Dispatcher: ✅ Status updated
+            Note over Dispatcher: Graph terminates — no execution
+        end
+    end
+
     Note over User,Formatter: WorkPlan Status Classification:<br/>• "pass" - Clear scope, ready to implement<br/>• "concerns" - Has risks or dependencies<br/>• "blocked" - Missing info or ambiguous<br/><br/>WorkPlan Comment Sections:<br/>• Plan Summary (approach and status)<br/>• Task List (with files affected)<br/>• Risks<br/>• Questions for Reviewer<br/>• Approval Instructions<br/>  - dispatcher approve {ticket_key}<br/>  - dispatcher reject {ticket_key}

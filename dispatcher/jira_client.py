@@ -71,20 +71,38 @@ class JiraClient:
             raise JiraConfigurationError(
                 f"Missing required environment variables: {', '.join(missing_vars)}"
             )
-        
+
+        # Detect unedited placeholder values from .env.example
+        placeholder_vars = []
+        if self.jira_email and self.jira_email == 'your.email@example.com':
+            placeholder_vars.append('JIRA_EMAIL')
+        if self.jira_api_token and self.jira_api_token == 'your_api_token_here':
+            placeholder_vars.append('JIRA_API_TOKEN')
+        if placeholder_vars:
+            raise JiraConfigurationError(
+                f"JIRA credentials contain placeholder values: {', '.join(placeholder_vars)}. "
+                "Please update your .env file with real credentials. "
+                "Generate an API token at: https://id.atlassian.com/manage-profile/security/api-tokens"
+            )
+
         try:
             self.client = JIRA(
                 server=self.jira_url,
                 basic_auth=(self.jira_email, self.jira_api_token)
             )
+            # Eagerly validate credentials — /myself fails fast with 401/403
+            # if the email or API token is wrong.
+            self.client.myself()
         except JIRAError as e:
-            if e.status_code == 401:
+            if e.status_code in (401, 403):
                 raise JiraAuthenticationError(
-                    "Authentication failed. Please check JIRA_EMAIL and JIRA_API_TOKEN."
+                    f"JIRA authentication failed (HTTP {e.status_code}). "
+                    "Check that JIRA_EMAIL and JIRA_API_TOKEN are correct. "
+                    "Generate a new token at: https://id.atlassian.com/manage-profile/security/api-tokens"
                 ) from e
             else:
                 raise JiraAuthenticationError(
-                    f"Failed to authenticate with JIRA: {e}"
+                    f"Failed to connect to JIRA: {e}"
                 ) from e
     
     def get_ticket(self, ticket_key: str) -> JiraTicket:
@@ -123,14 +141,14 @@ class JiraClient:
         except JIRAError as e:
             if e.status_code == 404:
                 raise JiraTicketNotFoundError(
-                    f"Ticket '{ticket_key}' not found. Please verify the ticket key."
+                    f"Ticket '{ticket_key}' not found. Verify the ticket key is correct."
                 ) from e
-            elif e.status_code == 401:
+            elif e.status_code in (401, 403):
                 raise JiraAuthenticationError(
-                    "Authentication failed during ticket fetch. Please check your credentials."
+                    f"Access denied fetching '{ticket_key}' (HTTP {e.status_code}). "
+                    "Check that JIRA_EMAIL and JIRA_API_TOKEN are correct and have access to this project."
                 ) from e
             else:
-                # Re-raise other JIRA errors with more context
                 raise JiraAuthenticationError(
                     f"Failed to fetch ticket '{ticket_key}': {e}"
                 ) from e

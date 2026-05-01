@@ -1,5 +1,7 @@
 """Node: fetch_ticket — retrieve JIRA ticket details via the API."""
 
+import dataclasses
+
 import click
 
 from dispatcher.jira_client import JiraClient
@@ -12,4 +14,6 @@ def fetch_ticket(state: WorkPlannerState) -> dict:
     jira_client = JiraClient()
     ticket = jira_client.get_ticket(ticket_key)
     click.echo(f"✅ Ticket fetched: {ticket.title}")
-    return {"ticket": ticket}
+    # Store as a plain dict so LangGraph can checkpoint it without needing
+    # to register JiraTicket as a custom msgpack type.
+    return {"ticket": dataclasses.asdict(ticket)}

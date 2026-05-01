@@ -5,6 +5,7 @@ import os
 import tempfile
 from unittest.mock import Mock, patch
 from click.testing import CliRunner
+from langgraph.checkpoint.memory import MemorySaver
 
 from dispatcher.run import run
 from dispatcher.jira_client import JiraTicket, JiraTicketNotFoundError, JiraConfigurationError
@@ -42,6 +43,12 @@ def test_db():
 
 
 @pytest.fixture
+def memory_checkpointer():
+    """In-memory checkpointer so tests don't need SqliteSaver setup."""
+    return MemorySaver()
+
+
+@pytest.fixture
 def mock_jira_client():
     """Mock JIRA client for predictable responses."""
     with patch('graph.work_planner.nodes.fetch_ticket.JiraClient') as mock:
@@ -63,69 +70,85 @@ def cli_runner():
     return CliRunner()
 
 
-def test_run_creates_workflow(test_db, mock_jira_client, cli_runner):
-    """Test that running the dispatcher creates a workflow record."""
-    result = cli_runner.invoke(run, ['--ticket', 'TEST-123'])
-    
+def test_run_creates_workflow(test_db, mock_jira_client, cli_runner, memory_checkpointer):
+    """Test that running the dispatcher creates a workflow record and pauses for approval."""
+    with patch('dispatcher.run.build_orchestrator') as mock_build:
+        from graph.builder import build_orchestrator
+        mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
+
+        result = cli_runner.invoke(run, ['--ticket', 'TEST-123'])
+
     assert result.exit_code == 0
     assert '🚀 Starting workflow for ticket: TEST-123' in result.output
     assert '✅ Ticket fetched: Test Ticket' in result.output
     assert '📝 Creating workflow record...' in result.output
-    assert '🎉 Workflow completed successfully' in result.output
-    
-    # Verify workflow was created in database
+    # Graph pauses at await_approval — no completion message yet
+    assert '⏸️  WorkPlan is ready for review.' in result.output
+
+    # Verify workflow was created and is pending approval
     workflows = state_store.get_workflow_by_ticket('TEST-123')
     assert len(workflows) == 1
     assert workflows[0]['ticket_key'] == 'TEST-123'
-    assert workflows[0]['status'] == WorkflowStatus.COMPLETED
+    assert workflows[0]['status'] == WorkflowStatus.PENDING_APPROVAL
 
 
-def test_run_rejects_duplicate(test_db, mock_jira_client, cli_runner):
+def test_run_rejects_duplicate(test_db, mock_jira_client, cli_runner, memory_checkpointer):
     """Test that duplicate detection prevents running workflows twice."""
     # Create an in-progress workflow
     workflow_id = state_store.create_workflow('TEST-123', status=WorkflowStatus.IN_PROGRESS)
-    
-    # Try to run again
-    result = cli_runner.invoke(run, ['--ticket', 'TEST-123'])
-    
+
+    with patch('dispatcher.run.build_orchestrator') as mock_build:
+        from graph.builder import build_orchestrator
+        mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
+
+        result = cli_runner.invoke(run, ['--ticket', 'TEST-123'])
+
     assert result.exit_code == 1
     assert '❌ Workflow already in progress' in result.output
     assert workflow_id in result.output
     assert 'Cannot start a new workflow while one is active' in result.output
 
 
-def test_run_allows_rerun_after_completion(test_db, mock_jira_client, cli_runner):
-    """Test that completed workflows can be re-run."""
+def test_run_allows_rerun_after_completion(test_db, mock_jira_client, cli_runner, memory_checkpointer):
+    """Test that completed workflows can be re-run (pauses at approval gate)."""
     # Create a completed workflow
-    workflow_id = state_store.create_workflow('TEST-123', status=WorkflowStatus.COMPLETED)
-    
-    # Try to run again - should succeed with warning
-    result = cli_runner.invoke(run, ['--ticket', 'TEST-123'])
-    
+    state_store.create_workflow('TEST-123', status=WorkflowStatus.COMPLETED)
+
+    with patch('dispatcher.run.build_orchestrator') as mock_build:
+        from graph.builder import build_orchestrator
+        mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
+
+        result = cli_runner.invoke(run, ['--ticket', 'TEST-123'])
+
     assert result.exit_code == 0
     assert '⚠️  Warning: 1 completed workflow(s) exist for TEST-123' in result.output
-    assert '🎉 Workflow completed successfully' in result.output
-    
-    # Verify new workflow was created
+    # New run pauses at approval gate
+    assert '⏸️  WorkPlan is ready for review.' in result.output
+
+    # Verify new workflow was created (2 total)
     workflows = state_store.get_workflow_by_ticket('TEST-123')
     assert len(workflows) == 2
 
 
-def test_run_handles_ticket_not_found(test_db, cli_runner):
+def test_run_handles_ticket_not_found(test_db, cli_runner, memory_checkpointer):
     """Test graceful handling of non-existent tickets."""
     with patch('graph.work_planner.nodes.fetch_ticket.JiraClient') as mock:
         mock_instance = Mock()
         mock_instance.get_ticket.side_effect = JiraTicketNotFoundError("Ticket not found")
         mock.return_value = mock_instance
-        
-        result = cli_runner.invoke(run, ['--ticket', 'NOTFOUND-999'])
-        
-        assert result.exit_code == 1
-        assert '❌ Ticket not found' in result.output
-        
-        # Verify no workflow was created (error happens before workflow creation)
-        workflows = state_store.get_workflow_by_ticket('NOTFOUND-999')
-        assert len(workflows) == 0
+
+        with patch('dispatcher.run.build_orchestrator') as mock_build:
+            from graph.builder import build_orchestrator
+            mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
+
+            result = cli_runner.invoke(run, ['--ticket', 'NOTFOUND-999'])
+
+    assert result.exit_code == 1
+    assert '❌ Ticket not found' in result.output
+
+    # Verify no workflow was created (error happens before workflow creation)
+    workflows = state_store.get_workflow_by_ticket('NOTFOUND-999')
+    assert len(workflows) == 0
 
 
 def test_run_dry_run_mode(test_db, cli_runner):
@@ -144,32 +167,39 @@ def test_run_dry_run_mode(test_db, cli_runner):
     assert len(workflows) == 0
 
 
-def test_run_logs_transitions(test_db, mock_jira_client, cli_runner):
+def test_run_logs_transitions(test_db, mock_jira_client, cli_runner, memory_checkpointer):
     """Test that all stage transitions are logged to audit log."""
-    result = cli_runner.invoke(run, ['--ticket', 'TEST-123'])
-    
+    with patch('dispatcher.run.build_orchestrator') as mock_build:
+        from graph.builder import build_orchestrator
+        mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
+
+        result = cli_runner.invoke(run, ['--ticket', 'TEST-123'])
+
     assert result.exit_code == 0
-    
+
     # Get workflow and audit log
     workflows = state_store.get_workflow_by_ticket('TEST-123')
     workflow_id = workflows[0]['id']
     audit_log = state_store.get_audit_log(workflow_id)
-    
-    # Verify audit log entries
-    assert len(audit_log) >= 3  # Created, in_progress, completed
-    
+
+    # Verify audit log entries (created, in_progress, pending_approval)
+    assert len(audit_log) >= 3
+
     # Check for workflow_created entry
     created_entries = [e for e in audit_log if e['action'] == 'workflow_created']
     assert len(created_entries) == 1
     assert created_entries[0]['actor'] == 'system'
-    
+
     # Check for status_change entries
     status_changes = [e for e in audit_log if e['action'] == 'status_change']
-    assert len(status_changes) >= 2  # in_progress, completed
-    
+    assert len(status_changes) >= 2  # in_progress, pending_approval
+
     # Verify dispatcher is the actor for stage transitions
     dispatcher_entries = [e for e in audit_log if e['actor'] == 'dispatcher']
     assert len(dispatcher_entries) >= 2
+
+    # Workflow should be paused pending approval
+    assert workflows[0]['status'] == WorkflowStatus.PENDING_APPROVAL
 
 
 def test_run_handles_exceptions(test_db, cli_runner):
@@ -191,16 +221,20 @@ def test_run_validates_ticket_format(test_db, cli_runner):
     assert '❌ Invalid ticket format' in result.output
 
 
-def test_run_handles_jira_config_error(test_db, cli_runner):
+def test_run_handles_jira_config_error(test_db, cli_runner, memory_checkpointer):
     """Test handling of JIRA configuration errors."""
     with patch('graph.work_planner.nodes.fetch_ticket.JiraClient') as mock:
         mock.side_effect = JiraConfigurationError("Missing JIRA_URL")
-        
-        result = cli_runner.invoke(run, ['--ticket', 'TEST-123'])
-        
-        assert result.exit_code == 1
-        assert '❌ JIRA configuration error' in result.output
-        assert 'JIRA_URL' in result.output
+
+        with patch('dispatcher.run.build_orchestrator') as mock_build:
+            from graph.builder import build_orchestrator
+            mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
+
+            result = cli_runner.invoke(run, ['--ticket', 'TEST-123'])
+
+    assert result.exit_code == 1
+    assert '❌ JIRA configuration error' in result.output
+    assert 'JIRA_URL' in result.output
 
 
 def test_check_duplicate_node(test_db):
@@ -246,14 +280,18 @@ def test_create_workflow_record_node(test_db):
     assert len(status_changes) >= 1
 
 
-def test_run_keyboard_interrupt(test_db, cli_runner):
+def test_run_keyboard_interrupt(test_db, cli_runner, memory_checkpointer):
     """Test that KeyboardInterrupt is handled gracefully."""
     with patch('graph.work_planner.nodes.fetch_ticket.JiraClient') as mock:
         mock_instance = Mock()
         mock_instance.get_ticket.side_effect = KeyboardInterrupt()
         mock.return_value = mock_instance
 
-        result = cli_runner.invoke(run, ['--ticket', 'TEST-123'])
+        with patch('dispatcher.run.build_orchestrator') as mock_build:
+            from graph.builder import build_orchestrator
+            mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
 
-        assert result.exit_code == 130  # Standard SIGINT exit code
-        assert '⚠️  Workflow interrupted by user' in result.output
+            result = cli_runner.invoke(run, ['--ticket', 'TEST-123'])
+
+    assert result.exit_code == 130  # Standard SIGINT exit code
+    assert '⚠️  Workflow interrupted by user' in result.output

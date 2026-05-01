@@ -20,3 +20,7 @@ class OrchestratorState(TypedDict, total=False):
     ticket: Optional[Any]          # dispatcher.jira_client.JiraTicket
     work_plan_data: Optional[dict]
     error: Optional[str]
+
+    # --- populated by await_approval node ---
+    approval_decision: Optional[str]   # "approved" | "rejected"
+    rejection_reason: Optional[str]    # only set when rejected
