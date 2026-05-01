@@ -1,4 +1,4 @@
-"""Integration tests for dispatcher/run.py"""
+"""Integration tests for dispatcher/run.py (LangGraph-based orchestrator)"""
 
 import pytest
 import os
@@ -6,7 +6,7 @@ import tempfile
 from unittest.mock import Mock, patch
 from click.testing import CliRunner
 
-from dispatcher.run import run, check_for_duplicate_workflow, execute_workflow
+from dispatcher.run import run
 from dispatcher.jira_client import JiraTicket, JiraTicketNotFoundError, JiraConfigurationError
 from state import state_store
 from state.workflow_status import WorkflowStatus
@@ -44,7 +44,7 @@ def test_db():
 @pytest.fixture
 def mock_jira_client():
     """Mock JIRA client for predictable responses."""
-    with patch('dispatcher.run.JiraClient') as mock:
+    with patch('graph.work_planner.nodes.fetch_ticket.JiraClient') as mock:
         mock_instance = Mock()
         mock_instance.get_ticket.return_value = JiraTicket(
             key='TEST-123',
@@ -113,7 +113,7 @@ def test_run_allows_rerun_after_completion(test_db, mock_jira_client, cli_runner
 
 def test_run_handles_ticket_not_found(test_db, cli_runner):
     """Test graceful handling of non-existent tickets."""
-    with patch('dispatcher.run.JiraClient') as mock:
+    with patch('graph.work_planner.nodes.fetch_ticket.JiraClient') as mock:
         mock_instance = Mock()
         mock_instance.get_ticket.side_effect = JiraTicketNotFoundError("Ticket not found")
         mock.return_value = mock_instance
@@ -128,7 +128,7 @@ def test_run_handles_ticket_not_found(test_db, cli_runner):
         assert len(workflows) == 0
 
 
-def test_run_dry_run_mode(test_db, mock_jira_client, cli_runner):
+def test_run_dry_run_mode(test_db, cli_runner):
     """Test that dry-run mode doesn't mutate state."""
     result = cli_runner.invoke(run, ['--ticket', 'TEST-123', '--dry-run'])
     
@@ -174,7 +174,7 @@ def test_run_logs_transitions(test_db, mock_jira_client, cli_runner):
 
 def test_run_handles_exceptions(test_db, cli_runner):
     """Test that exceptions are caught and logged with failed status."""
-    with patch('dispatcher.run.JiraClient') as mock:
+    with patch('graph.work_planner.nodes.fetch_ticket.JiraClient') as mock:
         mock.side_effect = Exception("Unexpected error")
         
         result = cli_runner.invoke(run, ['--ticket', 'TEST-123'])
@@ -193,7 +193,7 @@ def test_run_validates_ticket_format(test_db, cli_runner):
 
 def test_run_handles_jira_config_error(test_db, cli_runner):
     """Test handling of JIRA configuration errors."""
-    with patch('dispatcher.run.JiraClient') as mock:
+    with patch('graph.work_planner.nodes.fetch_ticket.JiraClient') as mock:
         mock.side_effect = JiraConfigurationError("Missing JIRA_URL")
         
         result = cli_runner.invoke(run, ['--ticket', 'TEST-123'])
@@ -203,81 +203,57 @@ def test_run_handles_jira_config_error(test_db, cli_runner):
         assert 'JIRA_URL' in result.output
 
 
-def test_check_for_duplicate_workflow(test_db):
-    """Test duplicate detection logic independently."""
-    # No workflows - should return None
-    result = check_for_duplicate_workflow('TEST-999')
-    assert result is None
-    
-    # Create pending workflow - should return workflow_id
-    workflow_id = state_store.create_workflow('TEST-999', status=WorkflowStatus.PENDING)
-    result = check_for_duplicate_workflow('TEST-999')
-    assert result == workflow_id
-    
-    # Update to completed - should return None
+def test_check_duplicate_node(test_db):
+    """Test duplicate detection via the check_duplicate graph node."""
+    from graph.work_planner.nodes.check_duplicate import check_duplicate
+
+    # No workflows — should return empty dict (no error)
+    result = check_duplicate({"ticket_key": "TEST-999", "dry_run": False})
+    assert result == {}
+
+    # Create pending workflow — should set error containing the workflow id
+    workflow_id = state_store.create_workflow("TEST-999", status=WorkflowStatus.PENDING)
+    result = check_duplicate({"ticket_key": "TEST-999", "dry_run": False})
+    assert "error" in result
+    assert workflow_id in result["error"]
+
+    # Mark completed — should return empty dict again
     state_store.update_status(workflow_id, WorkflowStatus.COMPLETED)
-    result = check_for_duplicate_workflow('TEST-999')
-    assert result is None
-    
-    # Create in_progress workflow - should return workflow_id
-    workflow_id2 = state_store.create_workflow('TEST-999', status=WorkflowStatus.IN_PROGRESS)
-    result = check_for_duplicate_workflow('TEST-999')
-    assert result == workflow_id2
+    result = check_duplicate({"ticket_key": "TEST-999", "dry_run": False})
+    assert result == {}
+
+    # Create in_progress workflow — should set error
+    workflow_id2 = state_store.create_workflow("TEST-999", status=WorkflowStatus.IN_PROGRESS)
+    result = check_duplicate({"ticket_key": "TEST-999", "dry_run": False})
+    assert "error" in result
+    assert workflow_id2 in result["error"]
 
 
-def test_execute_workflow_placeholder(test_db, capsys):
-    """Test that execute_workflow runs without errors (placeholder)."""
-    ticket = JiraTicket(
-        key='TEST-123',
-        title='Test Ticket',
-        description='Test description',
-        labels=['test'],
-        status='To Do'
-    )
-    
-    workflow_id = state_store.create_workflow('TEST-123', status=WorkflowStatus.PENDING)
-    
-    # Execute workflow (not dry-run)
-    execute_workflow(workflow_id, ticket, dry_run=False)
-    
-    # Verify workflow transitioned to in_progress
+def test_create_workflow_record_node(test_db):
+    """Test that create_workflow_record creates a workflow and transitions to IN_PROGRESS."""
+    from graph.work_planner.nodes.create_workflow_record import create_workflow_record
+
+    result = create_workflow_record({"ticket_key": "TEST-123", "dry_run": False})
+
+    assert "workflow_id" in result
+    workflow_id = result["workflow_id"]
+
     workflow = state_store.get_workflow(workflow_id)
-    assert workflow['status'] == WorkflowStatus.IN_PROGRESS
-    
-    # Check audit log
+    assert workflow["status"] == WorkflowStatus.IN_PROGRESS
+
     audit_log = state_store.get_audit_log(workflow_id)
-    status_changes = [e for e in audit_log if e['action'] == 'status_change']
+    status_changes = [e for e in audit_log if e["action"] == "status_change"]
     assert len(status_changes) >= 1
-
-
-def test_execute_workflow_dry_run(test_db, capsys):
-    """Test that execute_workflow in dry-run mode doesn't mutate state."""
-    ticket = JiraTicket(
-        key='TEST-123',
-        title='Test Ticket',
-        description='Test description',
-        labels=['test'],
-        status='To Do'
-    )
-    
-    workflow_id = state_store.create_workflow('TEST-123', status=WorkflowStatus.PENDING)
-    
-    # Execute workflow in dry-run mode
-    execute_workflow(workflow_id, ticket, dry_run=True)
-    
-    # Verify workflow status unchanged
-    workflow = state_store.get_workflow(workflow_id)
-    assert workflow['status'] == WorkflowStatus.PENDING
 
 
 def test_run_keyboard_interrupt(test_db, cli_runner):
     """Test that KeyboardInterrupt is handled gracefully."""
-    with patch('dispatcher.run.JiraClient') as mock:
+    with patch('graph.work_planner.nodes.fetch_ticket.JiraClient') as mock:
         mock_instance = Mock()
         mock_instance.get_ticket.side_effect = KeyboardInterrupt()
         mock.return_value = mock_instance
-        
+
         result = cli_runner.invoke(run, ['--ticket', 'TEST-123'])
-        
+
         assert result.exit_code == 130  # Standard SIGINT exit code
         assert '⚠️  Workflow interrupted by user' in result.output
