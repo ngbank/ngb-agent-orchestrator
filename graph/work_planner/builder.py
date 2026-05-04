@@ -14,7 +14,7 @@ Graph topology:
     create_workflow_record
         ↓
     generate_plan
-        ↓
+        ↓ (error or empty work_plan_data → error_handler)
     validate_plan
         ↓ (error → error_handler)
     store_plan
@@ -30,6 +30,7 @@ from langgraph.graph import END, StateGraph
 from graph.work_planner.edges import (
     route_after_check_duplicate,
     route_after_fetch_ticket,
+    route_after_generate_plan,
     route_after_validate_input,
     route_after_validate_plan,
 )
@@ -92,7 +93,11 @@ def build_work_planner(checkpointer=None):
         },
     )
     builder.add_edge("create_workflow_record", "generate_plan")
-    builder.add_edge("generate_plan", "validate_plan")
+    builder.add_conditional_edges(
+        "generate_plan",
+        route_after_generate_plan,
+        {"validate_plan": "validate_plan", "error_handler": "error_handler"},
+    )
     builder.add_conditional_edges(
         "validate_plan",
         route_after_validate_plan,

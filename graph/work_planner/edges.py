@@ -34,6 +34,16 @@ def route_after_fetch_ticket(
     return "create_workflow_record"
 
 
+def route_after_generate_plan(
+    state: WorkPlannerState,
+) -> Literal["validate_plan", "error_handler"]:
+    if state.get("error"):
+        return "error_handler"
+    if not state.get("work_plan_data"):
+        return "error_handler"
+    return "validate_plan"
+
+
 def route_after_validate_plan(
     state: WorkPlannerState,
 ) -> Literal["store_plan", "error_handler"]:
