@@ -9,6 +9,7 @@ sequenceDiagram
     participant Validator as WorkPlan Validator
     participant SQLite as SQLite DB
     participant Formatter as WorkPlan Formatter
+    participant ExecRecipe as Execute Recipe
 
     User->>Dispatcher: dispatcher run --ticket {ticket_key}
     Dispatcher->>Goose: Run plan recipe with params<br/>(ticket_key, output_path)
@@ -94,7 +95,45 @@ sequenceDiagram
             Dispatcher->>SQLite: update_status(APPROVED)<br/>audit_log: actor=local_user, action=workflow_approved
             SQLite-->>Dispatcher: ✅ Status updated
             Dispatcher->>Dispatcher: Resume graph → execute_plan
-            Note over Dispatcher: Status → COMPLETED
+
+            rect rgb(235, 255, 235)
+                Note over Dispatcher,ExecRecipe: Step 9: Execute WorkPlan (AOS-41)
+                Dispatcher->>FileSystem: Write WorkPlan JSON<br/>to /tmp/{workflow_id}_workplan.json
+                Dispatcher->>Goose: goose run --recipe recipes/execute.yaml<br/>--params ticket_key={ticket_key}<br/>--params work_plan_path=...<br/>--params output_path=...
+                Goose->>ExecRecipe: Initialize recipe
+                ExecRecipe->>FileSystem: Read WorkPlan JSON
+                FileSystem-->>ExecRecipe: tasks, summary, approach
+                ExecRecipe->>FileSystem: git status --porcelain
+                FileSystem-->>ExecRecipe: Clean working tree ✅
+                ExecRecipe->>FileSystem: git checkout -b feature/{ticket_key}-{slug}
+                loop For each task
+                    ExecRecipe->>FileSystem: Read files_likely_affected
+                    FileSystem-->>ExecRecipe: Existing code context
+                    ExecRecipe->>LLM: Implement task<br/>(description + code context)
+                    LLM-->>ExecRecipe: Code changes
+                    ExecRecipe->>FileSystem: Write code changes
+                end
+                ExecRecipe->>FileSystem: python -m py_compile <files><br/>python -m pytest tests/ -q
+                FileSystem-->>ExecRecipe: build: pass|fail<br/>tests: pass|fail|skipped
+                ExecRecipe->>FileSystem: git add -A && git commit
+                FileSystem-->>ExecRecipe: commit_sha
+                ExecRecipe->>FileSystem: Write execution summary JSON<br/>to /tmp/{workflow_id}_exec_summary.json
+                Goose-->>Dispatcher: Recipe complete
+                Dispatcher->>FileSystem: Read execution summary JSON
+                FileSystem-->>Dispatcher: { status, build, tests, branch, commit_sha }
+                Dispatcher->>SQLite: update_execution_summary()<br/>Store summary JSON
+                SQLite-->>Dispatcher: ✅ Stored
+                alt status: success or partial
+                    Dispatcher->>SQLite: update_status(COMPLETED)
+                    SQLite-->>Dispatcher: ✅ Status updated
+                else status: failed
+                    Dispatcher->>SQLite: update_status(FAILED)
+                    SQLite-->>Dispatcher: ✅ Status updated
+                end
+                Dispatcher->>FileSystem: Clean up temp files
+            end
+
+            Note over Dispatcher: Status → COMPLETED or FAILED
         else Rejected
             Dispatcher->>SQLite: update_status(REJECTED)<br/>audit_log: actor=local_user, action=workflow_rejected, reason=...
             SQLite-->>Dispatcher: ✅ Status updated

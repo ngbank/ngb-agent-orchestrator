@@ -24,3 +24,6 @@ class OrchestratorState(TypedDict, total=False):
     # --- populated by await_approval node ---
     approval_decision: Optional[str]   # "approved" | "rejected"
     rejection_reason: Optional[str]    # only set when rejected
+
+    # --- populated by execute_plan node ---
+    execution_summary: Optional[dict]  # summary written by execute recipe

@@ -36,17 +36,40 @@ def run_migrations() -> None:
     """
     Run database migrations.
     This is idempotent - safe to run multiple times.
+    Tracks applied migrations in a schema_migrations table so each file runs exactly once.
     """
     migrations_dir = Path(__file__).parent / "migrations"
     migration_files = sorted(migrations_dir.glob("*.sql"))
-    
+
     conn = get_connection()
     try:
+        # Bootstrap the migrations tracking table
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                name TEXT PRIMARY KEY,
+                applied_at TEXT NOT NULL
+            );
+            """
+        )
+        conn.commit()
+
         for migration_file in migration_files:
+            name = migration_file.name
+            already_applied = conn.execute(
+                "SELECT 1 FROM schema_migrations WHERE name = ?", (name,)
+            ).fetchone()
+            if already_applied:
+                continue
+
             with open(migration_file, 'r') as f:
                 sql = f.read()
-                conn.executescript(sql)
-        conn.commit()
+            conn.executescript(sql)
+            conn.execute(
+                "INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)",
+                (name, datetime.now(UTC).isoformat()),
+            )
+            conn.commit()
     finally:
         conn.close()
 
@@ -194,6 +217,47 @@ def update_work_plan(
             actor=actor,
             action="work_plan_updated",
             reason=reason or "WorkPlan stored"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def update_execution_summary(
+    workflow_id: str,
+    execution_summary: Dict,
+    actor: str = "system",
+) -> None:
+    """
+    Persist the execution summary produced by the execute recipe.
+    Also creates an audit log entry.
+
+    Args:
+        workflow_id: UUID of the workflow
+        execution_summary: Dictionary containing the execution summary (will be JSON-serialized)
+        actor: Who/what performed the update
+    """
+    now = datetime.now(UTC).isoformat()
+    summary_json = json.dumps(execution_summary)
+
+    conn = get_connection()
+    try:
+        conn.execute(
+            """
+            UPDATE workflows
+            SET execution_summary = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (summary_json, now, workflow_id),
+        )
+        conn.commit()
+
+        _create_audit_log(
+            conn,
+            workflow_id=workflow_id,
+            actor=actor,
+            action="execution_summary_stored",
+            reason="Execution summary saved from execute recipe",
         )
         conn.commit()
     finally:

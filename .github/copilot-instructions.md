@@ -8,7 +8,7 @@ Follow these rules when working in this repository.
 
 When creating an implementation plan for a ticket:
 
-1. **Create the plan**: Generate a detailed implementation plan in a temporary file (e.g., `{TICKET_ID}-implementation-plan.md`)
+1. **Present the plan in chat** — do not create a file
 2. **Review and agree**: Discuss and refine the plan with the user
 3. **Once the plan is agreed upon**, follow the steps below to start work
 
@@ -16,17 +16,15 @@ When creating an implementation plan for a ticket:
 
 After agreeing on an implementation plan, complete these steps in order:
 
-1. **Update the JIRA ticket description** with the implementation plan content
-   ```bash
-   acli jira workitem edit --key "TICKET-ID" --description "$(cat TICKET-ID-implementation-plan.md)" -y
-   ```
+1. **Check if the JIRA ticket description already contains the plan**
+   - Run `acli jira workitem view TICKET-ID` and inspect the description
+   - If the description is empty or doesn't contain the plan, update it:
+     ```bash
+     acli jira workitem edit --key "TICKET-ID" --description "<plan content>" -y
+     ```
+   - If the description already has the plan, skip this step
 
-2. **Delete the temporary implementation plan file** from the project
-   ```bash
-   rm TICKET-ID-implementation-plan.md
-   ```
-
-3. **Create a feature branch** using the naming convention: `feature/{jira_id}+{summary}`
+2. **Create a feature branch** using the naming convention: `feature/{jira_id}+{summary}`
    ```bash
    git checkout -b feature/TICKET-ID+brief-summary
    ```
@@ -86,16 +84,14 @@ Complete the following steps in order:
 
 ```bash
 # After agreeing on implementation plan:
-# 1. Update ticket description
-acli jira workitem edit --key "TICKET-ID" --description "$(cat TICKET-ID-implementation-plan.md)" -y
+# 1. Check if JIRA description already has the plan; if not, update it:
+acli jira workitem view TICKET-ID  # inspect description
+acli jira workitem edit --key "TICKET-ID" --description "<plan content>" -y
 
-# 2. Delete temporary plan file
-rm TICKET-ID-implementation-plan.md
-
-# 3. Create feature branch
+# 2. Create feature branch
 git checkout -b feature/TICKET-ID+brief-summary
 
-# 4. Assign ticket and transition to "In Progress"
+# 3. Assign ticket and transition to "In Progress"
 acli jira workitem assign --key "TICKET-ID" --assignee "@me" -y
 acli jira workitem transition --key "TICKET-ID" --status "In Progress" -y
 
