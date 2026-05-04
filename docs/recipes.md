@@ -1,0 +1,153 @@
+# Goose Recipes
+
+Recipes are YAML files in `recipes/` that define reusable Goose agent workflows. Each recipe declares parameters, extensions (tools the agent can use), LLM settings, and a natural-language prompt.
+
+---
+
+## Running a Recipe Directly
+
+Recipes are invoked by the orchestrator automatically, but you can also run them manually:
+
+```bash
+# Ensure LiteLLM proxy is running first (see docs/configuration.md)
+
+# Add Goose to PATH if needed
+export PATH="$HOME/.local/bin:$PATH"
+
+# Run the plan recipe directly
+goose run --recipe recipes/plan.yaml \
+  --params ticket_key=AOS-41 \
+  --params output_path=workplans/AOS-41-plan.json
+
+# Run the execute recipe directly (pass an already-generated WorkPlan)
+goose run --recipe recipes/execute.yaml \
+  --params ticket_key=AOS-41 \
+  --params work_plan_path=workplans/AOS-41-plan.json \
+  --params output_path=/tmp/AOS-41-exec-summary.json
+```
+
+Use `goose run --recipe recipes/plan.yaml --explain` to see a recipe's parameters without running it.
+
+---
+
+## `recipes/plan.yaml` — WorkPlan Generator
+
+**Purpose**: Turn a JIRA ticket into a structured `WorkPlan` JSON document.
+
+**Parameters**:
+
+| Parameter | Required | Description |
+|---|---|---|
+| `ticket_key` | Yes | JIRA ticket key (e.g. `AOS-41`) |
+| `output_path` | Yes | File path to write the WorkPlan JSON |
+
+**What it does**:
+1. Fetches the ticket with `acli jira workitem view {ticket_key}`
+2. Explores the repository structure (README, directory listing, relevant files)
+3. Generates a WorkPlan JSON with LLM (azure-gpt4, temperature 0.3)
+4. Validates the JSON against `schemas/work_plan_v1.json` — retries up to 3 times on failure
+5. Writes the validated JSON to `output_path`
+
+**WorkPlan status values**:
+- `pass` — clear scope, ready to implement
+- `concerns` — implementable but has risks or open questions
+- `blocked` — missing critical information; see `questions_for_reviewer`
+
+---
+
+## `recipes/execute.yaml` — WorkPlan Executor
+
+**Purpose**: Implement an approved WorkPlan by making code changes in the local repository.
+
+**Parameters**:
+
+| Parameter | Required | Description |
+|---|---|---|
+| `ticket_key` | Yes | JIRA ticket key |
+| `work_plan_path` | Yes | Path to the approved WorkPlan JSON file |
+| `output_path` | Yes | Path to write the execution summary JSON |
+
+**What it does**:
+1. Reads and parses the WorkPlan JSON
+2. Verifies the working tree is clean (`git status --porcelain`) — aborts if dirty
+3. Creates a feature branch: `feature/{ticket_key}-{summary-slug}`
+4. Implements each task in order — reads `files_likely_affected`, makes precise changes
+5. Runs build and test checks:
+   - Build: `python -m py_compile` on modified files
+   - Tests: `python -m pytest tests/ -q --tb=short`
+6. Commits all changes with a conventional commit message
+7. Writes an execution summary JSON to `output_path`
+
+**Execution summary format**:
+```json
+{
+  "ticket_key": "AOS-41",
+  "branch": "feature/AOS-41-goose-execute-recipe",
+  "build": "pass",
+  "tests": "pass",
+  "files_changed": ["graph/nodes/execute_plan.py", "recipes/execute.yaml"],
+  "commit_sha": "a1b2c3d...",
+  "status": "success"
+}
+```
+
+**Status values**:
+- `success` — build pass + tests pass
+- `partial` — build pass + tests fail
+- `failed` — build fail or unrecoverable error (see `error` field)
+
+**Safety constraints** (enforced in the prompt):
+- Never runs `git push`
+- Never commits to `main` or any pre-existing branch
+- Never force-resets or deletes branches
+
+---
+
+## Creating a New Recipe
+
+1. Copy an existing recipe as a template:
+   ```bash
+   cp recipes/plan.yaml recipes/my-recipe.yaml
+   ```
+
+2. Update the top-level fields: `title`, `description`, `parameters`
+
+3. Adjust `settings.temperature`:
+   - Planning / research tasks: `0.3`
+   - Code generation / precise edits: `0.1`
+
+4. Write the `prompt` — use `{{ param_name }}` for parameter substitution
+
+5. Test it manually before wiring into the graph:
+   ```bash
+   goose run --recipe recipes/my-recipe.yaml --params key=value
+   ```
+
+**Recipe file structure**:
+```yaml
+version: "1.0.0"
+title: "Recipe Title"
+description: "What the recipe does"
+
+parameters:
+  - key: param_name
+    input_type: string
+    requirement: required
+    description: "Parameter description"
+
+extensions:
+  - type: builtin
+    name: developer    # grants file system + shell access
+    timeout: 300
+    bundled: true
+
+settings:
+  goose_provider: "openai"
+  goose_model: "azure-gpt4"
+  temperature: 0.3
+  max_turns: 50
+
+prompt: |
+  Instructions here...
+  Reference parameters with {{ param_name }}.
+```

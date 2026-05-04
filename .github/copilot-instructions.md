@@ -43,26 +43,31 @@ After agreeing on an implementation plan, complete these steps in order:
 
 ### Documentation Updates During Implementation
 
-When implementing code changes that affect the application workflow or orchestration:
+The `docs/` folder is the source of truth for all detailed documentation. The `README.md` is a concise project overview and setup guide only — detailed content belongs in `docs/`.
 
-1. **Update the flow diagram**: If your changes impact the orchestration flow, update `docs/plan-recipe-flow.mmd`
-   - Add new participants (components, services, databases)
-   - Add new steps or modify existing steps in the sequence
-   - Update notes and annotations to reflect new behavior
-   - Document error handling paths if added
-   - Include the ticket ID in step annotations (e.g., "Step X: Description (AOS-XX)")
+**When to update `docs/`:**
+- Adding or changing a component, node, or service → update `docs/architecture.md`
+- Adding or changing environment variables or config → update `docs/configuration.md`
+- Adding or changing workflow behaviour, lifecycle states, or CLI flags → update `docs/workflows.md`
+- Adding or changing a Goose recipe → update `docs/recipes.md`
+- Adding or changing database schema, migrations, or state store API → update `docs/state-store.md`
+- Adding or changing pre-commit hooks, test setup, or project structure → update `docs/development.md`
 
-2. **Commit documentation with code**: Include documentation updates in the same PR
-   - Documentation commits should reference the ticket ID
-   - Example: `docs(AOS-39): Update plan-recipe-flow.mmd with WorkPlan posting workflow`
+**When to update `README.md`:**
+- Only if the high-level overview, component table, or environment setup steps change
+- Never add detailed usage, API reference, or troubleshooting to README — put it in `docs/`
 
-**When to update the flow diagram:**
-- Adding new components or services to the workflow
-- Changing the sequence of operations
+**When to update `docs/plan-recipe-flow.mmd`:**
+- Adding new participants (components, services, databases) to the orchestration flow
+- Changing the sequence of operations in the graph
 - Adding or removing integration points (JIRA, SQLite, external APIs)
-- Implementing new workflow stages or steps
+- Adding new workflow stages or steps
 - Adding error handling or alternative paths
-- Changing data flow between components
+- Include the ticket ID in step annotations (e.g., "Step X: Description (AOS-XX)")
+
+**Commit documentation with code**: Include documentation updates in the same commit/PR as the code changes they describe. Documentation commits should reference the ticket ID.
+
+Example: `docs(AOS-39): Update plan-recipe-flow.mmd and workflows.md with WorkPlan posting workflow`
 
 ### Pull Request Process
 
