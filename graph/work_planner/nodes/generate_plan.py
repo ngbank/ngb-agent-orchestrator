@@ -1,14 +1,66 @@
-"""
-Node: generate_plan — stub for future Goose-driven WorkPlan generation.
+"""Node: generate_plan — invoke the Goose plan recipe to generate a WorkPlan JSON."""
 
-A future ticket (AOS-51) will call the Goose CLI / plan recipe here and populate
-``work_plan_data`` in state. For now this sets an explicit error so the router
-sends the workflow to error_handler instead of silently continuing with empty state.
-"""
+import json
+import os
+import subprocess
+import tempfile
+
+import click
 
 from graph.work_planner.state import WorkPlannerState
 
 
 def generate_plan(state: WorkPlannerState) -> dict:
-    # TODO(AOS-51): invoke Goose plan recipe and return {"work_plan_data": <dict>}
-    return {"error": "Plan generation not yet implemented (AOS-51). Cannot continue."}
+    """Invoke the Goose plan recipe and return the resulting WorkPlan as state.
+
+    1. Creates a temp file path for the output JSON.
+    2. Shells out to `goose run --recipe recipes/plan.yaml`.
+    3. Reads and parses the WorkPlan JSON written by the recipe.
+    4. Returns {"work_plan_data": <dict>} on success.
+    5. Returns {"error": <message>} on any failure so route_after_generate_plan
+       sends the workflow to error_handler.
+    """
+    ticket_key = state.get("ticket_key", "")
+
+    summary_fd, output_path = tempfile.mkstemp(
+        suffix="_workplan.json",
+        prefix=f"{ticket_key}_",
+    )
+    os.close(summary_fd)
+
+    try:
+        click.echo(f"🪿 Running plan recipe for {ticket_key}...")
+        result = subprocess.run(
+            [
+                "goose",
+                "run",
+                "--recipe",
+                "recipes/plan.yaml",
+                "--params",
+                f"ticket_key={ticket_key}",
+                "--params",
+                f"output_path={output_path}",
+            ],
+            check=False,
+        )
+
+        if result.returncode != 0:
+            return {"error": f"Goose plan recipe exited with code {result.returncode}"}
+
+        try:
+            with open(output_path, "r") as f:
+                work_plan_data = json.load(f)
+        except FileNotFoundError:
+            return {"error": "Goose plan recipe did not write output file"}
+        except json.JSONDecodeError as exc:
+            return {"error": f"Goose plan recipe wrote invalid JSON: {exc}"}
+
+        if not work_plan_data:
+            return {"error": "Goose plan recipe wrote empty WorkPlan"}
+
+        click.echo(f"✅ WorkPlan generated for {ticket_key}")
+        return {"work_plan_data": work_plan_data}
+
+    finally:
+        if os.path.exists(output_path):
+            os.unlink(output_path)
