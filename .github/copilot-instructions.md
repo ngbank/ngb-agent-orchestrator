@@ -8,7 +8,7 @@ Follow these rules when working in this repository.
 
 When creating an implementation plan for a ticket:
 
-1. **Create the plan**: Generate a detailed implementation plan in a temporary file (e.g., `{TICKET_ID}-implementation-plan.md`)
+1. **Present the plan in chat** — do not create a file
 2. **Review and agree**: Discuss and refine the plan with the user
 3. **Once the plan is agreed upon**, follow the steps below to start work
 
@@ -16,17 +16,15 @@ When creating an implementation plan for a ticket:
 
 After agreeing on an implementation plan, complete these steps in order:
 
-1. **Update the JIRA ticket description** with the implementation plan content
-   ```bash
-   acli jira workitem edit --key "TICKET-ID" --description "$(cat TICKET-ID-implementation-plan.md)" -y
-   ```
+1. **Check if the JIRA ticket description already contains the plan**
+   - Run `acli jira workitem view TICKET-ID` and inspect the description
+   - If the description is empty or doesn't contain the plan, update it:
+     ```bash
+     acli jira workitem edit --key "TICKET-ID" --description "<plan content>" -y
+     ```
+   - If the description already has the plan, skip this step
 
-2. **Delete the temporary implementation plan file** from the project
-   ```bash
-   rm TICKET-ID-implementation-plan.md
-   ```
-
-3. **Create a feature branch** using the naming convention: `feature/{jira_id}+{summary}`
+2. **Create a feature branch** using the naming convention: `feature/{jira_id}+{summary}`
    ```bash
    git checkout -b feature/TICKET-ID+brief-summary
    ```
@@ -45,26 +43,39 @@ After agreeing on an implementation plan, complete these steps in order:
 
 ### Documentation Updates During Implementation
 
-When implementing code changes that affect the application workflow or orchestration:
+The `docs/` folder is the source of truth for all detailed documentation. The `README.md` is a concise project overview and setup guide only — detailed content belongs in `docs/`.
 
-1. **Update the flow diagram**: If your changes impact the orchestration flow, update `docs/plan-recipe-flow.mmd`
-   - Add new participants (components, services, databases)
-   - Add new steps or modify existing steps in the sequence
-   - Update notes and annotations to reflect new behavior
-   - Document error handling paths if added
-   - Include the ticket ID in step annotations (e.g., "Step X: Description (AOS-XX)")
+**When to update `docs/`:**
+- Adding or changing a component, node, or service → update `docs/architecture.md`
+- Adding or changing environment variables or config → update `docs/configuration.md`
+- Adding or changing workflow behaviour, lifecycle states, or CLI flags → update `docs/workflows.md`
+- Adding or changing a Goose recipe → update `docs/recipes.md`
+- Adding or changing database schema, migrations, or state store API → update `docs/state-store.md`
+- Adding or changing pre-commit hooks, test setup, or project structure → update `docs/development.md`
 
-2. **Commit documentation with code**: Include documentation updates in the same PR
-   - Documentation commits should reference the ticket ID
-   - Example: `docs(AOS-39): Update plan-recipe-flow.mmd with WorkPlan posting workflow`
+**When to update `README.md`:**
 
-**When to update the flow diagram:**
-- Adding new components or services to the workflow
-- Changing the sequence of operations
+**After every change, ask: did I change any of the following?** If yes, update `README.md` before committing.
+
+- The CLI command name, flags, or usage syntax → update the "Running Your First Workflow" section
+- Installation steps (new tool, new `pip install`, new config step) → update the "Installation" section
+- Prerequisites (new required tool or service) → update the "Prerequisites" list
+- The component table (added/removed/renamed a top-level module) → update the "Components" table
+- The high-level flow diagram (new stage, new participant) → update the ASCII diagram
+
+Never add detailed usage, API reference, or troubleshooting to README — put it in `docs/`.
+
+**When to update `docs/plan-recipe-flow.mmd`:**
+- Adding new participants (components, services, databases) to the orchestration flow
+- Changing the sequence of operations in the graph
 - Adding or removing integration points (JIRA, SQLite, external APIs)
-- Implementing new workflow stages or steps
+- Adding new workflow stages or steps
 - Adding error handling or alternative paths
-- Changing data flow between components
+- Include the ticket ID in step annotations (e.g., "Step X: Description (AOS-XX)")
+
+**Commit documentation with code**: Include documentation updates in the same commit/PR as the code changes they describe. Documentation commits should reference the ticket ID.
+
+Example: `docs(AOS-39): Update plan-recipe-flow.mmd and workflows.md with WorkPlan posting workflow`
 
 ### Pull Request Process
 
@@ -86,16 +97,14 @@ Complete the following steps in order:
 
 ```bash
 # After agreeing on implementation plan:
-# 1. Update ticket description
-acli jira workitem edit --key "TICKET-ID" --description "$(cat TICKET-ID-implementation-plan.md)" -y
+# 1. Check if JIRA description already has the plan; if not, update it:
+acli jira workitem view TICKET-ID  # inspect description
+acli jira workitem edit --key "TICKET-ID" --description "<plan content>" -y
 
-# 2. Delete temporary plan file
-rm TICKET-ID-implementation-plan.md
-
-# 3. Create feature branch
+# 2. Create feature branch
 git checkout -b feature/TICKET-ID+brief-summary
 
-# 4. Assign ticket and transition to "In Progress"
+# 3. Assign ticket and transition to "In Progress"
 acli jira workitem assign --key "TICKET-ID" --assignee "@me" -y
 acli jira workitem transition --key "TICKET-ID" --status "In Progress" -y
 

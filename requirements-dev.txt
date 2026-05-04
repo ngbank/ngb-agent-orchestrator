@@ -13,3 +13,6 @@ isort>=5.12.0
 
 # Coverage Reporting
 coverage[toml]>=7.3.0
+
+# Pre-commit hooks
+pre-commit>=4.0.0

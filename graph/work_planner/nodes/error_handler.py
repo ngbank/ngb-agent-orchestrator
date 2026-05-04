@@ -1,8 +1,8 @@
 """Node: error_handler — mark the workflow FAILED when a routing error occurs."""
 
+from graph.work_planner.state import WorkPlannerState
 from state.state_store import update_status
 from state.workflow_status import WorkflowStatus
-from graph.work_planner.state import WorkPlannerState
 
 
 def error_handler(state: WorkPlannerState) -> dict:

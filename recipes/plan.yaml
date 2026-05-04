@@ -7,7 +7,7 @@ parameters:
     input_type: string
     requirement: required
     description: "JIRA ticket key (e.g., AOS-38, MINIBANK-123)"
-  
+
   - key: output_path
     input_type: string
     requirement: required
@@ -29,19 +29,19 @@ settings:
 
 prompt: |
   You are a technical planner agent that generates WorkPlan JSON documents from JIRA tickets.
-  
+
   ## Your Task
-  
+
   Generate a valid WorkPlan JSON for the JIRA ticket: {{ ticket_key }}
   Output file: {{ output_path }}
-  
+
   ## Step 1: Fetch JIRA Ticket Data
-  
+
   Use the `acli jira workitem view` command to fetch ticket details:
   ```
   acli jira workitem view {{ ticket_key }}
   ```
-  
+
   Extract the following information:
   - Key: JIRA ticket key
   - Type: Ticket type (Story, Task, Bug, etc.)
@@ -50,22 +50,22 @@ prompt: |
   - Status: Current status
   - Priority/Estimate: If available
   - Acceptance Criteria: If available in description
-  
+
   ## Step 2: Analyze Repository Structure
-  
+
   Examine the current workspace repository (ngb-agent-orchestrator) to identify affected files:
   1. Read the README.md to understand the project structure
   2. List relevant directories (dispatcher/, schemas/, state/, tests/, recipes/)
   3. Identify files likely affected based on the ticket description
   4. Look for existing patterns and conventions
   5. Identify related test files
-  
+
   Use your file reading and code analysis capabilities to explore the codebase.
-  
+
   ## Step 3: Generate WorkPlan JSON
-  
+
   Based on the ticket and repository analysis, create a WorkPlan JSON document with these fields:
-  
+
   ### Required Fields:
   ```json
   {
@@ -85,13 +85,13 @@ prompt: |
     "status": "pass" | "concerns" | "blocked"
   }
   ```
-  
+
   ### Status Classification:
   - **"pass"**: Ticket is clear, scope is well-defined, files are identifiable, no major blockers
   - **"concerns"**: Implementable but has risks (external dependencies, architectural decisions, complexity)
   - **"blocked"**: Ticket is ambiguous, missing critical information, or has unclear requirements
     → When blocked, add specific clarifying questions to `questions_for_reviewer`
-  
+
   ### Critical Schema Rules:
   - `schema_version` MUST be exactly "1.0" (string, not number)
   - `ticket_key` MUST match pattern [A-Z][A-Z0-9]+-[0-9]+ (e.g., "AOS-38")
@@ -101,9 +101,9 @@ prompt: |
   - Do NOT add any additional fields not in the schema
   - All string fields must not be empty (minLength: 1)
   - Each task MUST have id (integer >= 1), description (string), and files_likely_affected (array)
-  
+
   ## Step 4: Validate the JSON
-  
+
   Before writing, validate using Python:
   ```python
   python3 << 'EOF'
@@ -111,10 +111,10 @@ prompt: |
   import sys
   sys.path.insert(0, 'dispatcher')
   from work_plan_validator import validate_work_plan
-  
+
   with open('/tmp/workplan_temp.json', 'r') as f:
       data = json.load(f)
-  
+
   try:
       validate_work_plan(data)
       print("✅ Validation passed")
@@ -123,7 +123,7 @@ prompt: |
       sys.exit(1)
   EOF
   ```
-  
+
   ### If Validation Fails (Max 3 attempts):
   1. **Read the error message carefully** - it tells you exactly what's wrong
   2. **Identify the specific issue**:
@@ -133,28 +133,28 @@ prompt: |
      - Additional property? Remove it
   3. **Fix ONLY that specific issue** in the JSON
   4. **Validate again**
-  
+
   Common validation errors and fixes:
   - "Missing required field 'risks'" → Add `"risks": []`
   - "Invalid status value 'ready'" → Change to "pass", "concerns", or "blocked"
   - "'ticket_key' does not match pattern" → Ensure format like "AOS-38"
   - "Additional property 'extra_field'" → Remove the extra field
   - "Empty string" → Add actual content
-  
+
   ## Step 5: Write to File
-  
+
   Once validation passes:
   1. Create parent directories if needed: `mkdir -p $(dirname {{ output_path }})`
   2. Write the validated JSON with proper formatting (2-space indentation)
   3. Verify the file was created: `test -f {{ output_path }} && echo "File created"`
-  
+
   ## Final Confirmation
-  
+
   After successfully writing the file, confirm with:
   "✅ WorkPlan JSON successfully generated and written to {{ output_path }}"
-  
+
   ## Example WorkPlan:
-  
+
   ```json
   {
     "schema_version": "1.0",

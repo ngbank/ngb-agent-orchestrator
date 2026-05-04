@@ -5,8 +5,8 @@
 ## JIRA Ticket
 
 <!-- Link to the JIRA ticket -->
-- Ticket ID: 
-- Link: 
+- Ticket ID:
+- Link:
 
 ## Type of Change
 
@@ -24,9 +24,9 @@
 
 <!-- List the main changes made in this PR -->
 
-- 
-- 
-- 
+-
+-
+-
 
 ## Testing
 

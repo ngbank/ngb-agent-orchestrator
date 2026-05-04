@@ -6,7 +6,7 @@ Validates planner output against the WorkPlan JSON Schema contract
 """
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -44,13 +44,9 @@ def _load_schema() -> dict[str, Any]:
         with open(_SCHEMA_PATH, "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
-        raise WorkPlanValidationError(
-            f"WorkPlan schema file not found at {_SCHEMA_PATH}"
-        )
+        raise WorkPlanValidationError(f"WorkPlan schema file not found at {_SCHEMA_PATH}")
     except json.JSONDecodeError as e:
-        raise WorkPlanValidationError(
-            f"WorkPlan schema file is not valid JSON: {e}"
-        )
+        raise WorkPlanValidationError(f"WorkPlan schema file is not valid JSON: {e}")
 
 
 def validate_work_plan(data: dict[str, Any]) -> WorkPlan:

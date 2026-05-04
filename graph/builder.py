@@ -10,24 +10,21 @@ Creates a pipeline with a human-in-the-loop approval gate:
 The ``work_planner`` subgraph handles all planning stages (fetch, generate,
 validate, store, post to Jira).  ``await_approval`` calls interrupt() so the
 graph suspends until the developer explicitly approves or rejects via CLI.
-The ``execute_plan`` node is a stub for future code-execution work.
+The ``execute_plan`` node invokes the Goose execute recipe to implement the
+approved WorkPlan (AOS-41).
 """
 
 import sqlite3
 from typing import Literal
 
-from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.graph import END, StateGraph
 
+from graph.nodes.await_approval import await_approval
+from graph.nodes.execute_plan import execute_plan
 from graph.state import OrchestratorState
 from graph.work_planner.builder import build_work_planner
-from graph.nodes.await_approval import await_approval
 from state.state_store import get_db_path
-
-
-def _execute_plan_stub(state: OrchestratorState) -> dict:
-    """Stub for future code-execution stage (ticket TBD)."""
-    return {}
 
 
 def _route_after_work_planner(
@@ -67,7 +64,7 @@ def build_orchestrator(checkpointer=None):
     builder = StateGraph(OrchestratorState)
     builder.add_node("work_planner", work_planner)
     builder.add_node("await_approval", await_approval)
-    builder.add_node("execute_plan", _execute_plan_stub)
+    builder.add_node("execute_plan", execute_plan)
 
     builder.set_entry_point("work_planner")
     builder.add_conditional_edges(

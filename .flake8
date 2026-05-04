@@ -1,0 +1,15 @@
+[flake8]
+max-line-length = 100
+# Ignore formatting rules that conflict with black:
+# E203 - whitespace before ':' (black's slice formatting)
+# W503 - line break before binary operator (black prefers this)
+extend-ignore = E203, W503
+exclude =
+    .git,
+    venv,
+    __pycache__,
+    state/migrations,
+    *.egg-info
+per-file-ignores =
+    # Tests use long assertion strings and mock setup; relax E501 slightly
+    tests/*:E501

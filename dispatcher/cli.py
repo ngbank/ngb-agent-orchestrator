@@ -5,9 +5,10 @@ Agent Orchestrator CLI
 Command-line interface for managing agentic workflows and Goose integration.
 """
 
-import click
 import os
 from pathlib import Path
+
+import click
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -19,7 +20,7 @@ load_dotenv()
 def cli():
     """
     Agent Orchestrator CLI
-    
+
     Manage agentic workflows, JIRA integration, and Goose recipes.
     """
     pass
@@ -30,7 +31,7 @@ def status():
     """Check orchestrator status and configuration."""
     click.echo("🚀 Agent Orchestrator Status")
     click.echo("=" * 50)
-    
+
     # Check environment configuration
     env_file = Path(".env")
     if env_file.exists():
@@ -38,7 +39,7 @@ def status():
     else:
         click.echo("⚠️  Environment file (.env) not found")
         click.echo("   Copy .env.example to .env and configure credentials")
-    
+
     # Check required directories
     required_dirs = ["dispatcher", "recipes", "schemas", "state"]
     for dir_name in required_dirs:
@@ -46,14 +47,14 @@ def status():
             click.echo(f"✅ Directory '{dir_name}/' exists")
         else:
             click.echo(f"❌ Directory '{dir_name}/' missing")
-    
+
     # Check JIRA configuration
     jira_url = os.getenv("JIRA_URL")
     if jira_url:
         click.echo(f"✅ JIRA URL configured: {jira_url}")
     else:
         click.echo("⚠️  JIRA_URL not configured")
-    
+
     click.echo("=" * 50)
     click.echo("Orchestrator is ready! ✨")
 
@@ -62,12 +63,13 @@ def status():
 def init():
     """Initialize the orchestrator environment."""
     click.echo("🔧 Initializing Agent Orchestrator...")
-    
+
     # Check if .env exists
     if not Path(".env").exists():
         if Path(".env.example").exists():
             click.echo("📋 Creating .env from .env.example...")
             import shutil
+
             shutil.copy(".env.example", ".env")
             click.echo("✅ .env file created")
             click.echo("⚠️  Please edit .env and add your credentials")
@@ -76,12 +78,12 @@ def init():
             return
     else:
         click.echo("✅ .env file already exists")
-    
+
     # Ensure state directory exists
     state_dir = Path("state")
     state_dir.mkdir(exist_ok=True)
     click.echo("✅ State directory ready")
-    
+
     click.echo("\n🎉 Initialization complete!")
     click.echo("Next steps:")
     click.echo("  1. Edit .env with your credentials")
@@ -105,7 +107,7 @@ def goose(recipe):
         else:
             click.echo("  recipes/ directory not found")
         return
-    
+
     click.echo(f"🪿 Running Goose recipe: {recipe}")
     # TODO: Implement Goose execution logic
     click.echo("⚠️  Goose execution not yet implemented")

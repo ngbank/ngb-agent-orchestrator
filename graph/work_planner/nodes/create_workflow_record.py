@@ -2,9 +2,9 @@
 
 import click
 
+from graph.work_planner.state import WorkPlannerState
 from state.state_store import create_workflow, update_status
 from state.workflow_status import WorkflowStatus
-from graph.work_planner.state import WorkPlannerState
 
 
 def create_workflow_record(state: WorkPlannerState) -> dict:

@@ -7,6 +7,7 @@ without an explicit input/output channel mapping.
 """
 
 from typing import Any, Optional
+
 from typing_extensions import TypedDict
 
 
@@ -15,6 +16,6 @@ class WorkPlannerState(TypedDict, total=False):
     ticket_key: str
     dry_run: bool
     workflow_id: Optional[str]
-    ticket: Optional[Any]          # dispatcher.jira_client.JiraTicket
+    ticket: Optional[Any]  # dispatcher.jira_client.JiraTicket
     work_plan_data: Optional[dict]
     error: Optional[str]

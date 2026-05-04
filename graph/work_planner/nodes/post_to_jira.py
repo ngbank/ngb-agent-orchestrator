@@ -22,9 +22,7 @@ def post_to_jira(state: WorkPlannerState) -> dict:
             click.echo("✅ WorkPlan posted to Jira")
             click.echo(f"   View at: {jira_client.jira_url}/browse/{ticket_key}")
         else:
-            click.echo(
-                "⚠️  WorkPlan posted but confirmation unclear", err=True
-            )
+            click.echo("⚠️  WorkPlan posted but confirmation unclear", err=True)
     except JiraCommentError as e:
         click.echo(f"⚠️  Failed to post WorkPlan to Jira: {e}", err=True)
         click.echo(
