@@ -47,10 +47,9 @@ def await_approval(state: OrchestratorState) -> dict:
     click.echo("⏸️  WorkPlan is ready for review.")
     click.echo(f"   Workflow ID: {workflow_id}")
     click.echo("")
-    click.echo(f"   To approve:  python -m dispatcher.run --approve --ticket {ticket_key}")
+    click.echo(f"   To approve:  dispatcher --approve --ticket {ticket_key}")
     click.echo(
-        f"   To reject:   python -m dispatcher.run --reject --ticket {ticket_key}"
-        + ' --reason "your reason"'
+        f"   To reject:   dispatcher --reject --ticket {ticket_key}" + ' --reason "your reason"'
     )
     click.echo("")
 

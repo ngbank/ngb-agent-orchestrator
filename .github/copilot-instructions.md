@@ -54,8 +54,16 @@ The `docs/` folder is the source of truth for all detailed documentation. The `R
 - Adding or changing pre-commit hooks, test setup, or project structure → update `docs/development.md`
 
 **When to update `README.md`:**
-- Only if the high-level overview, component table, or environment setup steps change
-- Never add detailed usage, API reference, or troubleshooting to README — put it in `docs/`
+
+**After every change, ask: did I change any of the following?** If yes, update `README.md` before committing.
+
+- The CLI command name, flags, or usage syntax → update the "Running Your First Workflow" section
+- Installation steps (new tool, new `pip install`, new config step) → update the "Installation" section
+- Prerequisites (new required tool or service) → update the "Prerequisites" list
+- The component table (added/removed/renamed a top-level module) → update the "Components" table
+- The high-level flow diagram (new stage, new participant) → update the ASCII diagram
+
+Never add detailed usage, API reference, or troubleshooting to README — put it in `docs/`.
 
 **When to update `docs/plan-recipe-flow.mmd`:**
 - Adding new participants (components, services, databases) to the orchestration flow

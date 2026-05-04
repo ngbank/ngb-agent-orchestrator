@@ -64,19 +64,25 @@ cd ngb-agent-orchestrator
 python3 -m venv venv
 source venv/bin/activate
 
-# 3. Install dependencies
+# 3. Install dependencies and register the CLI
 pip install -r requirements.txt
+pip install -e .                      # registers the `dispatcher` CLI command
 pip install -r requirements-dev.txt   # for development (pre-commit, pytest, etc.)
 
 # 4. Set up environment variables
 cp .env.example .env
 # Edit .env — see docs/configuration.md for all required variables
 
-# 5. Install pre-commit hooks
+# 5. (Recommended) Auto-load .env with direnv
+brew install direnv
+echo 'eval "$(direnv hook zsh)"' >> ~/.zshrc  # or ~/.bashrc
+direnv allow .
+
+# 6. Install pre-commit hooks
 pre-commit install
 
-# 6. Verify setup
-python -m dispatcher.run --help
+# 7. Verify setup
+dispatcher --help
 ```
 
 ### Running the LiteLLM Proxy
@@ -93,11 +99,11 @@ litellm --config config/litellm.yaml --port 4000
 
 ```bash
 # Run the full pipeline for a JIRA ticket
-python -m dispatcher.run --ticket AOS-41
+dispatcher --ticket AOS-41
 
 # After reviewing the WorkPlan comment on JIRA, approve or reject:
-python -m dispatcher.run --approve --ticket AOS-41
-python -m dispatcher.run --reject  --ticket AOS-41 --reason "scope too broad"
+dispatcher --approve --ticket AOS-41
+dispatcher --reject  --ticket AOS-41 --reason "scope too broad"
 ```
 
 ---

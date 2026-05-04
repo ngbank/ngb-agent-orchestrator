@@ -98,22 +98,22 @@ def run(
     Examples:
 
         # Run a workflow for a ticket
-        python -m dispatcher.run --ticket AOS-36
+        dispatcher --ticket AOS-36
 
         # Preview what would happen without executing
-        python -m dispatcher.run --ticket AOS-36 --dry-run
+        dispatcher --ticket AOS-36 --dry-run
 
         # Approve by ticket key
-        python -m dispatcher.run --approve --ticket AOS-36
+        dispatcher --approve --ticket AOS-36
 
         # Approve by workflow ID
-        python -m dispatcher.run --approve --workflow-id <uuid>
+        dispatcher --approve --workflow-id <uuid>
 
         # Reject by ticket key
-        python -m dispatcher.run --reject --ticket AOS-36 --reason "scope too broad"
+        dispatcher --reject --ticket AOS-36 --reason "scope too broad"
 
         # Reject by workflow ID
-        python -m dispatcher.run --reject --workflow-id <uuid> --reason "scope too broad"
+        dispatcher --reject --workflow-id <uuid> --reason "scope too broad"
     """
     # --- dispatch to the right sub-command ---
     if do_approve:
