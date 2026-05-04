@@ -1,0 +1,43 @@
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | venv
+  | __pycache__
+  | state/migrations
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+skip_glob = ["venv/*", ".venv/*", "state/migrations/*"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_return_any = false
+disallow_untyped_defs = false
+exclude = [
+    "venv/",
+    "state/migrations/",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.coverage.run]
+source = ["dispatcher", "graph", "state"]
+omit = ["tests/*", "venv/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false

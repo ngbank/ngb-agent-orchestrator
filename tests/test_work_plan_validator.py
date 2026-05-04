@@ -3,6 +3,7 @@ Tests for dispatcher.work_plan_validator
 """
 
 import pytest
+
 from dispatcher.work_plan_validator import (
     WorkPlan,
     WorkPlanValidationError,
@@ -61,16 +62,19 @@ class TestValidWorkPlan:
 
 
 class TestMissingRequiredFields:
-    @pytest.mark.parametrize("field", [
-        "schema_version",
-        "ticket_key",
-        "summary",
-        "approach",
-        "tasks",
-        "risks",
-        "questions_for_reviewer",
-        "status",
-    ])
+    @pytest.mark.parametrize(
+        "field",
+        [
+            "schema_version",
+            "ticket_key",
+            "summary",
+            "approach",
+            "tasks",
+            "risks",
+            "questions_for_reviewer",
+            "status",
+        ],
+    )
     def test_missing_field_raises_error(self, field):
         data = _valid_work_plan()
         del data[field]

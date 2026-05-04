@@ -14,13 +14,13 @@ sequenceDiagram
     User->>Dispatcher: dispatcher run --ticket {ticket_key}
     Dispatcher->>Goose: Run plan recipe with params<br/>(ticket_key, output_path)
     Goose->>Recipe: Initialize recipe
-    
+
     rect rgb(230, 240, 255)
         Note over Recipe,ACLI: Step 1: Fetch JIRA Ticket
         Recipe->>ACLI: acli jira workitem view {ticket_key}
         ACLI-->>Recipe: Ticket details<br/>(summary, description, status)
     end
-    
+
     rect rgb(240, 255, 240)
         Note over Recipe,FileSystem: Step 2: Analyze Repository
         Recipe->>FileSystem: Read README.md
@@ -30,13 +30,13 @@ sequenceDiagram
         Recipe->>FileSystem: Read relevant files<br/>(patterns, conventions)
         FileSystem-->>Recipe: Code context
     end
-    
+
     rect rgb(255, 245, 230)
         Note over Recipe,LLM: Step 3: Generate WorkPlan
         Recipe->>LLM: Generate WorkPlan JSON<br/>(ticket + repo analysis)
         LLM-->>Recipe: WorkPlan JSON draft
     end
-    
+
     rect rgb(255, 240, 245)
         Note over Recipe,Validator: Step 4: Validate (Retry Loop)
         loop Max 3 attempts
@@ -52,7 +52,7 @@ sequenceDiagram
             end
         end
     end
-    
+
     rect rgb(240, 255, 255)
         Note over Recipe,FileSystem: Step 5: Write to File
         Recipe->>FileSystem: mkdir -p {output_dir}
@@ -61,16 +61,16 @@ sequenceDiagram
         Recipe->>FileSystem: Verify file exists
         FileSystem-->>Recipe: ✅ Confirmed
     end
-    
+
     Recipe->>Goose: ✅ WorkPlan generated
     Goose->>Dispatcher: WorkPlan JSON returned
-    
+
     rect rgb(255, 235, 245)
         Note over Dispatcher,SQLite: Step 6: Store WorkPlan (AOS-39)
         Dispatcher->>SQLite: update_work_plan()<br/>Store WorkPlan JSON
         SQLite-->>Dispatcher: ✅ Stored
     end
-    
+
     rect rgb(245, 235, 255)
         Note over Dispatcher,ACLI: Step 7: Post to Jira (AOS-39)
         Dispatcher->>Formatter: format_work_plan_comment()<br/>(WorkPlan, ticket_key)
@@ -84,7 +84,7 @@ sequenceDiagram
             Note over Dispatcher: Log error, continue<br/>(WorkPlan still in SQLite)
         end
     end
-    
+
     Dispatcher->>User: ⏸️ WorkPlan ready for review<br/>Workflow ID: {workflow_id}
 
     rect rgb(255, 250, 220)

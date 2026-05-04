@@ -19,25 +19,27 @@ Usage:
     python -m dispatcher.run --reject <workflow_id> --reason "scope too broad"
 """
 
+import getpass
 import sys
 import uuid
-import getpass
+from typing import Optional
+
 import click
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from langgraph.types import Command
-from langgraph.errors import GraphInterrupt
+from langgraph.errors import GraphInterrupt  # noqa: E402
+from langgraph.types import Command  # noqa: E402
 
-from dispatcher.jira_client import (
-    JiraConfigurationError,
+from dispatcher.jira_client import (  # noqa: E402
     JiraAuthenticationError,
+    JiraConfigurationError,
     JiraTicketNotFoundError,
 )
-from state.state_store import update_status, get_workflow, get_workflow_by_ticket
-from state.workflow_status import WorkflowStatus
-from graph.builder import build_orchestrator
+from graph.builder import build_orchestrator  # noqa: E402
+from state.state_store import get_workflow, get_workflow_by_ticket, update_status  # noqa: E402
+from state.workflow_status import WorkflowStatus  # noqa: E402
 
 
 def _get_actor() -> str:
@@ -49,38 +51,38 @@ def _get_actor() -> str:
 
 @click.command()
 @click.option(
-    '--ticket',
+    "--ticket",
     default=None,
-    help='JIRA ticket key (e.g., AOS-36)',
+    help="JIRA ticket key (e.g., AOS-36)",
 )
 @click.option(
-    '--dry-run',
+    "--dry-run",
     is_flag=True,
-    help='Print actions without executing (no API calls or database changes)',
+    help="Print actions without executing (no API calls or database changes)",
 )
 @click.option(
-    '--approve',
-    'do_approve',
+    "--approve",
+    "do_approve",
     is_flag=True,
-    help='Approve the pending WorkPlan (use with --ticket or --workflow-id)',
+    help="Approve the pending WorkPlan (use with --ticket or --workflow-id)",
 )
 @click.option(
-    '--reject',
-    'do_reject',
+    "--reject",
+    "do_reject",
     is_flag=True,
-    help='Reject the pending WorkPlan (use with --ticket or --workflow-id)',
+    help="Reject the pending WorkPlan (use with --ticket or --workflow-id)",
 )
 @click.option(
-    '--reason',
+    "--reason",
     default=None,
-    help='Reason for rejection (used with --reject)',
+    help="Reason for rejection (used with --reject)",
 )
 @click.option(
-    '--workflow-id',
-    'workflow_id',
+    "--workflow-id",
+    "workflow_id",
     default=None,
-    metavar='UUID',
-    help='Target a specific workflow by ID (use with --approve or --reject)',
+    metavar="UUID",
+    help="Target a specific workflow by ID (use with --approve or --reject)",
 )
 def run(
     ticket: str,
@@ -132,7 +134,7 @@ def run(
         click.echo("❌ --ticket is required when not using --approve or --reject", err=True)
         sys.exit(1)
 
-    if '-' not in ticket:
+    if "-" not in ticket:
         click.echo("❌ Invalid ticket format. Expected format: PROJECT-123", err=True)
         sys.exit(1)
 
@@ -142,6 +144,7 @@ def run(
 # ---------------------------------------------------------------------------
 # Sub-handlers
 # ---------------------------------------------------------------------------
+
 
 def _handle_run(ticket: str, dry_run: bool) -> None:
     click.echo(f"🚀 Starting workflow for ticket: {ticket}")
@@ -216,12 +219,13 @@ def _handle_run(ticket: str, dry_run: bool) -> None:
         sys.exit(1)
 
 
-def _handle_approve(ticket_key: str, workflow_id: str = None) -> None:
+def _handle_approve(ticket_key: str, workflow_id: Optional[str] = None) -> None:
     if workflow_id:
         resolved_id = workflow_id
     else:
         pending = [
-            w for w in get_workflow_by_ticket(ticket_key)
+            w
+            for w in get_workflow_by_ticket(ticket_key)
             if w["status"] == WorkflowStatus.PENDING_APPROVAL
         ]
         if not pending:
@@ -239,8 +243,9 @@ def _handle_approve(ticket_key: str, workflow_id: str = None) -> None:
         return
 
     if workflow["status"] != WorkflowStatus.PENDING_APPROVAL:
+        status_val = workflow["status"].value
         click.echo(
-            f"❌ Workflow {resolved_id} is not pending approval (status: {workflow['status'].value})",
+            f"\u274c Workflow {resolved_id} is not pending approval (status: {status_val})",
             err=True,
         )
         sys.exit(1)
@@ -269,12 +274,13 @@ def _handle_approve(ticket_key: str, workflow_id: str = None) -> None:
         sys.exit(1)
 
 
-def _handle_reject(ticket_key: str, reason: str, workflow_id: str = None) -> None:
+def _handle_reject(ticket_key: str, reason: str, workflow_id: Optional[str] = None) -> None:
     if workflow_id:
         resolved_id = workflow_id
     else:
         pending = [
-            w for w in get_workflow_by_ticket(ticket_key)
+            w
+            for w in get_workflow_by_ticket(ticket_key)
             if w["status"] == WorkflowStatus.PENDING_APPROVAL
         ]
         if not pending:
@@ -288,8 +294,9 @@ def _handle_reject(ticket_key: str, reason: str, workflow_id: str = None) -> Non
         sys.exit(1)
 
     if workflow["status"] != WorkflowStatus.PENDING_APPROVAL:
+        status_val = workflow["status"].value
         click.echo(
-            f"❌ Workflow {resolved_id} is not pending approval (status: {workflow['status'].value})",
+            f"❌ Workflow {resolved_id} is not pending approval (status: {status_val})",
             err=True,
         )
         sys.exit(1)
@@ -313,6 +320,5 @@ def _handle_reject(ticket_key: str, reason: str, workflow_id: str = None) -> Non
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run()
-

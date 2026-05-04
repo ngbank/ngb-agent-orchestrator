@@ -203,7 +203,7 @@ ngb-agent-orchestrator/
 ├── recipes/                 # Goose YAML recipe files
 │   └── .gitkeep            # Keeps directory in git
 ├── schemas/                 # JSON schemas for WorkPlan and validation
-│   └── .gitkeep            
+│   └── .gitkeep
 ├── state/                   # SQLite database for orchestration state
 │   └── .gitkeep            # (directory is gitignored)
 ├── tests/                   # Test suite
@@ -255,7 +255,7 @@ All configuration is managed through the `.env` file. **Never commit this file t
 ### Obtaining JIRA Credentials
 
 1. **JIRA_EMAIL**: Your Atlassian account email
-2. **JIRA_API_TOKEN**: 
+2. **JIRA_API_TOKEN**:
    - Go to [Atlassian Account Security](https://id.atlassian.com/manage-profile/security/api-tokens)
    - Click "Create API token"
    - Give it a label (e.g., "Agent Orchestrator")
@@ -499,13 +499,13 @@ from dispatcher.jira_client import get_ticket, JiraTicketNotFoundError
 try:
     # Fetch a JIRA ticket by key
     ticket = get_ticket('AOS-34')
-    
+
     # Access ticket fields
     print(f"Title: {ticket.title}")
     print(f"Status: {ticket.status}")
     print(f"Description: {ticket.description}")
     print(f"Labels: {', '.join(ticket.labels)}")
-    
+
 except JiraTicketNotFoundError as e:
     print(f"Error: {e}")
 ```
@@ -534,15 +534,15 @@ from dispatcher.jira_client import JiraClient, JiraConfigurationError
 try:
     # Create a client instance
     client = JiraClient()
-    
+
     # Fetch multiple tickets
     ticket1 = client.get_ticket('AOS-34')
     ticket2 = client.get_ticket('AOS-35')
-    
+
     # Process tickets
     for ticket in [ticket1, ticket2]:
         print(f"{ticket.key}: {ticket.title} [{ticket.status}]")
-        
+
 except JiraConfigurationError as e:
     print(f"Configuration error: {e}")
 ```
@@ -760,7 +760,7 @@ You should see `(venv)` in your terminal prompt.
 
 **Symptom**: `goose: command not found`
 
-**Solution**: 
+**Solution**:
 ```bash
 # Ensure dependencies are installed
 pip install -r requirements.txt

@@ -5,13 +5,13 @@ This module provides functions to create, update, and retrieve workflow state
 stored in a SQLite database. Each workflow maps to one JIRA ticket run.
 """
 
-import sqlite3
 import json
-import uuid
-from datetime import datetime, UTC
-from pathlib import Path
-from typing import Optional, Dict, List
 import os
+import sqlite3
+import uuid
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Dict, List, Optional
 
 from .workflow_status import WorkflowStatus
 
@@ -44,14 +44,12 @@ def run_migrations() -> None:
     conn = get_connection()
     try:
         # Bootstrap the migrations tracking table
-        conn.executescript(
-            """
+        conn.executescript("""
             CREATE TABLE IF NOT EXISTS schema_migrations (
                 name TEXT PRIMARY KEY,
                 applied_at TEXT NOT NULL
             );
-            """
-        )
+            """)
         conn.commit()
 
         for migration_file in migration_files:
@@ -62,7 +60,7 @@ def run_migrations() -> None:
             if already_applied:
                 continue
 
-            with open(migration_file, 'r') as f:
+            with open(migration_file, "r") as f:
                 sql = f.read()
             conn.executescript(sql)
             conn.execute(
@@ -82,20 +80,20 @@ def create_workflow(
 ) -> str:
     """
     Create a new workflow record.
-    
+
     Args:
         ticket_key: JIRA ticket key (e.g., "AOS-35")
         work_plan: Dictionary containing the work plan (will be JSON-serialized)
         status: Initial status (default: WorkflowStatus.PENDING)
         workflow_id: Optional pre-seeded UUID. Generated automatically when None.
-    
+
     Returns:
         workflow_id: UUID of created workflow
     """
     workflow_id = workflow_id or str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()
     work_plan_json = json.dumps(work_plan) if work_plan else None
-    
+
     conn = get_connection()
     try:
         conn.execute(
@@ -103,22 +101,22 @@ def create_workflow(
             INSERT INTO workflows (id, ticket_key, status, work_plan, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (workflow_id, ticket_key, status.value, work_plan_json, now, now)
+            (workflow_id, ticket_key, status.value, work_plan_json, now, now),
         )
         conn.commit()
-        
+
         # Create audit log entry
         _create_audit_log(
             conn,
             workflow_id=workflow_id,
             actor="system",
             action="workflow_created",
-            reason=f"Created workflow for {ticket_key}"
+            reason=f"Created workflow for {ticket_key}",
         )
         conn.commit()
     finally:
         conn.close()
-    
+
     return workflow_id
 
 
@@ -127,12 +125,12 @@ def update_status(
     status: WorkflowStatus,
     pr_url: Optional[str] = None,
     actor: str = "system",
-    reason: Optional[str] = None
+    reason: Optional[str] = None,
 ) -> None:
     """
     Update workflow status and optionally PR URL.
     Also creates an audit log entry.
-    
+
     Args:
         workflow_id: UUID of the workflow
         status: New status value
@@ -141,7 +139,7 @@ def update_status(
         reason: Reason for the update (optional)
     """
     now = datetime.now(UTC).isoformat()
-    
+
     conn = get_connection()
     try:
         # Update workflow
@@ -152,7 +150,7 @@ def update_status(
                 SET status = ?, pr_url = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (status.value, pr_url, now, workflow_id)
+                (status.value, pr_url, now, workflow_id),
             )
         else:
             conn.execute(
@@ -161,18 +159,18 @@ def update_status(
                 SET status = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (status.value, now, workflow_id)
+                (status.value, now, workflow_id),
             )
-        
+
         conn.commit()
-        
+
         # Create audit log entry
         _create_audit_log(
             conn,
             workflow_id=workflow_id,
             actor=actor,
             action="status_change",
-            reason=reason or f"Status changed to {status.value}"
+            reason=reason or f"Status changed to {status.value}",
         )
         conn.commit()
     finally:
@@ -180,15 +178,12 @@ def update_status(
 
 
 def update_work_plan(
-    workflow_id: str,
-    work_plan: Dict,
-    actor: str = "system",
-    reason: Optional[str] = None
+    workflow_id: str, work_plan: Dict, actor: str = "system", reason: Optional[str] = None
 ) -> None:
     """
     Update workflow with a work plan.
     Also creates an audit log entry.
-    
+
     Args:
         workflow_id: UUID of the workflow
         work_plan: Dictionary containing the work plan (will be JSON-serialized)
@@ -197,7 +192,7 @@ def update_work_plan(
     """
     now = datetime.now(UTC).isoformat()
     work_plan_json = json.dumps(work_plan)
-    
+
     conn = get_connection()
     try:
         conn.execute(
@@ -206,17 +201,17 @@ def update_work_plan(
             SET work_plan = ?, updated_at = ?
             WHERE id = ?
             """,
-            (work_plan_json, now, workflow_id)
+            (work_plan_json, now, workflow_id),
         )
         conn.commit()
-        
+
         # Create audit log entry
         _create_audit_log(
             conn,
             workflow_id=workflow_id,
             actor=actor,
             action="work_plan_updated",
-            reason=reason or "WorkPlan stored"
+            reason=reason or "WorkPlan stored",
         )
         conn.commit()
     finally:
@@ -267,30 +262,27 @@ def update_execution_summary(
 def get_workflow(workflow_id: str) -> Optional[Dict]:
     """
     Retrieve workflow by ID.
-    
+
     Args:
         workflow_id: UUID of the workflow
-    
+
     Returns:
         Dictionary with workflow data, or None if not found
     """
     conn = get_connection()
     try:
-        cursor = conn.execute(
-            "SELECT * FROM workflows WHERE id = ?",
-            (workflow_id,)
-        )
+        cursor = conn.execute("SELECT * FROM workflows WHERE id = ?", (workflow_id,))
         row = cursor.fetchone()
-        
+
         if row is None:
             return None
-        
+
         # Convert to dict and deserialize work_plan and status
         workflow = dict(row)
-        if workflow['work_plan']:
-            workflow['work_plan'] = json.loads(workflow['work_plan'])
-        workflow['status'] = WorkflowStatus(workflow['status'])
-        
+        if workflow["work_plan"]:
+            workflow["work_plan"] = json.loads(workflow["work_plan"])
+        workflow["status"] = WorkflowStatus(workflow["status"])
+
         return workflow
     finally:
         conn.close()
@@ -299,29 +291,28 @@ def get_workflow(workflow_id: str) -> Optional[Dict]:
 def get_workflow_by_ticket(ticket_key: str) -> List[Dict]:
     """
     Retrieve all workflows for a given ticket.
-    
+
     Args:
         ticket_key: JIRA ticket key
-    
+
     Returns:
         List of workflow dictionaries
     """
     conn = get_connection()
     try:
         cursor = conn.execute(
-            "SELECT * FROM workflows WHERE ticket_key = ? ORDER BY created_at DESC",
-            (ticket_key,)
+            "SELECT * FROM workflows WHERE ticket_key = ? ORDER BY created_at DESC", (ticket_key,)
         )
         rows = cursor.fetchall()
-        
+
         workflows = []
         for row in rows:
             workflow = dict(row)
-            if workflow['work_plan']:
-                workflow['work_plan'] = json.loads(workflow['work_plan'])
-            workflow['status'] = WorkflowStatus(workflow['status'])
+            if workflow["work_plan"]:
+                workflow["work_plan"] = json.loads(workflow["work_plan"])
+            workflow["status"] = WorkflowStatus(workflow["status"])
             workflows.append(workflow)
-        
+
         return workflows
     finally:
         conn.close()
@@ -330,18 +321,17 @@ def get_workflow_by_ticket(ticket_key: str) -> List[Dict]:
 def get_audit_log(workflow_id: str) -> List[Dict]:
     """
     Retrieve audit log entries for a workflow.
-    
+
     Args:
         workflow_id: UUID of the workflow
-    
+
     Returns:
         List of audit log entries
     """
     conn = get_connection()
     try:
         cursor = conn.execute(
-            "SELECT * FROM audit_log WHERE workflow_id = ? ORDER BY created_at ASC",
-            (workflow_id,)
+            "SELECT * FROM audit_log WHERE workflow_id = ? ORDER BY created_at ASC", (workflow_id,)
         )
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
@@ -354,12 +344,12 @@ def _create_audit_log(
     workflow_id: str,
     actor: str,
     action: str,
-    reason: Optional[str] = None
+    reason: Optional[str] = None,
 ) -> None:
     """
     Internal function to create an audit log entry.
     Note: This is append-only - no delete operations.
-    
+
     Args:
         conn: Database connection
         workflow_id: UUID of the workflow
@@ -369,13 +359,13 @@ def _create_audit_log(
     """
     audit_id = str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()
-    
+
     conn.execute(
         """
         INSERT INTO audit_log (id, workflow_id, actor, action, reason, created_at)
         VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (audit_id, workflow_id, actor, action, reason, now)
+        (audit_id, workflow_id, actor, action, reason, now),
     )
 
 

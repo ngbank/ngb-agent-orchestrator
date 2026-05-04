@@ -17,15 +17,14 @@ approved WorkPlan (AOS-41).
 import sqlite3
 from typing import Literal
 
-from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.graph import END, StateGraph
 
-from graph.state import OrchestratorState
-from graph.work_planner.builder import build_work_planner
 from graph.nodes.await_approval import await_approval
 from graph.nodes.execute_plan import execute_plan
+from graph.state import OrchestratorState
+from graph.work_planner.builder import build_work_planner
 from state.state_store import get_db_path
-
 
 
 def _route_after_work_planner(

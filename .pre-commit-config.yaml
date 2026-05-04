@@ -1,0 +1,60 @@
+repos:
+  # ── General file hygiene ──────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: detect-private-key
+
+  # ── Python formatting ─────────────────────────────────────────────────────
+  - repo: https://github.com/psf/black
+    rev: 26.1.0
+    hooks:
+      - id: black
+        language_version: python3.12
+
+  - repo: https://github.com/PyCQA/isort
+    rev: 6.0.1
+    hooks:
+      - id: isort
+        name: isort (python)
+
+  # ── Python linting ────────────────────────────────────────────────────────
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.2.0
+    hooks:
+      - id: flake8
+
+  # ── Python type checking ──────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.20.0
+    hooks:
+      - id: mypy
+        additional_dependencies: []
+        args: [--ignore-missing-imports, --no-error-summary, --python-version=3.12]
+        exclude: ^(venv/|state/migrations/)
+
+  # ── Tests ─────────────────────────────────────────────────────────────────
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: python -m pytest tests/ -q --tb=short
+        language: system
+        pass_filenames: false
+        always_run: true
+
+  # ── SQL migration safety ──────────────────────────────────────────────────
+      - id: check-sql-migrations
+        name: check-sql-migrations
+        entry: python scripts/check_sql_migrations.py
+        language: system
+        files: ^state/migrations/.*\.sql$
+        pass_filenames: true

@@ -4,19 +4,17 @@ All routing functions are pure: they inspect state and return a string
 destination — no I/O, no side-effects.
 """
 
-import pytest
-
 from graph.work_planner.edges import (
-    route_after_validate_input,
     route_after_check_duplicate,
     route_after_fetch_ticket,
+    route_after_validate_input,
     route_after_validate_plan,
 )
-
 
 # ---------------------------------------------------------------------------
 # route_after_validate_input
 # ---------------------------------------------------------------------------
+
 
 def test_route_validate_input_no_error():
     state = {"ticket_key": "AOS-50", "dry_run": False}
@@ -38,6 +36,7 @@ def test_route_validate_input_empty_error_is_falsy():
 # route_after_check_duplicate
 # ---------------------------------------------------------------------------
 
+
 def test_route_check_duplicate_no_error():
     state = {"ticket_key": "AOS-50", "dry_run": False}
     assert route_after_check_duplicate(state) == "fetch_ticket"
@@ -56,6 +55,7 @@ def test_route_check_duplicate_with_error():
 # route_after_fetch_ticket
 # ---------------------------------------------------------------------------
 
+
 def test_route_fetch_ticket_no_error():
     state = {"ticket_key": "AOS-50", "dry_run": False, "ticket": object()}
     assert route_after_fetch_ticket(state) == "create_workflow_record"
@@ -69,6 +69,7 @@ def test_route_fetch_ticket_with_error():
 # ---------------------------------------------------------------------------
 # route_after_validate_plan
 # ---------------------------------------------------------------------------
+
 
 def test_route_validate_plan_no_error():
     state = {"ticket_key": "AOS-50", "dry_run": False}

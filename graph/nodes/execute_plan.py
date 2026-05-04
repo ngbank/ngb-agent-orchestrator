@@ -7,9 +7,9 @@ import tempfile
 
 import click
 
+from graph.state import OrchestratorState
 from state.state_store import update_execution_summary, update_status
 from state.workflow_status import WorkflowStatus
-from graph.state import OrchestratorState
 
 
 def execute_plan(state: OrchestratorState) -> dict:
@@ -46,11 +46,16 @@ def execute_plan(state: OrchestratorState) -> dict:
         click.echo(f"🪿 Running execute recipe for {ticket_key}...")
         result = subprocess.run(
             [
-                "goose", "run",
-                "--recipe", "recipes/execute.yaml",
-                "--params", f"ticket_key={ticket_key}",
-                "--params", f"work_plan_path={work_plan_path}",
-                "--params", f"output_path={summary_path}",
+                "goose",
+                "run",
+                "--recipe",
+                "recipes/execute.yaml",
+                "--params",
+                f"ticket_key={ticket_key}",
+                "--params",
+                f"work_plan_path={work_plan_path}",
+                "--params",
+                f"output_path={summary_path}",
             ],
             check=False,
         )

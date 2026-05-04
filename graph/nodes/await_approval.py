@@ -5,9 +5,9 @@ import getpass
 import click
 from langgraph.types import interrupt
 
-from state.state_store import update_status, get_workflow, _create_audit_log, get_connection
-from state.workflow_status import WorkflowStatus
 from graph.state import OrchestratorState
+from state.state_store import _create_audit_log, get_connection, get_workflow, update_status
+from state.workflow_status import WorkflowStatus
 
 
 def await_approval(state: OrchestratorState) -> dict:
@@ -48,7 +48,10 @@ def await_approval(state: OrchestratorState) -> dict:
     click.echo(f"   Workflow ID: {workflow_id}")
     click.echo("")
     click.echo(f"   To approve:  python -m dispatcher.run --approve --ticket {ticket_key}")
-    click.echo(f"   To reject:   python -m dispatcher.run --reject --ticket {ticket_key}" + ' --reason "your reason"')
+    click.echo(
+        f"   To reject:   python -m dispatcher.run --reject --ticket {ticket_key}"
+        + ' --reason "your reason"'
+    )
     click.echo("")
 
     # Suspend here — resumes when Command(resume={"decision": ..., "reason": ...}) is passed.
@@ -57,6 +60,9 @@ def await_approval(state: OrchestratorState) -> dict:
     decision = resume_payload.get("decision", "")
     reason = resume_payload.get("reason")
     actor = _get_actor()
+
+    if not workflow_id:
+        return {"approval_decision": "rejected", "rejection_reason": "missing workflow_id"}
 
     if decision == "approved":
         update_status(

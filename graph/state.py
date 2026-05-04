@@ -7,6 +7,7 @@ shared keys without an explicit channel mapping.
 """
 
 from typing import Any, Optional
+
 from typing_extensions import TypedDict
 
 
@@ -17,13 +18,13 @@ class OrchestratorState(TypedDict, total=False):
 
     # --- populated by WorkPlanner subgraph ---
     workflow_id: Optional[str]
-    ticket: Optional[Any]          # dispatcher.jira_client.JiraTicket
+    ticket: Optional[Any]  # dispatcher.jira_client.JiraTicket
     work_plan_data: Optional[dict]
     error: Optional[str]
 
     # --- populated by await_approval node ---
-    approval_decision: Optional[str]   # "approved" | "rejected"
-    rejection_reason: Optional[str]    # only set when rejected
+    approval_decision: Optional[str]  # "approved" | "rejected"
+    rejection_reason: Optional[str]  # only set when rejected
 
     # --- populated by execute_plan node ---
     execution_summary: Optional[dict]  # summary written by execute recipe

@@ -2,8 +2,8 @@
 
 import click
 
-from state.state_store import update_work_plan
 from graph.work_planner.state import WorkPlannerState
+from state.state_store import update_work_plan
 
 
 def store_plan(state: WorkPlannerState) -> dict:
