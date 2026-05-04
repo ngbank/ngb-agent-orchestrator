@@ -71,7 +71,28 @@ def cli_runner():
     return CliRunner()
 
 
-def test_run_creates_workflow(test_db, mock_jira_client, cli_runner, memory_checkpointer):
+@pytest.fixture
+def mock_generate_plan():
+    """Mock generate_plan node to return a schema-valid WorkPlan so tests reach await_approval."""
+    with patch("graph.work_planner.builder.generate_plan") as mock:
+        mock.return_value = {
+            "work_plan_data": {
+                "schema_version": "1.0",
+                "ticket_key": "TEST-123",
+                "summary": "Test plan",
+                "approach": "test approach",
+                "tasks": [{"id": 1, "description": "Do the thing", "files_likely_affected": []}],
+                "risks": [],
+                "questions_for_reviewer": [],
+                "status": "pass",
+            }
+        }
+        yield mock
+
+
+def test_run_creates_workflow(
+    test_db, mock_jira_client, mock_generate_plan, cli_runner, memory_checkpointer
+):
     """Test that running the dispatcher creates a workflow record and pauses for approval."""
     with patch("dispatcher.run.build_orchestrator") as mock_build:
         from graph.builder import build_orchestrator
@@ -113,7 +134,7 @@ def test_run_rejects_duplicate(test_db, mock_jira_client, cli_runner, memory_che
 
 
 def test_run_allows_rerun_after_completion(
-    test_db, mock_jira_client, cli_runner, memory_checkpointer
+    test_db, mock_jira_client, mock_generate_plan, cli_runner, memory_checkpointer
 ):
     """Test that completed workflows can be re-run (pauses at approval gate)."""
     # Create a completed workflow
@@ -174,7 +195,9 @@ def test_run_dry_run_mode(test_db, cli_runner):
     assert len(workflows) == 0
 
 
-def test_run_logs_transitions(test_db, mock_jira_client, cli_runner, memory_checkpointer):
+def test_run_logs_transitions(
+    test_db, mock_jira_client, mock_generate_plan, cli_runner, memory_checkpointer
+):
     """Test that all stage transitions are logged to audit log."""
     with patch("dispatcher.run.build_orchestrator") as mock_build:
         from graph.builder import build_orchestrator

@@ -7,6 +7,7 @@ destination — no I/O, no side-effects.
 from graph.work_planner.edges import (
     route_after_check_duplicate,
     route_after_fetch_ticket,
+    route_after_generate_plan,
     route_after_validate_input,
     route_after_validate_plan,
 )
@@ -89,3 +90,41 @@ def test_route_validate_plan_none_error():
     """Explicit None error must not trigger the error path."""
     state = {"ticket_key": "AOS-50", "dry_run": False, "error": None}
     assert route_after_validate_plan(state) == "store_plan"
+
+
+# ---------------------------------------------------------------------------
+# route_after_generate_plan
+# ---------------------------------------------------------------------------
+
+
+def test_route_generate_plan_with_work_plan_data():
+    state = {"ticket_key": "AOS-50", "work_plan_data": {"tasks": []}}
+    assert route_after_generate_plan(state) == "validate_plan"
+
+
+def test_route_generate_plan_empty_work_plan_data():
+    """Empty dict for work_plan_data must route to error_handler."""
+    state = {"ticket_key": "AOS-50", "work_plan_data": {}}
+    assert route_after_generate_plan(state) == "error_handler"
+
+
+def test_route_generate_plan_missing_work_plan_data():
+    """Missing work_plan_data key must route to error_handler."""
+    state = {"ticket_key": "AOS-50"}
+    assert route_after_generate_plan(state) == "error_handler"
+
+
+def test_route_generate_plan_none_work_plan_data():
+    """Explicit None work_plan_data must route to error_handler."""
+    state = {"ticket_key": "AOS-50", "work_plan_data": None}
+    assert route_after_generate_plan(state) == "error_handler"
+
+
+def test_route_generate_plan_with_error():
+    """An error in state must route to error_handler regardless of work_plan_data."""
+    state = {
+        "ticket_key": "AOS-50",
+        "work_plan_data": {"tasks": []},
+        "error": "Plan generation not yet implemented (AOS-51).",
+    }
+    assert route_after_generate_plan(state) == "error_handler"
