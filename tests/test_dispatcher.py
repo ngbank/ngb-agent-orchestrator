@@ -328,3 +328,57 @@ def test_run_keyboard_interrupt(test_db, cli_runner, memory_checkpointer):
 
     assert result.exit_code == 130  # Standard SIGINT exit code
     assert "⚠️  Workflow interrupted by user" in result.output
+
+
+class TestPostExecutionComment:
+    """Tests for _post_execution_comment helper."""
+
+    def test_posts_comment_with_pr_url(self, test_db):
+        """Test that pr_url from the execution summary is posted to JIRA and echoed."""
+        from dispatcher.run import _post_execution_comment
+
+        execution_summary = {
+            "ticket_key": "AOS-42",
+            "branch": "feature/AOS-42+branch-push-and-pr",
+            "build": "pass",
+            "tests": "pass",
+            "files_changed": ["dispatcher/run.py"],
+            "commit_sha": "abc123",
+            "pr_url": "https://github.com/org/repo/pull/99",
+            "status": "success",
+        }
+
+        with patch("dispatcher.run.JiraClient") as mock_jira_class:
+            mock_jira = mock_jira_class.return_value
+            _post_execution_comment("AOS-42", execution_summary)
+            mock_jira.post_comment.assert_called_once()
+            call_args = mock_jira.post_comment.call_args
+            assert call_args[0][0] == "AOS-42"
+            assert "https://github.com/org/repo/pull/99" in call_args[0][1]
+
+    def test_skips_when_no_ticket(self):
+        """Test that no JIRA call is made when ticket_key is absent."""
+        from dispatcher.run import _post_execution_comment
+
+        with patch("dispatcher.run.JiraClient") as mock_jira_class:
+            _post_execution_comment(None, {"status": "success", "pr_url": "http://x"})
+            mock_jira_class.assert_not_called()
+
+    def test_skips_when_no_summary(self):
+        """Test that no JIRA call is made when execution_summary is None."""
+        from dispatcher.run import _post_execution_comment
+
+        with patch("dispatcher.run.JiraClient") as mock_jira_class:
+            _post_execution_comment("AOS-42", None)
+            mock_jira_class.assert_not_called()
+
+    def test_tolerates_jira_comment_error(self):
+        """Test that a JiraCommentError is caught and does not raise."""
+        from dispatcher.jira_client import JiraCommentError
+        from dispatcher.run import _post_execution_comment
+
+        with patch("dispatcher.run.JiraClient") as mock_jira_class:
+            mock_jira = mock_jira_class.return_value
+            mock_jira.post_comment.side_effect = JiraCommentError("network error")
+            # Should not raise
+            _post_execution_comment("AOS-42", {"status": "success", "pr_url": ""})

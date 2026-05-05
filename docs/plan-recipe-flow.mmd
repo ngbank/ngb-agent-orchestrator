@@ -133,6 +133,21 @@ sequenceDiagram
                 Dispatcher->>FileSystem: Clean up temp files
             end
 
+            rect rgb(225, 245, 255)
+                Note over Dispatcher,GitHub: Step 10: Push Branch and Create PR (AOS-42)
+                Note over ExecRecipe: execute recipe already pushed branch<br/>and created PR via gh CLI
+                Dispatcher->>Formatter: format_execution_summary_comment()<br/>(execution_summary incl. pr_url)
+                Formatter-->>Dispatcher: Formatted comment
+                Dispatcher->>JiraAPI: post_comment(ticket_key, comment)<br/>includes PR URL if present
+                alt Comment Posted
+                    JiraAPI-->>Dispatcher: ✅ Comment added
+                    Note over Dispatcher: PR URL visible on Jira ticket
+                else Comment Failed
+                    JiraAPI-->>Dispatcher: ⚠️ Error (non-fatal)
+                    Note over Dispatcher: Log warning, workflow still COMPLETED
+                end
+            end
+
             Note over Dispatcher: Status → COMPLETED or FAILED
         else Rejected
             Dispatcher->>SQLite: update_status(REJECTED)<br/>audit_log: actor=local_user, action=workflow_rejected, reason=...

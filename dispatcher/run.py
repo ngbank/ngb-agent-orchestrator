@@ -34,9 +34,12 @@ from langgraph.types import Command  # noqa: E402
 
 from dispatcher.jira_client import (  # noqa: E402
     JiraAuthenticationError,
+    JiraClient,
+    JiraCommentError,
     JiraConfigurationError,
     JiraTicketNotFoundError,
 )
+from dispatcher.work_plan_formatter import format_execution_summary_comment  # noqa: E402
 from graph.builder import build_orchestrator  # noqa: E402
 from state.state_store import (  # noqa: E402
     get_workflow,
@@ -228,6 +231,7 @@ def _handle_run(ticket: str, dry_run: bool) -> None:
             reason="All stages completed successfully",
         )
         click.echo("🎉 Workflow completed successfully")
+        _post_execution_comment(ticket, final_state.get("execution_summary"))
 
     except GraphInterrupt:
         # The graph hit interrupt() inside await_approval.  The node already
@@ -303,6 +307,7 @@ def _handle_approve(ticket_key: str, workflow_id: Optional[str] = None) -> None:
         )
 
         wf_id = final_state.get("workflow_id", resolved_id)
+        ticket_key = final_state.get("ticket_key", "")
         update_status(
             wf_id,
             WorkflowStatus.COMPLETED,
@@ -310,10 +315,27 @@ def _handle_approve(ticket_key: str, workflow_id: Optional[str] = None) -> None:
             reason="All stages completed successfully after approval",
         )
         click.echo("🎉 Workflow completed successfully")
+        _post_execution_comment(ticket_key, final_state.get("execution_summary"))
 
     except Exception as e:
         click.echo(f"❌ Error resuming workflow: {e}", err=True)
         sys.exit(1)
+
+
+def _post_execution_comment(ticket_key: Optional[str], execution_summary: Optional[dict]) -> None:
+    """Post execution summary (including pr_url if present) as a JIRA comment."""
+    if not ticket_key or not execution_summary:
+        return
+    try:
+        comment = format_execution_summary_comment(execution_summary)
+        jira = JiraClient()
+        jira.post_comment(ticket_key, comment)
+        pr_url = execution_summary.get("pr_url", "")
+        if pr_url:
+            click.echo(f"🔗 PR created: {pr_url}")
+        click.echo(f"💬 Execution summary posted to {ticket_key}")
+    except JiraCommentError as e:
+        click.echo(f"⚠️  Could not post execution summary to JIRA: {e}", err=True)
 
 
 # Status display config: (emoji, label)
