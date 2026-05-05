@@ -104,6 +104,12 @@ def execute_plan(state: OrchestratorState) -> dict:
     )
     os.close(summary_fd)
 
+    reasoning_fd, reasoning_path = tempfile.mkstemp(
+        suffix="_reasoning.txt",
+        prefix=f"{workflow_id}_",
+    )
+    os.close(reasoning_fd)
+
     try:
         click.echo(f"🪵 Running execute recipe for {ticket_key}...")
         with open(lp, "a") as log_file:
@@ -122,10 +128,22 @@ def execute_plan(state: OrchestratorState) -> dict:
                     f"working_dir={working_dir}",
                     "--params",
                     f"output_path={summary_path}",
+                    "--params",
+                    f"reasoning_path={reasoning_path}",
                 ],
                 log_file,
                 cwd=working_dir,
             )
+
+        # Append reasoning diary to log
+        if os.path.exists(reasoning_path):
+            reasoning_text = open(reasoning_path).read().strip()
+            if reasoning_text:
+                with open(lp, "a") as log_file:
+                    log_file.write("\n\n" + "=" * 60 + "\n")
+                    log_file.write("  AGENT REASONING DIARY\n")
+                    log_file.write("=" * 60 + "\n")
+                    log_file.write(reasoning_text + "\n")
 
         if result.returncode != 0:
             click.echo(f"⚠️  Goose exited with code {result.returncode}")
@@ -168,7 +186,7 @@ def execute_plan(state: OrchestratorState) -> dict:
 
     finally:
         # Clean up temp files and the working clone
-        for path in (work_plan_path, summary_path):
+        for path in (work_plan_path, summary_path, reasoning_path):
             try:
                 os.unlink(path)
             except OSError:
