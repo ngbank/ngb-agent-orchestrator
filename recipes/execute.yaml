@@ -13,6 +13,11 @@ parameters:
     requirement: required
     description: "Path to the approved WorkPlan JSON file"
 
+  - key: working_dir
+    input_type: string
+    requirement: required
+    description: "Absolute path to the cloned target repository (e.g. /tmp/ngb-execute-<uuid>)"
+
   - key: output_path
     input_type: string
     requirement: required
@@ -39,6 +44,7 @@ prompt: |
 
   Implement the WorkPlan at: {{ work_plan_path }}
   Ticket: {{ ticket_key }}
+  Working directory (cloned target repo): {{ working_dir }}
   Write execution summary to: {{ output_path }}
 
   ## Step 1: Read the WorkPlan
@@ -49,27 +55,17 @@ prompt: |
   - `tasks`: Ordered list of tasks to implement (each has `id`, `description`, `files_likely_affected`)
   - `approach`: Overall implementation approach
 
-  ## Step 2: Verify Clean Working Tree
+  ## Step 2: Change Into Working Directory
 
-  Run:
+  All subsequent commands must run inside the cloned repository:
   ```
-  git status --porcelain
+  cd {{ working_dir }}
   ```
 
-  If there are any uncommitted changes, write the execution summary with:
-  ```json
-  {
-    "ticket_key": "{{ ticket_key }}",
-    "branch": "",
-    "build": "skipped",
-    "tests": "skipped",
-    "files_changed": [],
-    "commit_sha": "",
-    "status": "failed",
-    "error": "Working tree is dirty. Commit or stash changes before running execute recipe."
-  }
+  Confirm you are in the right place:
   ```
-  Write it to {{ output_path }} and stop.
+  pwd && git remote get-url origin
+  ```
 
   ## Step 3: Create Feature Branch
 

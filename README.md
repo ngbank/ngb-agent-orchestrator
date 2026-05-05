@@ -32,14 +32,16 @@ See [docs/architecture.md](docs/architecture.md) for a full sequence diagram and
 ## Components
 
 | Component | Description |
-|---|---|
+|---|-----------|
 | `dispatcher/run.py` | CLI entry point — orchestrates the full lifecycle |
 | `graph/` | LangGraph state machine — nodes, edges, approval interrupt |
 | `recipes/plan.yaml` | Goose recipe: JIRA ticket → WorkPlan JSON |
 | `recipes/execute.yaml` | Goose recipe: WorkPlan → feature branch + commit |
 | `state/` | SQLite persistence — workflows, audit log, migrations |
 | `schemas/work_plan_v1.json` | JSON schema contract for WorkPlan documents |
+| `mcp_server/server.py` | MCP server: resolves JIRA project key → Git repo URL |
 | `config/litellm.yaml` | LiteLLM proxy config (routes Goose → your LLM provider) |
+| `config/project-repo-mapping.md` | Maps JIRA project keys to target Git repository URLs |
 
 ---
 
@@ -95,6 +97,34 @@ source venv/bin/activate
 litellm --config config/litellm.yaml --port 4000
 ```
 
+### Registering the MCP Server (Repo Lookup)
+
+The `mcp_server/server.py` tool lets Goose resolve a JIRA project key to its target Git repository URL. It must be registered in your local Goose config — this is a **one-time per-machine setup** and is not stored in the repo.
+
+Add the following block to `~/.config/goose/config.yaml` under the `extensions:` key:
+
+```yaml
+extensions:
+  repo-lookup:
+    enabled: true
+    type: stdio
+    name: repo-lookup
+    description: Resolves a JIRA project key to its Git repository URL using config/project-repo-mapping.md
+    display_name: Repo Lookup
+    cmd: /path/to/ngb-agent-orchestrator/venv/bin/python
+    args:
+      - -m
+      - mcp_server.server
+    env_keys: []
+    bundled: false
+```
+
+Replace `/path/to/ngb-agent-orchestrator` with the absolute path to your local clone. Restart Goose after editing.
+
+To add a new project, append a row to [config/project-repo-mapping.md](config/project-repo-mapping.md) — no server restart is needed as the file is read on every tool call.
+
+See [docs/mcp-server.md](docs/mcp-server.md) for full details including how to run the server standalone for testing.
+
 ### Running Your First Workflow
 
 ```bash
@@ -117,6 +147,7 @@ dispatcher --reject  --ticket AOS-41 --reason "scope too broad"
 | Running workflows, approval, lifecycle | [docs/workflows.md](docs/workflows.md) |
 | Goose recipes (plan & execute) | [docs/recipes.md](docs/recipes.md) |
 | SQLite state store & migrations | [docs/state-store.md](docs/state-store.md) |
+| MCP server setup & repo mapping | [docs/mcp-server.md](docs/mcp-server.md) |
 | Development guide (tests, pre-commit, contributing) | [docs/development.md](docs/development.md) |
 
 ---

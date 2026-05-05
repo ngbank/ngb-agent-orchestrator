@@ -11,7 +11,7 @@ requires-python = ">=3.12"
 dispatcher = "dispatcher.run:run"
 
 [tool.setuptools.packages.find]
-include = ["dispatcher*", "graph*", "state*"]
+include = ["dispatcher*", "graph*", "state*", "mcp_server*"]
 
 [tool.black]
 line-length = 100

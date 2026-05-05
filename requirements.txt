@@ -25,6 +25,9 @@ langgraph-checkpoint-sqlite>=3.0.0
 # [proxy] extras required for running the proxy server (includes websockets, etc.)
 litellm[proxy]>=1.0.0
 
+# MCP Server
+mcp>=1.0.0
+
 # Goose Integration
 # Note: Install Goose separately following official documentation
 # Goose is typically installed via: pip install goose-toolkit
