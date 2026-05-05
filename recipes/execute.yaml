@@ -73,15 +73,15 @@ prompt: |
 
   ## Step 3: Create Feature Branch
 
-  Generate a branch name:
+  Generate a branch name following the repository convention:
   - Take the WorkPlan `summary` field
   - Convert to lowercase, replace spaces and special chars with hyphens
   - Truncate to 40 characters, trim trailing hyphens
-  - Branch name: `feature/{{ ticket_key }}-{slug}`
+  - Branch name: `feature/{{ ticket_key }}+{slug}` (note: `+` separator between ticket and slug)
 
   Run:
   ```
-  git checkout -b feature/{{ ticket_key }}-{slug}
+  git checkout -b feature/{{ ticket_key }}+{slug}
   ```
 
   If the branch already exists, append `-2` (and increment until unique).
@@ -156,23 +156,57 @@ prompt: |
   ```
 
   **IMPORTANT safety constraints:**
-  - NEVER run `git push`
   - NEVER commit to `main` or any pre-existing branch
   - NEVER run `git reset --hard` or `git force`
   - NEVER delete branches
 
-  ## Step 7: Write Execution Summary
+  ## Step 7: Push Branch and Create Pull Request
+
+  Push the feature branch to the remote:
+  ```
+  git push origin feature/{{ ticket_key }}+{slug}
+  ```
+
+  Build the PR description:
+  1. Check if a PR template exists:
+     ```
+     test -f .github/pull_request_template.md && echo "exists" || echo "missing"
+     ```
+  2. If the template **exists**, read it and fill in the sections:
+     - **Description**: WorkPlan `summary` and `approach`
+     - **JIRA Ticket**: Ticket ID = `{{ ticket_key }}`, Link = `https://mirandags.atlassian.net/browse/{{ ticket_key }}`
+     - **Type of Change**: mark the relevant checkbox based on the WorkPlan
+     - **Changes Made**: list each task from the WorkPlan
+     - **Testing**: reflect actual build/test results from Step 5
+  3. If the template **does not exist**, use a minimal description with the same information.
+
+  Write the PR body to a temp file, then create a **draft** PR:
+  ```
+  cat > /tmp/pr_body_{{ ticket_key }}.md << 'PR_EOF'
+  <filled-in PR body>
+  PR_EOF
+
+  gh pr create \
+    --title "[{{ ticket_key }}] {WorkPlan summary}" \
+    --body-file /tmp/pr_body_{{ ticket_key }}.md \
+    --base main
+  ```
+
+  Capture the PR URL from the output of `gh pr create`. If `gh` is not available or the push fails, record `pr_url` as `""` in the summary and continue.
+
+  ## Step 8: Write Execution Summary
 
   Write a JSON file to {{ output_path }}:
 
   ```json
   {
     "ticket_key": "{{ ticket_key }}",
-    "branch": "feature/{{ ticket_key }}-{slug}",
+    "branch": "feature/{{ ticket_key }}+{slug}",
     "build": "pass|fail",
     "tests": "pass|fail|skipped",
     "files_changed": ["path/to/file1", "path/to/file2"],
     "commit_sha": "<full sha>",
+    "pr_url": "<GitHub PR URL or empty string>",
     "status": "success|partial|failed"
   }
   ```
@@ -191,6 +225,7 @@ prompt: |
     "tests": "skipped",
     "files_changed": [],
     "commit_sha": "",
+    "pr_url": "",
     "status": "failed",
     "error": "<description of the error>"
   }

@@ -6,7 +6,6 @@ structured ticket information (title, description, labels, status).
 """
 
 import os
-import subprocess
 from dataclasses import dataclass
 from typing import List
 
@@ -154,51 +153,23 @@ class JiraClient:
 
     def post_comment(self, ticket_key: str, comment: str) -> bool:
         """
-        Post a comment to a JIRA ticket using ACLI.
+        Post a comment to a JIRA ticket using the JIRA API.
 
         Args:
             ticket_key: The JIRA ticket key (e.g., 'AOS-39')
             comment: The comment text to post (supports Jira markdown)
 
         Returns:
-            bool: True if comment was posted successfully, False otherwise
+            bool: True if comment was posted successfully
 
         Raises:
             JiraCommentError: If posting the comment fails
         """
         try:
-            # Use ACLI to post comment
-            result = subprocess.run(
-                [
-                    "acli",
-                    "jira",
-                    "workitem",
-                    "comment",
-                    "add",
-                    "--key",
-                    ticket_key,
-                    "--comment",
-                    comment,
-                    "-y",
-                ],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-
-            # Check for success message in output
-            if "✓" in result.stdout or "successfully" in result.stdout.lower():
-                return True
-            else:
-                raise JiraCommentError(f"Unexpected output from ACLI: {result.stdout}")
-
-        except subprocess.CalledProcessError as e:
-            error_msg = e.stderr if e.stderr else e.stdout
-            raise JiraCommentError(f"Failed to post comment to {ticket_key}: {error_msg}") from e
-        except FileNotFoundError:
-            raise JiraCommentError(
-                "ACLI command not found. Please ensure Atlassian CLI is installed."
-            )
+            self.client.add_comment(ticket_key, comment)
+            return True
+        except JIRAError as e:
+            raise JiraCommentError(f"Failed to post comment to {ticket_key}: {e}") from e
 
 
 def get_ticket(ticket_key: str) -> JiraTicket:
