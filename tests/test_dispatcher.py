@@ -382,3 +382,76 @@ class TestPostExecutionComment:
             mock_jira.post_comment.side_effect = JiraCommentError("network error")
             # Should not raise
             _post_execution_comment("AOS-42", {"status": "success", "pr_url": ""})
+
+
+class TestHandleHistory:
+    """Tests for --history / _handle_history."""
+
+    def test_history_errors_without_ticket_or_workflow_id(self, test_db, cli_runner):
+        """--history with neither --ticket nor --workflow-id should exit 1."""
+        result = cli_runner.invoke(run, ["--history"])
+        assert result.exit_code == 1
+        assert "--history requires --ticket or --workflow-id" in result.output
+
+    def test_history_no_workflows_found(self, test_db, cli_runner):
+        """--history --ticket for a ticket with no workflows should exit 1."""
+        result = cli_runner.invoke(run, ["--history", "--ticket", "AOS-999"])
+        assert result.exit_code == 1
+        assert "No workflows found for ticket: AOS-999" in result.output
+
+    def test_history_unknown_workflow_id(self, test_db, cli_runner):
+        """--history --workflow-id with a non-existent UUID should exit 1."""
+        result = cli_runner.invoke(
+            run, ["--history", "--workflow-id", "00000000-0000-0000-0000-000000000000"]
+        )
+        assert result.exit_code == 1
+        assert "Workflow not found" in result.output
+
+    def test_history_shows_steps(
+        self, test_db, mock_jira_client, mock_generate_plan, cli_runner, memory_checkpointer
+    ):
+        """--history should list at least one step after a workflow run."""
+        from graph.builder import build_orchestrator
+
+        checkpointer = memory_checkpointer
+        with patch("dispatcher.run.build_orchestrator") as mock_build:
+            mock_build.side_effect = lambda: build_orchestrator(checkpointer=checkpointer)
+
+            # Start workflow — pauses at await_approval
+            cli_runner.invoke(run, ["--ticket", "TEST-123"])
+
+        workflows = state_store.get_workflow_by_ticket("TEST-123")
+        assert workflows, "expected at least one workflow"
+        resolved_id = workflows[0]["id"]
+
+        with patch("dispatcher.run.build_orchestrator") as mock_build:
+            mock_build.side_effect = lambda: build_orchestrator(checkpointer=checkpointer)
+            result = cli_runner.invoke(run, ["--history", "--ticket", "TEST-123"])
+
+        assert result.exit_code == 0
+        assert "Workflow history for TEST-123" in result.output
+        assert resolved_id in result.output
+        # At minimum the work_planner step should appear
+        assert "work_planner" in result.output
+
+    def test_history_by_workflow_id(
+        self, test_db, mock_jira_client, mock_generate_plan, cli_runner, memory_checkpointer
+    ):
+        """--history --workflow-id should show the same output as --ticket."""
+        from graph.builder import build_orchestrator
+
+        checkpointer = memory_checkpointer
+        with patch("dispatcher.run.build_orchestrator") as mock_build:
+            mock_build.side_effect = lambda: build_orchestrator(checkpointer=checkpointer)
+            cli_runner.invoke(run, ["--ticket", "TEST-123"])
+
+        workflows = state_store.get_workflow_by_ticket("TEST-123")
+        resolved_id = workflows[0]["id"]
+
+        with patch("dispatcher.run.build_orchestrator") as mock_build:
+            mock_build.side_effect = lambda: build_orchestrator(checkpointer=checkpointer)
+            result = cli_runner.invoke(run, ["--history", "--workflow-id", resolved_id])
+
+        assert result.exit_code == 0
+        assert "Workflow history for TEST-123" in result.output
+        assert resolved_id in result.output

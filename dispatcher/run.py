@@ -93,6 +93,12 @@ def _get_actor() -> str:
     help="List workflows and their statuses (optionally filter with --ticket)",
 )
 @click.option(
+    "--history",
+    "do_history",
+    is_flag=True,
+    help="Show node traversal history for a workflow (use with --ticket or --workflow-id)",
+)
+@click.option(
     "--reason",
     default=None,
     help="Reason for rejection (used with --reject)",
@@ -111,6 +117,7 @@ def run(
     do_reject: bool,
     do_cancel: bool,
     do_list: bool,
+    do_history: bool,
     reason: str,
     workflow_id: str,
 ) -> None:
@@ -148,8 +155,21 @@ def run(
 
         # List workflows for a specific ticket
         dispatcher --list --ticket AOS-36
+
+        # Show node traversal history for a ticket
+        dispatcher --history --ticket AOS-36
+
+        # Show history for a specific workflow ID
+        dispatcher --history --workflow-id <uuid>
     """
     # --- dispatch to the right sub-command ---
+    if do_history:
+        if not ticket and not workflow_id:
+            click.echo("\u274c --history requires --ticket or --workflow-id", err=True)
+            sys.exit(1)
+        _handle_history(ticket, workflow_id)
+        return
+
     if do_list:
         _handle_list(ticket)
         return
@@ -370,6 +390,81 @@ def _handle_list(ticket_key: Optional[str]) -> None:
         emoji, label = _STATUS_DISPLAY.get(status_val, ("  ", status_val))
         created = wf["created_at"][:19].replace("T", " ")
         click.echo(f"{wf['ticket_key']:<12} {emoji} {label:<16} {wf['id']}  {created}")
+
+
+# Node display config: emoji per top-level node name
+_NODE_EMOJI = {
+    "__start__": "▶ ",
+    "work_planner": "📋",
+    "await_approval": "⏸️ ",
+    "execute_plan": "⚙️ ",
+    "__end__": "🏁",
+}
+
+
+def _handle_history(ticket_key: Optional[str], workflow_id: Optional[str]) -> None:
+    """Print the node traversal history for a workflow, oldest step first."""
+    # Resolve workflow_id from ticket if not provided directly
+    if workflow_id:
+        resolved_id = workflow_id
+        wf = get_workflow(resolved_id)
+        if wf is None:
+            click.echo(f"❌ Workflow not found: {resolved_id}", err=True)
+            sys.exit(1)
+        resolved_ticket = wf["ticket_key"]
+    else:
+        workflows = get_workflow_by_ticket(ticket_key)  # type: ignore[arg-type]
+        if not workflows:
+            click.echo(f"❌ No workflows found for ticket: {ticket_key}", err=True)
+            sys.exit(1)
+        # Show history for the most recent workflow
+        wf = sorted(workflows, key=lambda w: w["created_at"])[-1]
+        resolved_id = wf["id"]
+        resolved_ticket = ticket_key
+
+    status_val = wf["status"].value
+    emoji, label = _STATUS_DISPLAY.get(status_val, ("  ", status_val))
+    click.echo(f"\nWorkflow history for {resolved_ticket} ({resolved_id})")
+    click.echo(f"Status: {emoji} {label}")
+    click.echo()
+
+    thread_config = {"configurable": {"thread_id": resolved_id}}
+    try:
+        graph = build_orchestrator()
+        # get_state_history returns newest-first; reverse for chronological order
+        history = list(graph.get_state_history(thread_config))
+        history.reverse()
+    except Exception as e:
+        click.echo(f"❌ Could not read workflow history: {e}", err=True)
+        sys.exit(1)
+
+    if not history:
+        click.echo("No history found.")
+        return
+
+    click.echo(f"  {'STEP':<6} {'NODE':<20} {'OUTCOME'}")
+    click.echo(f"  {'-'*5} {'-'*19} {'-'*30}")
+
+    for state in history:
+        step = state.metadata.get("step", "?")
+        if step == -1:
+            # input step — skip internal detail
+            continue
+        for task in state.tasks:
+            node = task.name
+            node_emoji = _NODE_EMOJI.get(node, "  ")
+            # Determine outcome
+            if task.error:
+                outcome = f"❌ error: {task.error}"
+            elif task.interrupts:
+                outcome = "⏸️  interrupted (awaiting approval)"
+            elif task.result:
+                # Summarise key result fields
+                result_keys = list(task.result.keys())
+                outcome = f"✅ → {', '.join(result_keys)}"
+            else:
+                outcome = "✅ done"
+            click.echo(f"  {step:<6} {node_emoji} {node:<18} {outcome}")
 
 
 def _handle_cancel(
