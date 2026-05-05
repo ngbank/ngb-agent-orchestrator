@@ -55,14 +55,10 @@ prompt: |
   - `tasks`: Ordered list of tasks to implement (each has `id`, `description`, `files_likely_affected`)
   - `approach`: Overall implementation approach
 
-  ## Step 2: Change Into Working Directory
+  ## Step 2: Confirm Working Directory
 
-  All subsequent commands must run inside the cloned repository:
-  ```
-  cd {{ working_dir }}
-  ```
-
-  Confirm you are in the right place:
+  You are already running inside the cloned target repository at `{{ working_dir }}`.
+  Confirm this is correct:
   ```
   pwd && git remote get-url origin
   ```

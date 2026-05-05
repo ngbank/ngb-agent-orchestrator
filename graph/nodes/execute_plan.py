@@ -117,6 +117,7 @@ def execute_plan(state: OrchestratorState) -> dict:
                 f"output_path={summary_path}",
             ],
             check=False,
+            cwd=working_dir,
         )
 
         if result.returncode != 0:
