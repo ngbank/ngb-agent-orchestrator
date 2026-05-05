@@ -417,5 +417,29 @@ def _create_audit_log(
     )
 
 
+def clear_db() -> tuple[int, int]:
+    """
+    Delete all workflow and audit log data, and reset LangGraph checkpoints.
+
+    Returns:
+        (workflows_deleted, checkpoints_deleted)
+    """
+    conn = get_connection()
+    try:
+        wf_count = conn.execute("SELECT COUNT(*) FROM workflows").fetchone()[0]
+        cp_count = conn.execute("SELECT COUNT(*) FROM checkpoints").fetchone()[0]
+
+        conn.executescript("""
+            DELETE FROM audit_log;
+            DELETE FROM workflows;
+            DELETE FROM checkpoints;
+            DELETE FROM writes;
+        """)
+        conn.commit()
+        return wf_count, cp_count
+    finally:
+        conn.close()
+
+
 # Initialize database on module import
 run_migrations()

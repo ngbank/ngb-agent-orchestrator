@@ -42,6 +42,7 @@ from dispatcher.jira_client import (  # noqa: E402
 from dispatcher.work_plan_formatter import format_execution_summary_comment  # noqa: E402
 from graph.builder import build_orchestrator  # noqa: E402
 from state.state_store import (  # noqa: E402
+    clear_db,
     get_workflow,
     get_workflow_by_ticket,
     list_workflows,
@@ -99,6 +100,12 @@ def _get_actor() -> str:
     help="Show node traversal history for a workflow (use with --ticket or --workflow-id)",
 )
 @click.option(
+    "--clear-db",
+    "do_clear_db",
+    is_flag=True,
+    help="Delete all workflows and checkpoints from the local database (prompts for confirmation)",
+)
+@click.option(
     "--reason",
     default=None,
     help="Reason for rejection (used with --reject)",
@@ -118,6 +125,7 @@ def run(
     do_cancel: bool,
     do_list: bool,
     do_history: bool,
+    do_clear_db: bool,
     reason: str,
     workflow_id: str,
 ) -> None:
@@ -161,8 +169,15 @@ def run(
 
         # Show history for a specific workflow ID
         dispatcher --history --workflow-id <uuid>
+
+        # Clear all workflows and checkpoints from the local database
+        dispatcher --clear-db
     """
     # --- dispatch to the right sub-command ---
+    if do_clear_db:
+        _handle_clear_db()
+        return
+
     if do_history:
         if not ticket and not workflow_id:
             click.echo("\u274c --history requires --ticket or --workflow-id", err=True)
@@ -356,6 +371,16 @@ def _post_execution_comment(ticket_key: Optional[str], execution_summary: Option
         click.echo(f"💬 Execution summary posted to {ticket_key}")
     except JiraCommentError as e:
         click.echo(f"⚠️  Could not post execution summary to JIRA: {e}", err=True)
+
+
+def _handle_clear_db() -> None:
+    """Prompt for confirmation then wipe all workflows and LangGraph checkpoints."""
+    click.echo("⚠️  This will permanently delete ALL workflow records and LangGraph checkpoints.")
+    if not click.confirm("Are you sure?", default=False):
+        click.echo("Aborted.")
+        return
+    wf_deleted, cp_deleted = clear_db()
+    click.echo(f"🗑️  Cleared {wf_deleted} workflow(s) and {cp_deleted} checkpoint(s).")
 
 
 # Status display config: (emoji, label)
