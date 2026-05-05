@@ -3,12 +3,12 @@
 import json
 import os
 import shutil
-import subprocess
 import tempfile
 
 import click
 
 from graph.state import OrchestratorState
+from graph.utils import log_path, run_and_tee
 from mcp_server.server import get_repo_for_project
 from state.state_store import update_execution_summary, update_status
 from state.workflow_status import WorkflowStatus
@@ -60,13 +60,18 @@ def execute_plan(state: OrchestratorState) -> dict:
 
     # --- Clone into a fresh temp directory ---
     working_dir = f"/tmp/ngb-execute-{workflow_id}"
-    click.echo(f"📂 Cloning {repo_url} into {working_dir}...")
+    lp = log_path(workflow_id or "unknown", "execute")
+    click.echo(f"📂 Cloning {repo_url} into {working_dir}... (log: {lp})")
     try:
-        subprocess.run(
-            ["git", "clone", repo_url, working_dir],
-            check=True,
-        )
-    except subprocess.CalledProcessError as e:
+        with open(lp, "w") as log_file:
+            log_file.write(f"=== git clone {repo_url} ===\n")
+            clone_result = run_and_tee(
+                ["git", "clone", repo_url, working_dir],
+                log_file,
+            )
+        if clone_result.returncode != 0:
+            raise Exception(f"git clone exited with code {clone_result.returncode}")
+    except Exception as e:
         click.echo(f"❌ Failed to clone repository: {e}", err=True)
         summary = {
             "ticket_key": ticket_key,
@@ -101,24 +106,26 @@ def execute_plan(state: OrchestratorState) -> dict:
 
     try:
         click.echo(f"🪵 Running execute recipe for {ticket_key}...")
-        result = subprocess.run(
-            [
-                "goose",
-                "run",
-                "--recipe",
-                "recipes/execute.yaml",
-                "--params",
-                f"ticket_key={ticket_key}",
-                "--params",
-                f"work_plan_path={work_plan_path}",
-                "--params",
-                f"working_dir={working_dir}",
-                "--params",
-                f"output_path={summary_path}",
-            ],
-            check=False,
-            cwd=working_dir,
-        )
+        with open(lp, "a") as log_file:
+            log_file.write("\n=== goose run execute recipe ===\n")
+            result = run_and_tee(
+                [
+                    "goose",
+                    "run",
+                    "--recipe",
+                    "recipes/execute.yaml",
+                    "--params",
+                    f"ticket_key={ticket_key}",
+                    "--params",
+                    f"work_plan_path={work_plan_path}",
+                    "--params",
+                    f"working_dir={working_dir}",
+                    "--params",
+                    f"output_path={summary_path}",
+                ],
+                log_file,
+                cwd=working_dir,
+            )
 
         if result.returncode != 0:
             click.echo(f"⚠️  Goose exited with code {result.returncode}")

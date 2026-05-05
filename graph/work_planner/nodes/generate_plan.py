@@ -2,11 +2,11 @@
 
 import json
 import os
-import subprocess
 import tempfile
 
 import click
 
+from graph.utils import log_path, run_and_tee
 from graph.work_planner.state import WorkPlannerState
 
 
@@ -21,6 +21,7 @@ def generate_plan(state: WorkPlannerState) -> dict:
        sends the workflow to error_handler.
     """
     ticket_key = state.get("ticket_key", "")
+    workflow_id = state.get("workflow_id") or ticket_key
 
     summary_fd, output_path = tempfile.mkstemp(
         suffix="_workplan.json",
@@ -29,20 +30,22 @@ def generate_plan(state: WorkPlannerState) -> dict:
     os.close(summary_fd)
 
     try:
-        click.echo(f"🪿 Running plan recipe for {ticket_key}...")
-        result = subprocess.run(
-            [
-                "goose",
-                "run",
-                "--recipe",
-                "recipes/plan.yaml",
-                "--params",
-                f"ticket_key={ticket_key}",
-                "--params",
-                f"output_path={output_path}",
-            ],
-            check=False,
-        )
+        lp = log_path(workflow_id, "plan")
+        click.echo(f"🪿 Running plan recipe for {ticket_key}... (log: {lp})")
+        with open(lp, "w") as log_file:
+            result = run_and_tee(
+                [
+                    "goose",
+                    "run",
+                    "--recipe",
+                    "recipes/plan.yaml",
+                    "--params",
+                    f"ticket_key={ticket_key}",
+                    "--params",
+                    f"output_path={output_path}",
+                ],
+                log_file,
+            )
 
         if result.returncode != 0:
             return {"error": f"Goose plan recipe exited with code {result.returncode}"}

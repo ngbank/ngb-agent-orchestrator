@@ -41,6 +41,7 @@ from dispatcher.jira_client import (  # noqa: E402
 )
 from dispatcher.work_plan_formatter import format_execution_summary_comment  # noqa: E402
 from graph.builder import build_orchestrator  # noqa: E402
+from graph.utils import log_path  # noqa: E402
 from state.state_store import (  # noqa: E402
     clear_db,
     get_workflow,
@@ -106,6 +107,12 @@ def _get_actor() -> str:
     help="Delete all workflows and checkpoints from the local database (prompts for confirmation)",
 )
 @click.option(
+    "--logs",
+    "do_logs",
+    is_flag=True,
+    help="Print captured Goose output logs for a workflow (use with --ticket or --workflow-id)",
+)
+@click.option(
     "--reason",
     default=None,
     help="Reason for rejection (used with --reject)",
@@ -126,6 +133,7 @@ def run(
     do_list: bool,
     do_history: bool,
     do_clear_db: bool,
+    do_logs: bool,
     reason: str,
     workflow_id: str,
 ) -> None:
@@ -174,6 +182,13 @@ def run(
         dispatcher --clear-db
     """
     # --- dispatch to the right sub-command ---
+    if do_logs:
+        if not ticket and not workflow_id:
+            click.echo("\u274c --logs requires --ticket or --workflow-id", err=True)
+            sys.exit(1)
+        _handle_logs(ticket, workflow_id)
+        return
+
     if do_clear_db:
         _handle_clear_db()
         return
@@ -371,6 +386,33 @@ def _post_execution_comment(ticket_key: Optional[str], execution_summary: Option
         click.echo(f"💬 Execution summary posted to {ticket_key}")
     except JiraCommentError as e:
         click.echo(f"⚠️  Could not post execution summary to JIRA: {e}", err=True)
+
+
+def _handle_logs(ticket_key: Optional[str], workflow_id: Optional[str]) -> None:
+    """Print the captured Goose log(s) for a workflow."""
+    if workflow_id:
+        resolved_id = workflow_id
+    else:
+        workflows = get_workflow_by_ticket(ticket_key)  # type: ignore[arg-type]
+        if not workflows:
+            click.echo(f"❌ No workflows found for ticket: {ticket_key}", err=True)
+            sys.exit(1)
+        resolved_id = sorted(workflows, key=lambda w: w["created_at"])[-1]["id"]
+
+    found_any = False
+    for stage in ("plan", "execute"):
+        lp = log_path(resolved_id, stage)
+        if lp.exists():
+            found_any = True
+            click.echo(f"\n{'='*60}")
+            click.echo(f"  {stage.upper()} LOG  ({lp})")
+            click.echo(f"{'='*60}")
+            click.echo(lp.read_text())
+        else:
+            click.echo(f"ℹ️  No {stage} log found at {lp}")
+
+    if not found_any:
+        click.echo("No logs found for this workflow.")
 
 
 def _handle_clear_db() -> None:
