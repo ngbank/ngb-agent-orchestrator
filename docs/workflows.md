@@ -66,9 +66,13 @@ python -m dispatcher.run --reject  --workflow-id b04fd4e0-... --reason "needs mo
 2. The LangGraph graph resumes from the checkpoint
 3. The `execute_plan` node is invoked:
    - Runs `goose run --recipe recipes/execute.yaml`
-   - Goose creates a feature branch, implements tasks, runs tests, commits
-   - Execution summary JSON is stored in SQLite
-4. Workflow status → `COMPLETED` (or `FAILED` on error)
+   - Goose creates a feature branch (`feature/{TICKET}+{slug}`), implements tasks, runs tests, commits
+   - Goose pushes the branch to the remote and opens a PR via `gh pr create`
+   - PR title: `[TICKET-KEY] <WorkPlan summary>`
+   - PR description: filled from `.github/pull_request_template.md` if present, otherwise a minimal body
+   - Execution summary JSON (including `pr_url`) is stored in SQLite
+4. Dispatcher posts execution summary (with PR link) as a JIRA comment
+5. Workflow status → `COMPLETED` (or `FAILED` on error)
 
 ### What Happens on Rejection
 

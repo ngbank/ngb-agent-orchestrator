@@ -321,47 +321,23 @@ class TestJiraTicketDataclass:
 class TestPostComment:
     """Test suite for post_comment functionality."""
 
-    @patch("dispatcher.jira_client.subprocess.run")
     @patch("dispatcher.jira_client.JIRA")
-    def test_post_comment_success(self, mock_jira_class, mock_subprocess, mock_env_vars):
-        """Test successful comment posting via ACLI."""
-        # Mock ACLI success response
-        mock_result = Mock()
-        mock_result.stdout = "✓ Comment added successfully to AOS-39"
-        mock_result.stderr = ""
-        mock_subprocess.return_value = mock_result
+    def test_post_comment_success(self, mock_jira_class, mock_env_vars):
+        """Test successful comment posting via JIRA API."""
+        mock_jira_instance = mock_jira_class.return_value
+        mock_jira_instance.myself.return_value = {"displayName": "Test User"}
 
         client = JiraClient()
         success = client.post_comment("AOS-39", "Test comment")
 
         assert success is True
+        mock_jira_instance.add_comment.assert_called_once_with("AOS-39", "Test comment")
 
-        # Verify ACLI was called with correct arguments
-        mock_subprocess.assert_called_once()
-        call_args = mock_subprocess.call_args
-        assert call_args[0][0] == [
-            "acli",
-            "jira",
-            "workitem",
-            "comment",
-            "add",
-            "--key",
-            "AOS-39",
-            "--comment",
-            "Test comment",
-            "-y",
-        ]
-        assert call_args[1]["capture_output"] is True
-        assert call_args[1]["text"] is True
-        assert call_args[1]["check"] is True
-
-    @patch("dispatcher.jira_client.subprocess.run")
     @patch("dispatcher.jira_client.JIRA")
-    def test_post_comment_with_markdown(self, mock_jira_class, mock_subprocess, mock_env_vars):
+    def test_post_comment_with_markdown(self, mock_jira_class, mock_env_vars):
         """Test posting comment with Jira markdown."""
-        mock_result = Mock()
-        mock_result.stdout = "✓ Comment added successfully"
-        mock_subprocess.return_value = mock_result
+        mock_jira_instance = mock_jira_class.return_value
+        mock_jira_instance.myself.return_value = {"displayName": "Test User"}
 
         markdown_comment = "# WorkPlan\n\n## Tasks\n- Task 1\n- Task 2"
 
@@ -369,22 +345,17 @@ class TestPostComment:
         success = client.post_comment("AOS-39", markdown_comment)
 
         assert success is True
+        mock_jira_instance.add_comment.assert_called_once_with("AOS-39", markdown_comment)
 
-        # Verify markdown was passed correctly
-        call_args = mock_subprocess.call_args
-        assert markdown_comment in call_args[0][0]
-
-    @patch("dispatcher.jira_client.subprocess.run")
     @patch("dispatcher.jira_client.JIRA")
-    def test_post_comment_acli_failure(self, mock_jira_class, mock_subprocess, mock_env_vars):
-        """Test handling of ACLI command failure."""
-        import subprocess as sp
+    def test_post_comment_api_failure(self, mock_jira_class, mock_env_vars):
+        """Test handling of JIRA API failure."""
+        from jira.exceptions import JIRAError
 
-        # Mock ACLI failure
-        mock_subprocess.side_effect = sp.CalledProcessError(
-            returncode=1,
-            cmd=["acli", "jira", "workitem", "comment", "add"],
-            stderr="Error: Ticket not found",
+        mock_jira_instance = mock_jira_class.return_value
+        mock_jira_instance.myself.return_value = {"displayName": "Test User"}
+        mock_jira_instance.add_comment.side_effect = JIRAError(
+            text="Issue does not exist", status_code=404
         )
 
         client = JiraClient()
@@ -395,49 +366,15 @@ class TestPostComment:
         assert "Failed to post comment" in str(exc_info.value)
         assert "INVALID-999" in str(exc_info.value)
 
-    @patch("dispatcher.jira_client.subprocess.run")
-    @patch("dispatcher.jira_client.JIRA")
-    def test_post_comment_acli_not_installed(self, mock_jira_class, mock_subprocess, mock_env_vars):
-        """Test handling when ACLI is not installed."""
-        # Mock FileNotFoundError (command not found)
-        mock_subprocess.side_effect = FileNotFoundError()
-
-        client = JiraClient()
-
-        with pytest.raises(JiraCommentError) as exc_info:
-            client.post_comment("AOS-39", "Test comment")
-
-        assert "ACLI command not found" in str(exc_info.value)
-        assert "Atlassian CLI is installed" in str(exc_info.value)
-
-    @patch("dispatcher.jira_client.subprocess.run")
-    @patch("dispatcher.jira_client.JIRA")
-    def test_post_comment_unexpected_output(self, mock_jira_class, mock_subprocess, mock_env_vars):
-        """Test handling of unexpected ACLI output."""
-        # Mock unexpected output (no success indicator)
-        mock_result = Mock()
-        mock_result.stdout = "Some unexpected output"
-        mock_result.stderr = ""
-        mock_subprocess.return_value = mock_result
-
-        client = JiraClient()
-
-        with pytest.raises(JiraCommentError) as exc_info:
-            client.post_comment("AOS-39", "Test comment")
-
-        assert "Unexpected output" in str(exc_info.value)
-
 
 class TestPostCommentConvenienceFunction:
     """Test suite for the post_comment() convenience function."""
 
-    @patch("dispatcher.jira_client.subprocess.run")
     @patch("dispatcher.jira_client.JIRA")
-    def test_post_comment_function_success(self, mock_jira_class, mock_subprocess, mock_env_vars):
+    def test_post_comment_function_success(self, mock_jira_class, mock_env_vars):
         """Test that post_comment() convenience function works correctly."""
-        mock_result = Mock()
-        mock_result.stdout = "✓ Comment added successfully"
-        mock_subprocess.return_value = mock_result
+        mock_jira_instance = mock_jira_class.return_value
+        mock_jira_instance.myself.return_value = {"displayName": "Test User"}
 
         success = post_comment("AOS-39", "Test comment")
 
@@ -450,17 +387,14 @@ class TestPostCommentConvenienceFunction:
         with pytest.raises(JiraConfigurationError):
             post_comment("AOS-39", "Test comment")
 
-    @patch("dispatcher.jira_client.subprocess.run")
     @patch("dispatcher.jira_client.JIRA")
-    def test_post_comment_function_acli_failure(
-        self, mock_jira_class, mock_subprocess, mock_env_vars
-    ):
-        """Test that post_comment() raises JiraCommentError on ACLI failure."""
-        import subprocess as sp
+    def test_post_comment_function_api_failure(self, mock_jira_class, mock_env_vars):
+        """Test that post_comment() raises JiraCommentError on API failure."""
+        from jira.exceptions import JIRAError
 
-        mock_subprocess.side_effect = sp.CalledProcessError(
-            returncode=1, cmd=["acli"], stderr="Error"
-        )
+        mock_jira_instance = mock_jira_class.return_value
+        mock_jira_instance.myself.return_value = {"displayName": "Test User"}
+        mock_jira_instance.add_comment.side_effect = JIRAError(text="Error", status_code=500)
 
         with pytest.raises(JiraCommentError):
             post_comment("AOS-39", "Test comment")

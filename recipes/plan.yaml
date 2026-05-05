@@ -153,15 +153,25 @@ prompt: |
 
   ## Step 5: Write to File
 
+  **IMPORTANT**: You MUST write the JSON to `{{ output_path }}` using a shell command.
+  Do NOT use any `final_output` or structured response tool — the dispatcher reads the file directly.
+
   Once validation passes:
   1. Create parent directories if needed: `mkdir -p $(dirname {{ output_path }})`
-  2. Write the validated JSON with proper formatting (2-space indentation)
-  3. Verify the file was created: `test -f {{ output_path }} && echo "File created"`
+  2. Write the validated JSON using a shell command, e.g.:
+     ```
+     cat > {{ output_path }} << 'WORKPLAN_EOF'
+     { ... validated json ... }
+     WORKPLAN_EOF
+     ```
+  3. Verify the file was written: `test -f {{ output_path }} && echo "✅ File written" || echo "❌ File missing"`
 
   ## Final Confirmation
 
   After successfully writing the file, confirm with:
   "✅ WorkPlan JSON successfully generated and written to {{ output_path }}"
+
+  **Do NOT call final_output or any structured response tool. Writing the file is the only required completion step.**
 
   ## Example WorkPlan:
 
@@ -201,66 +211,6 @@ prompt: |
     "status": "pass"
   }
   ```
-
-response:
-  json_schema:
-    type: object
-    properties:
-      schema_version:
-        type: string
-        description: "Schema version identifier, must be '1.0'"
-      ticket_key:
-        type: string
-        description: "JIRA ticket key"
-      summary:
-        type: string
-        description: "Brief summary of the work plan"
-      approach:
-        type: string
-        description: "Overall implementation approach"
-      tasks:
-        type: array
-        description: "Ordered list of tasks"
-        items:
-          type: object
-          properties:
-            id:
-              type: integer
-              description: "Sequential task ID"
-            description:
-              type: string
-              description: "Task description"
-            files_likely_affected:
-              type: array
-              description: "List of files"
-              items:
-                type: string
-          required:
-            - id
-            - description
-            - files_likely_affected
-      risks:
-        type: array
-        description: "List of risks"
-        items:
-          type: string
-      questions_for_reviewer:
-        type: array
-        description: "Questions for reviewer"
-        items:
-          type: string
-      status:
-        type: string
-        description: "Plan status: pass, concerns, or blocked"
-    required:
-      - schema_version
-      - ticket_key
-      - summary
-      - approach
-      - tasks
-      - risks
-      - questions_for_reviewer
-      - status
 
 retry:
   max_retries: 3

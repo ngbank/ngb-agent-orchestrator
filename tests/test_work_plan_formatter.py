@@ -12,6 +12,7 @@ import pytest
 
 from dispatcher.work_plan_formatter import (
     WorkPlanCommentFormatter,
+    format_execution_summary_comment,
     format_work_plan_comment,
 )
 
@@ -238,3 +239,82 @@ class TestWorkPlanCommentFormatter:
         assert '"characters"' in comment
         assert "*asterisks*" in comment
         assert "<Button />" in comment
+
+
+class TestFormatExecutionSummaryComment:
+    """Tests for format_execution_summary_comment."""
+
+    def test_success_with_pr_url(self):
+        """Test formatting a successful execution summary that includes a PR URL."""
+        summary = {
+            "ticket_key": "AOS-42",
+            "branch": "feature/AOS-42+branch-push-and-pr",
+            "build": "pass",
+            "tests": "pass",
+            "files_changed": ["dispatcher/run.py", "dispatcher/work_plan_formatter.py"],
+            "commit_sha": "abc123def456",
+            "pr_url": "https://github.com/org/repo/pull/99",
+            "status": "success",
+        }
+        comment = format_execution_summary_comment(summary)
+
+        assert "✅ Execution Summary" in comment
+        assert "feature/AOS-42+branch-push-and-pr" in comment
+        assert "SUCCESS" in comment
+        assert "dispatcher/run.py" in comment
+        assert "abc123def456" in comment
+        assert "https://github.com/org/repo/pull/99" in comment
+
+    def test_success_without_pr_url(self):
+        """Test that missing pr_url is handled gracefully (no PR line in output)."""
+        summary = {
+            "ticket_key": "AOS-42",
+            "branch": "feature/AOS-42+branch-push-and-pr",
+            "build": "pass",
+            "tests": "pass",
+            "files_changed": [],
+            "commit_sha": "abc123",
+            "pr_url": "",
+            "status": "success",
+        }
+        comment = format_execution_summary_comment(summary)
+
+        assert "✅ Execution Summary" in comment
+        assert "Pull Request" not in comment
+
+    def test_failed_with_error(self):
+        """Test formatting a failed execution summary."""
+        summary = {
+            "ticket_key": "AOS-42",
+            "branch": "",
+            "build": "fail",
+            "tests": "skipped",
+            "files_changed": [],
+            "commit_sha": "",
+            "pr_url": "",
+            "status": "failed",
+            "error": "Tests failed: 3 failures",
+        }
+        comment = format_execution_summary_comment(summary)
+
+        assert "❌ Execution Summary" in comment
+        assert "FAILED" in comment
+        assert "Tests failed: 3 failures" in comment
+
+    def test_partial_status(self):
+        """Test formatting a partial (build pass, tests fail) execution summary."""
+        summary = {
+            "ticket_key": "AOS-42",
+            "branch": "feature/AOS-42+branch-push-and-pr",
+            "build": "pass",
+            "tests": "fail",
+            "files_changed": ["some/file.py"],
+            "commit_sha": "deadbeef",
+            "pr_url": "https://github.com/org/repo/pull/100",
+            "status": "partial",
+        }
+        comment = format_execution_summary_comment(summary)
+
+        assert "⚠️ Execution Summary" in comment
+        assert "PARTIAL" in comment
+        assert "https://github.com/org/repo/pull/100" in comment

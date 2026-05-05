@@ -259,6 +259,54 @@ def update_execution_summary(
         conn.close()
 
 
+def list_workflows(
+    ticket_key: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 50,
+) -> List[Dict]:
+    """
+    List workflows, optionally filtered by ticket key and/or status.
+
+    Args:
+        ticket_key: Filter to a specific JIRA ticket (optional)
+        status: Filter to a specific status value e.g. 'in_progress' (optional)
+        limit: Maximum number of rows to return (default 50)
+
+    Returns:
+        List of workflow dicts ordered by created_at descending
+    """
+    clauses = []
+    params: list = []
+
+    if ticket_key:
+        clauses.append("ticket_key = ?")
+        params.append(ticket_key)
+    if status:
+        clauses.append("status = ?")
+        params.append(status)
+
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    params.append(limit)
+
+    conn = get_connection()
+    try:
+        cursor = conn.execute(
+            f"SELECT * FROM workflows {where} ORDER BY created_at DESC LIMIT ?",
+            params,
+        )
+        rows = cursor.fetchall()
+        result = []
+        for row in rows:
+            wf = dict(row)
+            if wf["work_plan"]:
+                wf["work_plan"] = json.loads(wf["work_plan"])
+            wf["status"] = WorkflowStatus(wf["status"])
+            result.append(wf)
+        return result
+    finally:
+        conn.close()
+
+
 def get_workflow(workflow_id: str) -> Optional[Dict]:
     """
     Retrieve workflow by ID.
