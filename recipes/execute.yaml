@@ -172,7 +172,7 @@ prompt: |
      - **Testing**: reflect actual build/test results from Step 5
   3. If the template **does not exist**, use a minimal description with the same information.
 
-  Write the PR body to a temp file, then create a **draft** PR:
+  Write the PR body to a temp file, then create a PR:
   ```
   cat > /tmp/pr_body_{{ ticket_key }}.md << 'PR_EOF'
   <filled-in PR body>
