@@ -134,6 +134,14 @@ dispatcher --ticket AOS-41
 # After reviewing the WorkPlan comment on JIRA, approve or reject:
 dispatcher --approve --ticket AOS-41
 dispatcher --reject  --ticket AOS-41 --reason "scope too broad"
+
+# List all workflows (optionally filter by ticket)
+dispatcher --list
+dispatcher --list --ticket AOS-41
+
+# Show which nodes executed and in what order
+dispatcher --history --ticket AOS-41
+dispatcher --history --workflow-id <uuid>
 ```
 
 ---
