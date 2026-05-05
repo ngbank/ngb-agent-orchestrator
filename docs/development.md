@@ -13,7 +13,12 @@ source venv/bin/activate
 
 pip install -r requirements.txt
 pip install -r requirements-dev.txt
+pip install -e .   # registers the dispatcher CLI and all local packages
 ```
+
+> **Note:** Re-run `pip install -e .` whenever a new top-level package is added to the repo
+> (i.e. a new directory added to `pyproject.toml`'s `packages.find.include` list).
+> Without this, Python won't find the new module and imports will fail at runtime.
 
 ---
 
