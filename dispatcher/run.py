@@ -73,6 +73,12 @@ def _get_actor() -> str:
     help="Reject the pending WorkPlan (use with --ticket or --workflow-id)",
 )
 @click.option(
+    "--cancel",
+    "do_cancel",
+    is_flag=True,
+    help="Cancel any active workflow (use with --ticket or --workflow-id)",
+)
+@click.option(
     "--reason",
     default=None,
     help="Reason for rejection (used with --reject)",
@@ -89,6 +95,7 @@ def run(
     dry_run: bool,
     do_approve: bool,
     do_reject: bool,
+    do_cancel: bool,
     reason: str,
     workflow_id: str,
 ) -> None:
@@ -114,8 +121,21 @@ def run(
 
         # Reject by workflow ID
         dispatcher --reject --workflow-id <uuid> --reason "scope too broad"
+
+        # Cancel an active workflow by ticket key
+        dispatcher --cancel --ticket AOS-36
+
+        # Cancel an active workflow by workflow ID
+        dispatcher --cancel --workflow-id <uuid>
     """
     # --- dispatch to the right sub-command ---
+    if do_cancel:
+        if not ticket and not workflow_id:
+            click.echo("❌ --cancel requires --ticket or --workflow-id", err=True)
+            sys.exit(1)
+        _handle_cancel(ticket, reason, workflow_id)
+        return
+
     if do_approve:
         if not ticket and not workflow_id:
             click.echo("❌ --approve requires --ticket or --workflow-id", err=True)
@@ -272,6 +292,41 @@ def _handle_approve(ticket_key: str, workflow_id: Optional[str] = None) -> None:
     except Exception as e:
         click.echo(f"❌ Error resuming workflow: {e}", err=True)
         sys.exit(1)
+
+
+def _handle_cancel(
+    ticket_key: str, reason: Optional[str], workflow_id: Optional[str] = None
+) -> None:
+    if workflow_id:
+        resolved_id = workflow_id
+        workflow = get_workflow(resolved_id)
+        if workflow is None:
+            click.echo(f"❌ Workflow not found: {resolved_id}", err=True)
+            sys.exit(1)
+        active = [workflow] if workflow["status"].is_active() else []
+    else:
+        active = [w for w in get_workflow_by_ticket(ticket_key) if w["status"].is_active()]
+
+    if not active:
+        click.echo(
+            (
+                f"❌ No active workflow found for ticket: {ticket_key}"
+                if ticket_key
+                else f"❌ Workflow not active: {workflow_id}"
+            ),
+            err=True,
+        )
+        sys.exit(1)
+
+    actor = _get_actor()
+    for wf in active:
+        update_status(
+            wf["id"],
+            WorkflowStatus.CANCELLED,
+            actor=actor,
+            reason=reason or "Cancelled by user",
+        )
+        click.echo(f"🚫 Workflow {wf['id']} cancelled" + (f": {reason}" if reason else ""))
 
 
 def _handle_reject(ticket_key: str, reason: str, workflow_id: Optional[str] = None) -> None:

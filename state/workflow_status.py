@@ -11,6 +11,7 @@ class WorkflowStatus(Enum):
     REJECTED = "rejected"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
     def is_active(self) -> bool:
         """Return True if the workflow is still in-flight."""
@@ -27,4 +28,5 @@ class WorkflowStatus(Enum):
             WorkflowStatus.COMPLETED,
             WorkflowStatus.FAILED,
             WorkflowStatus.REJECTED,
+            WorkflowStatus.CANCELLED,
         )

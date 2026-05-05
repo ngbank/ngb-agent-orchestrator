@@ -53,14 +53,24 @@ prompt: |
 
   ## Step 2: Analyze Repository Structure
 
-  Examine the current workspace repository (ngb-agent-orchestrator) to identify affected files:
-  1. Read the README.md to understand the project structure
-  2. List relevant directories (dispatcher/, schemas/, state/, tests/, recipes/)
-  3. Identify files likely affected based on the ticket description
-  4. Look for existing patterns and conventions
-  5. Identify related test files
+  Examine the current workspace repository (ngb-agent-orchestrator) to identify affected files.
 
-  Use your file reading and code analysis capabilities to explore the codebase.
+  **IMPORTANT**: The feature described in the ticket likely does NOT exist yet — that is why the ticket exists.
+  Do NOT search for existing implementations of the feature. Instead, understand WHERE new code would be added.
+
+  Follow these steps exactly:
+  1. List the top-level directory structure (e.g., `ls` or `tree . --depth 2`)
+  2. Read key files to understand conventions: dispatcher/run.py, dispatcher/cli.py
+  3. List relevant directories: dispatcher/, schemas/, state/, tests/, recipes/
+  4. Based on the ticket description and existing patterns, identify files likely to be CREATED or MODIFIED
+  5. Note any related test files that would need to be added or updated
+
+  **Do NOT**:
+  - Use `analyze focus:` to search for the feature's keywords (e.g., push, PR, github, branch) — they won't be found
+  - Retry the same symbol search with different variants if a symbol is not found
+  - Spend more than 3 shell/read operations understanding the structure
+
+  Use shell commands (ls, cat, head) or the tree tool for exploration.
 
   ## Step 3: Generate WorkPlan JSON
 
