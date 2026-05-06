@@ -17,6 +17,18 @@ def log_path(workflow_id: str, stage: str) -> Path:
     return _logs_dir() / f"{workflow_id}_{stage}.log"
 
 
+def goose_env() -> dict:
+    """Build subprocess env with GOOSE_MODEL and GOOSE_PROVIDER sourced from the environment."""
+    env = os.environ.copy()
+    model = os.environ.get("GOOSE_MODEL")
+    provider = os.environ.get("GOOSE_PROVIDER")
+    if model:
+        env["GOOSE_MODEL"] = model
+    if provider:
+        env["GOOSE_PROVIDER"] = provider
+    return env
+
+
 def run_and_tee(
     cmd: List[str],
     log_file: IO[str],

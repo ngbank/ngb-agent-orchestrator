@@ -22,8 +22,6 @@ extensions:
     description: "File system and shell command access for reading files, running commands, and analyzing repository"
 
 settings:
-  goose_provider: "openai"
-  goose_model: "azure-gpt4"
   temperature: 0.3
   max_turns: 50
 

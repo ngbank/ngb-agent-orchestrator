@@ -6,7 +6,7 @@ import tempfile
 
 import click
 
-from graph.utils import log_path, run_and_tee
+from graph.utils import goose_env, log_path, run_and_tee
 from graph.work_planner.state import WorkPlannerState
 
 
@@ -45,6 +45,7 @@ def generate_plan(state: WorkPlannerState) -> dict:
                     f"output_path={output_path}",
                 ],
                 log_file,
+                env=goose_env(),
             )
 
         if result.returncode != 0:

@@ -37,8 +37,6 @@ extensions:
     description: "File system and shell command access for reading files, running commands, and making code changes"
 
 settings:
-  goose_provider: "openai"
-  goose_model: "azure-gpt4"
   temperature: 0.1
   max_turns: 100
 

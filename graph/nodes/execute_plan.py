@@ -8,7 +8,7 @@ import tempfile
 import click
 
 from graph.state import OrchestratorState
-from graph.utils import log_path, run_and_tee
+from graph.utils import goose_env, log_path, run_and_tee
 from mcp_server.server import get_repo_for_project
 from state.state_store import update_execution_summary, update_status
 from state.workflow_status import WorkflowStatus
@@ -133,6 +133,7 @@ def execute_plan(state: OrchestratorState) -> dict:
                 ],
                 log_file,
                 cwd=working_dir,
+                env=goose_env(),
             )
 
         # Append reasoning diary to log
