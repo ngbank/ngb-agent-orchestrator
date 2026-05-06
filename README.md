@@ -6,19 +6,28 @@ A local AI agent harness that turns JIRA tickets into committed code. Given a ti
 
 ## How It Works
 
-```
-dispatcher run --ticket AOS-41
-        │
-        ▼
-  ┌─────────────┐    ┌─────────────┐    ┌──────────────┐    ┌─────────────────┐
-  │ Fetch Ticket │───▶│ Plan (Goose)│───▶│ Await Approval│───▶│ Execute (Goose) │
-  │   (JIRA)    │    │  plan.yaml  │    │  CLI gate    │    │ execute.yaml    │
-  └─────────────┘    └─────────────┘    └──────────────┘    └─────────────────┘
-        │                   │                   │                    │
-        ▼                   ▼                   ▼                    ▼
-   Validate input     WorkPlan JSON         Suspend until       Feature branch
-   Check duplicate    → posted to JIRA      approve/reject      + commit + summary
-   Create DB record   → stored in SQLite    via CLI             stored in SQLite
+```mermaid
+flowchart LR
+    CLI["dispatcher run\n--ticket AOS-41"]
+
+    subgraph Plan["Plan Phase"]
+        FT["Fetch Ticket\n(JIRA)"]
+        PL["Plan\n(Goose / plan.yaml)"]
+    end
+
+    subgraph Approval["Approval Gate"]
+        AA["Await Approval\n(CLI gate)"]
+    end
+
+    subgraph Execute["Execute Phase"]
+        EX["Execute\n(Goose / execute.yaml)"]
+    end
+
+    CLI --> FT
+    FT -->|"Validate input\nCheck duplicate\nCreate DB record"| PL
+    PL -->|"WorkPlan JSON\n→ posted to JIRA\n→ stored in SQLite"| AA
+    AA -->|"Suspend until\napprove/reject\nvia CLI"| EX
+    EX -->|"Feature branch\n+ commit + summary\nstored in SQLite"| Done(["Done"])
 ```
 
 1. **Plan phase** — Goose fetches the ticket, analyses the repo, and produces a structured `WorkPlan` JSON (tasks, files affected, risks). The planner posts it as a JIRA comment so the developer can review it in context.
