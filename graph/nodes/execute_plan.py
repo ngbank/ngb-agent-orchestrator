@@ -3,12 +3,12 @@
 import json
 import os
 import shutil
-import subprocess
 import tempfile
 
 import click
 
 from graph.state import OrchestratorState
+from graph.utils import goose_env, log_path, run_and_tee
 from mcp_server.server import get_repo_for_project
 from state.state_store import update_execution_summary, update_status
 from state.workflow_status import WorkflowStatus
@@ -60,13 +60,18 @@ def execute_plan(state: OrchestratorState) -> dict:
 
     # --- Clone into a fresh temp directory ---
     working_dir = f"/tmp/ngb-execute-{workflow_id}"
-    click.echo(f"📂 Cloning {repo_url} into {working_dir}...")
+    lp = log_path(workflow_id or "unknown", "execute")
+    click.echo(f"📂 Cloning {repo_url} into {working_dir}... (log: {lp})")
     try:
-        subprocess.run(
-            ["git", "clone", repo_url, working_dir],
-            check=True,
-        )
-    except subprocess.CalledProcessError as e:
+        with open(lp, "w") as log_file:
+            log_file.write(f"=== git clone {repo_url} ===\n")
+            clone_result = run_and_tee(
+                ["git", "clone", repo_url, working_dir],
+                log_file,
+            )
+        if clone_result.returncode != 0:
+            raise Exception(f"git clone exited with code {clone_result.returncode}")
+    except Exception as e:
         click.echo(f"❌ Failed to clone repository: {e}", err=True)
         summary = {
             "ticket_key": ticket_key,
@@ -99,26 +104,47 @@ def execute_plan(state: OrchestratorState) -> dict:
     )
     os.close(summary_fd)
 
+    reasoning_fd, reasoning_path = tempfile.mkstemp(
+        suffix="_reasoning.txt",
+        prefix=f"{workflow_id}_",
+    )
+    os.close(reasoning_fd)
+
     try:
         click.echo(f"🪵 Running execute recipe for {ticket_key}...")
-        result = subprocess.run(
-            [
-                "goose",
-                "run",
-                "--recipe",
-                "recipes/execute.yaml",
-                "--params",
-                f"ticket_key={ticket_key}",
-                "--params",
-                f"work_plan_path={work_plan_path}",
-                "--params",
-                f"working_dir={working_dir}",
-                "--params",
-                f"output_path={summary_path}",
-            ],
-            check=False,
-            cwd=working_dir,
-        )
+        with open(lp, "a") as log_file:
+            log_file.write("\n=== goose run execute recipe ===\n")
+            result = run_and_tee(
+                [
+                    "goose",
+                    "run",
+                    "--recipe",
+                    "recipes/execute.yaml",
+                    "--params",
+                    f"ticket_key={ticket_key}",
+                    "--params",
+                    f"work_plan_path={work_plan_path}",
+                    "--params",
+                    f"working_dir={working_dir}",
+                    "--params",
+                    f"output_path={summary_path}",
+                    "--params",
+                    f"reasoning_path={reasoning_path}",
+                ],
+                log_file,
+                cwd=working_dir,
+                env=goose_env(),
+            )
+
+        # Append reasoning diary to log
+        if os.path.exists(reasoning_path):
+            reasoning_text = open(reasoning_path).read().strip()
+            if reasoning_text:
+                with open(lp, "a") as log_file:
+                    log_file.write("\n\n" + "=" * 60 + "\n")
+                    log_file.write("  AGENT REASONING DIARY\n")
+                    log_file.write("=" * 60 + "\n")
+                    log_file.write(reasoning_text + "\n")
 
         if result.returncode != 0:
             click.echo(f"⚠️  Goose exited with code {result.returncode}")
@@ -161,7 +187,7 @@ def execute_plan(state: OrchestratorState) -> dict:
 
     finally:
         # Clean up temp files and the working clone
-        for path in (work_plan_path, summary_path):
+        for path in (work_plan_path, summary_path, reasoning_path):
             try:
                 os.unlink(path)
             except OSError:

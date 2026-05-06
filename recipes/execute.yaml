@@ -23,6 +23,11 @@ parameters:
     requirement: required
     description: "Path where the execution summary JSON will be written"
 
+  - key: reasoning_path
+    input_type: string
+    requirement: required
+    description: "Path where the pre-execution reasoning and execution diary will be written (outside working_dir, never committed)"
+
 extensions:
   - type: builtin
     name: developer
@@ -32,8 +37,6 @@ extensions:
     description: "File system and shell command access for reading files, running commands, and making code changes"
 
 settings:
-  goose_provider: "openai"
-  goose_model: "azure-gpt4"
   temperature: 0.1
   max_turns: 100
 
@@ -46,6 +49,32 @@ prompt: |
   Ticket: {{ ticket_key }}
   Working directory (cloned target repo): {{ working_dir }}
   Write execution summary to: {{ output_path }}
+  Write reasoning diary to: {{ reasoning_path }}
+
+  ## Step 0: Write Pre-Execution Reasoning
+
+  Before touching any files, write your understanding and intent to `{{ reasoning_path }}`.
+  This file is for debugging only — it will NOT be committed to the repository.
+
+  The file must be plain text with these sections:
+
+  ```
+  === PRE-EXECUTION REASONING ===
+
+  Ticket: <ticket_key>
+  Summary: <one-line description of what needs to be done>
+
+  Understanding:
+  <What you understood from the WorkPlan — what problem is being solved>
+
+  Plan of action:
+  <Step-by-step what you intend to do, file by file>
+
+  Risks / uncertainties:
+  <Anything you're not sure about or might need to verify>
+  ```
+
+  Write this now — use the `write_file` tool or shell redirect. Do not skip this step.
 
   ## Step 1: Read the WorkPlan
 
@@ -186,7 +215,28 @@ prompt: |
 
   Capture the PR URL from the output of `gh pr create`. If `gh` is not available or the push fails, record `pr_url` as `""` in the summary and continue.
 
-  ## Step 8: Write Execution Summary
+  ## Step 8: Write Execution Diary
+
+  Append an execution diary to `{{ reasoning_path }}` (do not overwrite — append).
+  This is for debugging only and will NOT be committed.
+
+  ```
+  === EXECUTION DIARY ===
+
+  Files changed:
+  <For each file: what you changed and why>
+
+  Decisions made:
+  <Any non-obvious choices — why you picked this approach over alternatives>
+
+  What went well:
+  <Steps that were straightforward>
+
+  What was uncertain:
+  <Anything you had to guess at or work around>
+  ```
+
+  ## Step 9: Write Execution Summary
 
   Write a JSON file to {{ output_path }}:
 
