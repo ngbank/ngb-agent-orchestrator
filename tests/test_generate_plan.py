@@ -171,3 +171,17 @@ def test_generate_plan_empty_json(log_tmp):
     assert "error" in result
     assert "empty" in result["error"]
     assert "work_plan_data" not in result
+
+
+def test_date_txt_exists_and_has_single_timestamp_line():
+    """Repository root date.txt exists and contains one non-empty timestamp line."""
+    repo_root = os.path.dirname(os.path.dirname(__file__))
+    date_path = os.path.join(repo_root, "date.txt")
+
+    assert os.path.exists(date_path)
+
+    with open(date_path) as f:
+        lines = f.read().splitlines()
+
+    assert len(lines) == 1
+    assert lines[0].strip()
