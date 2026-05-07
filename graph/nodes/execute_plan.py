@@ -59,7 +59,7 @@ def execute_plan(state: OrchestratorState) -> dict:
         return {"execution_summary": summary}
 
     # --- Clone into a fresh temp directory ---
-    working_dir = f"/tmp/ngb-execute-{workflow_id}"
+    working_dir = tempfile.mkdtemp(prefix=f"ngb-execute-{workflow_id}-")
     lp = log_path(workflow_id or "unknown", "execute")
     click.echo(f"📂 Cloning {repo_url} into {working_dir}... (log: {lp})")
     try:
