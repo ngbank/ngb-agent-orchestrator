@@ -610,10 +610,6 @@ def _handle_reject(ticket_key: str, reason: str, workflow_id: Optional[str] = No
         click.echo(f"❌ Error resuming workflow: {e}", err=True)
         sys.exit(1)
 
-    except Exception as e:
-        click.echo(f"❌ Error resuming workflow: {e}", err=True)
-        sys.exit(1)
-
 
 if __name__ == "__main__":
     run()
