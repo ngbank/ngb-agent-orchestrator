@@ -8,14 +8,7 @@ required sections for reviewer approval.
 from typing import Dict
 
 
-class WorkPlanCommentFormatter:
-    """Formats WorkPlan JSON as readable Jira markdown comment."""
-
-    def __init__(self):
-        """Initialize the formatter."""
-        pass
-
-    def format(self, work_plan: Dict, ticket_id: str) -> str:
+def _format_work_plan(work_plan: Dict, ticket_id: str) -> str:
         """
         Format WorkPlan as Jira comment with required sections.
 
@@ -213,5 +206,4 @@ def format_work_plan_comment(work_plan: Dict, ticket_id: str) -> str:
         >>> comment = format_work_plan_comment(work_plan, 'AOS-39')
         >>> print(comment)
     """
-    formatter = WorkPlanCommentFormatter()
-    return formatter.format(work_plan, ticket_id)
+    return _format_work_plan(work_plan, ticket_id)

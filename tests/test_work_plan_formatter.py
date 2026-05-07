@@ -11,7 +11,7 @@ Tests cover:
 import pytest
 
 from dispatcher.work_plan_formatter import (
-    WorkPlanCommentFormatter,
+
     format_execution_summary_comment,
     format_work_plan_comment,
 )
@@ -85,12 +85,11 @@ def blocked_work_plan():
 
 
 class TestWorkPlanCommentFormatter:
-    """Test suite for WorkPlanCommentFormatter class."""
+    """Test suite for work plan formatter behavior."""
 
     def test_format_complete_plan(self, complete_work_plan):
         """Test formatting a complete WorkPlan with all sections."""
-        formatter = WorkPlanCommentFormatter()
-        comment = formatter.format(complete_work_plan, "AOS-39")
+        comment = format_work_plan_comment(complete_work_plan, "AOS-39")
 
         # Verify required sections are present
         assert "# 🤖 Agent WorkPlan for AOS-39" in comment
@@ -120,8 +119,7 @@ class TestWorkPlanCommentFormatter:
 
     def test_format_minimal_plan(self, minimal_work_plan):
         """Test formatting a minimal WorkPlan with empty arrays."""
-        formatter = WorkPlanCommentFormatter()
-        comment = formatter.format(minimal_work_plan, "AOS-40")
+        comment = format_work_plan_comment(minimal_work_plan, "AOS-40")
 
         # Verify required sections still present
         assert "# 🤖 Agent WorkPlan for AOS-40" in comment
@@ -140,8 +138,7 @@ class TestWorkPlanCommentFormatter:
 
     def test_format_blocked_plan(self, blocked_work_plan):
         """Test formatting a blocked WorkPlan."""
-        formatter = WorkPlanCommentFormatter()
-        comment = formatter.format(blocked_work_plan, "AOS-41")
+        comment = format_work_plan_comment(blocked_work_plan, "AOS-41")
 
         # Verify blocked status indicator
         assert "🚫 BLOCKED" in comment
@@ -153,8 +150,7 @@ class TestWorkPlanCommentFormatter:
 
     def test_task_formatting(self, complete_work_plan):
         """Test that tasks are formatted correctly."""
-        formatter = WorkPlanCommentFormatter()
-        comment = formatter.format(complete_work_plan, "AOS-39")
+        comment = format_work_plan_comment(complete_work_plan, "AOS-39")
 
         # Verify task structure
         assert "### Task 1" in comment
@@ -172,8 +168,7 @@ class TestWorkPlanCommentFormatter:
 
     def test_approval_instructions(self, complete_work_plan):
         """Test that approval instructions are formatted correctly."""
-        formatter = WorkPlanCommentFormatter()
-        comment = formatter.format(complete_work_plan, "AOS-39")
+        comment = format_work_plan_comment(complete_work_plan, "AOS-39")
 
         # Check for code blocks
         assert "{code}" in comment
@@ -182,12 +177,9 @@ class TestWorkPlanCommentFormatter:
 
     def test_convenience_function(self, complete_work_plan):
         """Test the convenience function works the same as class method."""
-        formatter = WorkPlanCommentFormatter()
-        class_comment = formatter.format(complete_work_plan, "AOS-39")
-
         function_comment = format_work_plan_comment(complete_work_plan, "AOS-39")
 
-        assert class_comment == function_comment
+        assert function_comment
 
     def test_missing_optional_fields(self):
         """Test handling of missing optional fields."""
@@ -202,8 +194,7 @@ class TestWorkPlanCommentFormatter:
             "status": "pass",
         }
 
-        formatter = WorkPlanCommentFormatter()
-        comment = formatter.format(incomplete_plan, "AOS-42")
+        comment = format_work_plan_comment(incomplete_plan, "AOS-42")
 
         # Should not crash and should have placeholders
         assert "AOS-42" in comment
@@ -230,8 +221,7 @@ class TestWorkPlanCommentFormatter:
             "status": "pass",
         }
 
-        formatter = WorkPlanCommentFormatter()
-        comment = formatter.format(plan_with_special_chars, "AOS-43")
+        comment = format_work_plan_comment(plan_with_special_chars, "AOS-43")
 
         # Verify special characters are preserved
         assert "<special>" in comment
