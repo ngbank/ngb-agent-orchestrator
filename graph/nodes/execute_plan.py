@@ -14,8 +14,6 @@ from state.state_store import update_execution_summary, update_status
 from state.workflow_status import WorkflowStatus
 
 
-
-
 def _failure_summary(ticket_key: str, error: str) -> dict:
     return {
         "ticket_key": ticket_key,
@@ -28,6 +26,7 @@ def _failure_summary(ticket_key: str, error: str) -> dict:
         "status": "failed",
         "error": error,
     }
+
 
 def _project_key(ticket_key: str) -> str:
     """Extract project key from a ticket key, e.g. 'AOS-42' -> 'AOS'."""

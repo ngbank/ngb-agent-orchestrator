@@ -51,7 +51,6 @@ from state.state_store import (  # noqa: E402
 from state.workflow_status import WorkflowStatus  # noqa: E402
 
 
-
 @click.command()
 @click.option(
     "--ticket",

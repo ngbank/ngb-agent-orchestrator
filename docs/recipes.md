@@ -65,18 +65,23 @@ Use `goose run --recipe recipes/plan.yaml --explain` to see a recipe's parameter
 |---|---|---|
 | `ticket_key` | Yes | JIRA ticket key |
 | `work_plan_path` | Yes | Path to the approved WorkPlan JSON file |
+| `working_dir` | Yes | Absolute path to the cloned target repository |
 | `output_path` | Yes | Path to write the execution summary JSON |
+| `reasoning_path` | Yes | Path to write the pre-execution reasoning and execution diary (not committed) |
 
 **What it does**:
-1. Reads and parses the WorkPlan JSON
-2. Verifies the working tree is clean (`git status --porcelain`) — aborts if dirty
-3. Creates a feature branch: `feature/{ticket_key}-{summary-slug}`
-4. Implements each task in order — reads `files_likely_affected`, makes precise changes
-5. Runs build and test checks:
+1. **Loads developer rules** by calling `get_developer_rules()` via the MCP server — rules are injected into the agent context and honoured throughout
+2. Writes pre-execution reasoning to `reasoning_path` (not committed)
+3. Reads and parses the WorkPlan JSON
+4. Verifies the working directory and remote origin
+5. Creates a feature branch: `feature/{ticket_key}+{summary-slug}`
+6. Implements each task in order — reads `files_likely_affected`, makes precise changes
+7. Runs build and test checks:
    - Build: `python -m py_compile` on modified files
    - Tests: `python -m pytest tests/ -q --tb=short`
-6. Commits all changes with a conventional commit message
-7. Writes an execution summary JSON to `output_path`
+8. Runs `pre-commit run --all-files` (DR-001), then commits all changes
+9. Pushes the branch and creates a GitHub PR
+10. Writes an execution diary and execution summary JSON to `output_path`
 
 **Execution summary format**:
 ```json
@@ -97,9 +102,12 @@ Use `goose run --recipe recipes/plan.yaml --explain` to see a recipe's parameter
 - `failed` — build fail or unrecoverable error (see `error` field)
 
 **Safety constraints** (enforced in the prompt):
-- Never runs `git push`
-- Never commits to `main` or any pre-existing branch
-- Never force-resets or deletes branches
+- Loads developer rules via MCP at startup; all rules are mandatory
+- Runs `pre-commit run --all-files` before every `git commit` (DR-001)
+- Never commits to `main` or any pre-existing branch (DR-002)
+- Branch name must follow `feature/{TICKET-ID}+{summary-slug}` (DR-003)
+- Runs `python -m pytest tests/ -q --tb=short` before every commit (DR-004)
+- Never runs `git reset --hard` or deletes branches
 
 ---
 
