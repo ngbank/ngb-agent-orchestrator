@@ -1,5 +1,6 @@
 """Shared utilities for graph nodes."""
 
+import getpass
 import os
 import subprocess
 from pathlib import Path
@@ -54,3 +55,10 @@ def run_and_tee(
 
     process.wait()
     return subprocess.CompletedProcess(cmd, process.returncode)
+
+
+def _get_actor() -> str:
+    try:
+        return getpass.getuser()
+    except Exception:
+        return "unknown"
