@@ -455,3 +455,17 @@ class TestHandleHistory:
         assert result.exit_code == 0
         assert "Workflow history for TEST-123" in result.output
         assert resolved_id in result.output
+
+def test_reject_handles_resume_error(test_db, cli_runner):
+    """Test that reject path reports resume errors with existing message."""
+    workflow_id = state_store.create_workflow("TEST-123", status=WorkflowStatus.PENDING_APPROVAL)
+
+    with patch("dispatcher.run.build_orchestrator") as mock_build:
+        mock_graph = Mock()
+        mock_graph.invoke.side_effect = Exception("boom")
+        mock_build.return_value = mock_graph
+
+        result = cli_runner.invoke(run, ["--reject", "--workflow-id", workflow_id])
+
+    assert result.exit_code == 1
+    assert "❌ Error resuming workflow: boom" in result.output
