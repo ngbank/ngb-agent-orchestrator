@@ -60,3 +60,21 @@ def test_execute_plan_no_hardcoded_tmp_path():
     assert (
         "/tmp/ngb-execute-" not in source
     ), "Hardcoded /tmp path found — replace with tempfile.mkdtemp()"
+
+
+def test_failure_summary_helper_semantics():
+    from graph.nodes.execute_plan import _failure_summary
+
+    summary = _failure_summary("AOS-63", "boom")
+
+    assert summary == {
+        "ticket_key": "AOS-63",
+        "branch": "",
+        "build": "fail",
+        "tests": "skipped",
+        "files_changed": [],
+        "commit_sha": "",
+        "pr_url": "",
+        "status": "failed",
+        "error": "boom",
+    }

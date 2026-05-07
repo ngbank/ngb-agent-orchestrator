@@ -1,11 +1,10 @@
 """Node: await_approval — pause the graph and wait for a CLI approve/reject signal."""
 
-import getpass
-
 import click
 from langgraph.types import interrupt
 
 from graph.state import OrchestratorState
+from graph.utils import _get_actor
 from state.state_store import get_workflow, update_status
 from state.workflow_status import WorkflowStatus
 
@@ -83,9 +82,3 @@ def await_approval(state: OrchestratorState) -> dict:
         click.echo(f"🚫 WorkPlan rejected by {actor}" + (f": {reason}" if reason else ""))
         return {"approval_decision": "rejected", "rejection_reason": reason}
 
-
-def _get_actor() -> str:
-    try:
-        return getpass.getuser()
-    except Exception:
-        return "unknown"

@@ -469,3 +469,11 @@ def test_reject_handles_resume_error(test_db, cli_runner):
 
     assert result.exit_code == 1
     assert "❌ Error resuming workflow: boom" in result.output
+
+
+def test_get_actor_imported_from_graph_utils():
+    """Dispatcher should consume shared _get_actor from graph.utils."""
+    import dispatcher.run as run_module
+    from graph.utils import _get_actor as shared_get_actor
+
+    assert run_module._get_actor is shared_get_actor
