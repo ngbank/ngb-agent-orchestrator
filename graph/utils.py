@@ -1,9 +1,18 @@
 """Shared utilities for graph nodes."""
 
+import getpass
 import os
 import subprocess
 from pathlib import Path
 from typing import IO, List
+
+
+def _get_actor() -> str:
+    """Return the current OS username, or 'unknown' if it cannot be determined."""
+    try:
+        return getpass.getuser()
+    except Exception:
+        return "unknown"
 
 
 def _logs_dir() -> Path:

@@ -14,6 +14,21 @@ from state.state_store import update_execution_summary, update_status
 from state.workflow_status import WorkflowStatus
 
 
+def _failure_summary(ticket_key: str, error: str) -> dict:
+    """Return a standard failed execution summary dict."""
+    return {
+        "ticket_key": ticket_key,
+        "branch": "",
+        "build": "fail",
+        "tests": "skipped",
+        "files_changed": [],
+        "commit_sha": "",
+        "pr_url": "",
+        "status": "failed",
+        "error": error,
+    }
+
+
 def _project_key(ticket_key: str) -> str:
     """Extract project key from a ticket key, e.g. 'AOS-42' -> 'AOS'."""
     return ticket_key.split("-")[0].upper()
@@ -42,17 +57,7 @@ def execute_plan(state: OrchestratorState) -> dict:
         repo_url = get_repo_for_project(project_key)
     except ValueError as e:
         click.echo(f"❌ {e}", err=True)
-        summary = {
-            "ticket_key": ticket_key,
-            "branch": "",
-            "build": "fail",
-            "tests": "skipped",
-            "files_changed": [],
-            "commit_sha": "",
-            "pr_url": "",
-            "status": "failed",
-            "error": str(e),
-        }
+        summary = _failure_summary(ticket_key, str(e))
         if workflow_id:
             update_execution_summary(workflow_id, summary)
             update_status(workflow_id, WorkflowStatus.FAILED, actor="execute_plan")
@@ -73,17 +78,7 @@ def execute_plan(state: OrchestratorState) -> dict:
             raise Exception(f"git clone exited with code {clone_result.returncode}")
     except Exception as e:
         click.echo(f"❌ Failed to clone repository: {e}", err=True)
-        summary = {
-            "ticket_key": ticket_key,
-            "branch": "",
-            "build": "fail",
-            "tests": "skipped",
-            "files_changed": [],
-            "commit_sha": "",
-            "pr_url": "",
-            "status": "failed",
-            "error": f"Failed to clone {repo_url}: {e}",
-        }
+        summary = _failure_summary(ticket_key, f"Failed to clone {repo_url}: {e}")
         if workflow_id:
             update_execution_summary(workflow_id, summary)
             update_status(workflow_id, WorkflowStatus.FAILED, actor="execute_plan")
@@ -154,17 +149,9 @@ def execute_plan(state: OrchestratorState) -> dict:
             with open(summary_path, "r") as f:
                 execution_summary = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError) as exc:
-            execution_summary = {
-                "ticket_key": ticket_key,
-                "branch": "",
-                "build": "fail",
-                "tests": "skipped",
-                "files_changed": [],
-                "commit_sha": "",
-                "pr_url": "",
-                "status": "failed",
-                "error": f"Execution summary not written by recipe: {exc}",
-            }
+            execution_summary = _failure_summary(
+                ticket_key, f"Execution summary not written by recipe: {exc}"
+            )
 
         # Persist to SQLite
         if workflow_id:

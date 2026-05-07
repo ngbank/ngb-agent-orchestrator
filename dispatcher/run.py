@@ -19,7 +19,6 @@ Usage:
     python -m dispatcher.run --reject <workflow_id> --reason "scope too broad"
 """
 
-import getpass
 import sys
 import uuid
 from typing import Optional
@@ -41,7 +40,7 @@ from dispatcher.jira_client import (  # noqa: E402
 )
 from dispatcher.work_plan_formatter import format_execution_summary_comment  # noqa: E402
 from graph.builder import build_orchestrator  # noqa: E402
-from graph.utils import log_path  # noqa: E402
+from graph.utils import _get_actor, log_path  # noqa: E402
 from state.state_store import (  # noqa: E402
     clear_db,
     get_workflow,
@@ -50,13 +49,6 @@ from state.state_store import (  # noqa: E402
     update_status,
 )
 from state.workflow_status import WorkflowStatus  # noqa: E402
-
-
-def _get_actor() -> str:
-    try:
-        return getpass.getuser()
-    except Exception:
-        return "unknown"
 
 
 @click.command()
