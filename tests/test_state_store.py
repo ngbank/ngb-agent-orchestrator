@@ -436,3 +436,24 @@ def test_update_work_plan_complex_structure(test_db):
     assert len(workflow["work_plan"]["risks"]) == 3
     assert len(workflow["work_plan"]["questions_for_reviewer"]) == 2
     assert workflow["work_plan"]["status"] == "concerns"
+
+
+def test_update_status_rejected_creates_audit_log(test_db):
+    """Test that update_status for REJECTED produces an audit log entry with the reason."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-61")
+
+    state_store.update_status(
+        workflow_id=workflow_id,
+        status=WorkflowStatus.REJECTED,
+        actor="developer",
+        reason="scope too broad",
+    )
+
+    audit_log = state_store.get_audit_log(workflow_id)
+    rejection_entries = [
+        entry
+        for entry in audit_log
+        if entry["action"] == "status_change" and "scope too broad" in (entry["reason"] or "")
+    ]
+    assert len(rejection_entries) == 1
+    assert rejection_entries[0]["actor"] == "developer"

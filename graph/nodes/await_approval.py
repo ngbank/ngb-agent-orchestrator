@@ -6,7 +6,7 @@ import click
 from langgraph.types import interrupt
 
 from graph.state import OrchestratorState
-from state.state_store import _create_audit_log, get_connection, get_workflow, update_status
+from state.state_store import get_workflow, update_status
 from state.workflow_status import WorkflowStatus
 
 
@@ -74,7 +74,6 @@ def await_approval(state: OrchestratorState) -> dict:
         return {"approval_decision": "approved"}
 
     else:  # rejected
-        _write_rejection_audit(workflow_id, actor, reason)
         update_status(
             workflow_id,
             WorkflowStatus.REJECTED,
@@ -90,18 +89,3 @@ def _get_actor() -> str:
         return getpass.getuser()
     except Exception:
         return "unknown"
-
-
-def _write_rejection_audit(workflow_id: str, actor: str, reason: str | None) -> None:
-    conn = get_connection()
-    try:
-        _create_audit_log(
-            conn,
-            workflow_id=workflow_id,
-            actor=actor,
-            action="workflow_rejected",
-            reason=reason or "No reason provided",
-        )
-        conn.commit()
-    finally:
-        conn.close()
