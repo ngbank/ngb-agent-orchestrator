@@ -61,7 +61,7 @@ prompt: |
   ## Step 0: Load Developer Rules
 
   Before doing anything else, call the `get_developer_rules` MCP tool and read every rule carefully.
-  These rules are **mandatory** and override any conflicting instructions in this prompt.
+  These rules are **mandatory** and take precedence over any conflicting guidance elsewhere in this prompt.
 
   Rules to load:
   ```
