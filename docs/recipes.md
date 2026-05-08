@@ -79,7 +79,7 @@ Use `goose run --recipe recipes/plan.yaml --explain` to see a recipe's parameter
 7. Runs build and test checks:
    - Build: `python -m py_compile` on modified files
    - Tests: `python -m pytest tests/ -q --tb=short`
-8. Runs `pre-commit run --all-files` (DR-001), then commits all changes
+8. Commits all changes (governed by developer rules from Step 1)
 9. Pushes the branch and creates a GitHub PR
 10. Writes an execution diary and execution summary JSON to `output_path`
 
@@ -103,10 +103,6 @@ Use `goose run --recipe recipes/plan.yaml --explain` to see a recipe's parameter
 
 **Safety constraints** (enforced in the prompt):
 - Loads developer rules via MCP at startup; all rules are mandatory
-- Runs `pre-commit run --all-files` before every `git commit` (DR-001)
-- Never commits to `main` or any pre-existing branch (DR-002)
-- Branch name must follow `feature/{TICKET-ID}+{summary-slug}` (DR-003)
-- Runs `python -m pytest tests/ -q --tb=short` before every commit (DR-004)
 - Never runs `git reset --hard` or deletes branches
 
 ---

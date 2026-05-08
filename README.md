@@ -106,7 +106,7 @@ source venv/bin/activate
 litellm --config config/litellm.yaml --port 4000
 ```
 
-### Registering the MCP Server (Repo Lookup)
+### Registering the MCP Server (Agent Harness)
 
 The `mcp_server/server.py` tool lets Goose resolve a JIRA project key to its target Git repository URL. It must be registered in your local Goose config — this is a **one-time per-machine setup** and is not stored in the repo.
 
@@ -114,12 +114,12 @@ Add the following block to `~/.config/goose/config.yaml` under the `extensions:`
 
 ```yaml
 extensions:
-  repo-lookup:
+  agent-harness:
     enabled: true
     type: stdio
-    name: repo-lookup
+    name: agent-harness
     description: Resolves a JIRA project key to its Git repository URL using config/project-repo-mapping.md
-    display_name: Repo Lookup
+    display_name: Agent Harness
     cmd: /path/to/ngb-agent-orchestrator/venv/bin/python
     args:
       - -m

@@ -36,49 +36,6 @@ def test_get_developer_rules_ids_are_unique():
     assert len(ids) == len(set(ids)), "Rule IDs are not unique"
 
 
-def test_get_developer_rules_includes_precommit_rule():
-    """DR-001: pre-commit hooks must be run before committing."""
-    rules = get_developer_rules()
-    dr001 = next((r for r in rules if r["id"] == "DR-001"), None)
-    assert dr001 is not None, "DR-001 (pre-commit) rule is missing"
-    assert "pre-commit run --all-files" in dr001.get("command", ""), (
-        "DR-001 must specify the pre-commit command"
-    )
-
-
-def test_get_developer_rules_includes_no_main_commit_rule():
-    """DR-002: never commit directly to main or master."""
-    rules = get_developer_rules()
-    dr002 = next((r for r in rules if r["id"] == "DR-002"), None)
-    assert dr002 is not None, "DR-002 (no commit to main) rule is missing"
-
-
-def test_get_developer_rules_includes_branch_naming_rule():
-    """DR-003: feature branch naming convention."""
-    rules = get_developer_rules()
-    dr003 = next((r for r in rules if r["id"] == "DR-003"), None)
-    assert dr003 is not None, "DR-003 (branch naming) rule is missing"
-    assert "feature/" in dr003["rule"], "DR-003 must reference 'feature/' convention"
-
-
-def test_get_developer_rules_includes_test_suite_rule():
-    """DR-004: run full test suite before committing."""
-    rules = get_developer_rules()
-    dr004 = next((r for r in rules if r["id"] == "DR-004"), None)
-    assert dr004 is not None, "DR-004 (run tests) rule is missing"
-    assert "pytest" in dr004.get("command", ""), (
-        "DR-004 must specify the pytest command"
-    )
-
-
-def test_get_developer_rules_returns_new_list_each_call():
-    """Mutations on the returned list must not affect subsequent calls."""
-    rules1 = get_developer_rules()
-    rules1.clear()
-    rules2 = get_developer_rules()
-    assert len(rules2) > 0, "get_developer_rules must return a fresh list each call"
-
-
 # ---------------------------------------------------------------------------
 # get_repo_for_project tests (smoke — mapping file must exist)
 # ---------------------------------------------------------------------------

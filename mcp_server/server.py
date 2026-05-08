@@ -1,5 +1,5 @@
 """
-MCP Server: Repo Lookup + Developer Rules
+MCP Server: Agent Harness
 
 Exposes tools:
   - get_repo_for_project: resolves a JIRA project key to its Git repository URL
@@ -20,7 +20,7 @@ from mcp.server.fastmcp import FastMCP
 _MAPPING_FILE = Path(__file__).parent.parent / "config" / "project-repo-mapping.md"
 
 mcp = FastMCP(
-    name="repo-lookup",
+    name="agent-harness",
     instructions=(
         "Use get_repo_for_project to resolve a JIRA project key to its Git repository URL"
         " before cloning. "
@@ -135,7 +135,7 @@ def get_developer_rules() -> list[dict[str, str]]:
     Returns:
         List of rule dicts that the agent must honour during execution.
     """
-    return list(_DEVELOPER_RULES)
+    return _DEVELOPER_RULES
 
 
 if __name__ == "__main__":

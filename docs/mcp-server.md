@@ -1,4 +1,4 @@
-# MCP Server: Repo Lookup + Developer Rules
+# MCP Server: Agent Harness
 
 The `mcp_server/server.py` module is a [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server that exposes the following tools:
 
@@ -33,12 +33,12 @@ Add the following block under `extensions:` in `~/.config/goose/config.yaml`:
 
 ```yaml
 extensions:
-  repo-lookup:
+  agent-harness:
     enabled: true
     type: stdio
-    name: repo-lookup
+    name: agent-harness
     description: Resolves a JIRA project key to its Git repository URL using config/project-repo-mapping.md
-    display_name: Repo Lookup
+    display_name: Agent Harness
     cmd: /path/to/ngb-agent-orchestrator/venv/bin/python
     args:
       - -m

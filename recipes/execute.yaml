@@ -36,8 +36,8 @@ extensions:
     bundled: true
     description: "File system and shell command access for reading files, running commands, and making code changes"
   - type: stdio
-    name: repo-lookup
-    display_name: Repo Lookup
+    name: agent-harness
+    display_name: Agent Harness
     cmd: "{{ GOOSE_MCP_PYTHON | default('python') }}"
     args:
       - "-m"
@@ -63,11 +63,6 @@ prompt: |
   ```
 
   Commit the rules to your working context. You must comply with all of them throughout the session.
-  In particular:
-  - You MUST run `pre-commit run --all-files` before every `git commit` (DR-001)
-  - You MUST run `python -m pytest tests/ -q --tb=short` before every `git commit` (DR-004)
-  - You MUST NOT commit to `main` or `master` (DR-002)
-  - Your branch MUST follow the naming convention `feature/{TICKET-ID}+{summary-slug}` (DR-003)
 
   ## Step 1: Write Pre-Execution Reasoning
 
