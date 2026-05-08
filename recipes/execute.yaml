@@ -160,6 +160,11 @@ prompt: |
   - Do not add docstrings or comments to code you didn't change
   - Do not refactor unrelated code
 
+  **File editing rules — CRITICAL:**
+  - Always use the `write_file` or `str_replace` tools from the developer extension to create or modify files
+  - NEVER write file content via shell heredocs (`cat << 'EOF'`, `python - << 'PY'`, etc.) — heredocs corrupt escape sequences (e.g. `\n`, `\t`), backslashes, quotes, and f-strings, causing syntax errors
+  - If you need to replace a specific section of a file, read the file first then use `str_replace` with exact context lines
+
   ## Step 6: Run Checks
 
   After implementing all tasks:
