@@ -107,6 +107,7 @@ def execute_plan(state: OrchestratorState) -> dict:
 
     try:
         click.echo(f"🪵 Running execute recipe for {ticket_key}...")
+        mcp_python = os.environ.get("GOOSE_MCP_PYTHON", "python")
         with open(lp, "a") as log_file:
             log_file.write("\n=== goose run execute recipe ===\n")
             result = run_and_tee(
@@ -125,6 +126,8 @@ def execute_plan(state: OrchestratorState) -> dict:
                     f"output_path={summary_path}",
                     "--params",
                     f"reasoning_path={reasoning_path}",
+                    "--params",
+                    f"GOOSE_MCP_PYTHON={mcp_python}",
                 ],
                 log_file,
                 cwd=working_dir,

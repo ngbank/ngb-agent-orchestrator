@@ -28,6 +28,12 @@ parameters:
     requirement: required
     description: "Path where the pre-execution reasoning and execution diary will be written (outside working_dir, never committed)"
 
+  - key: GOOSE_MCP_PYTHON
+    input_type: string
+    requirement: optional
+    description: "Python interpreter used to launch the MCP server (defaults to 'python')"
+    default: "python"
+
 extensions:
   - type: builtin
     name: developer
