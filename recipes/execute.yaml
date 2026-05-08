@@ -124,16 +124,16 @@ prompt: |
 
   ## Step 3.5: Set Up Python Environment
 
-  Create a virtual environment and install dependencies so that pre-commit hooks
-  (specifically the `pytest` hook that uses `venv/bin/python`) work correctly:
+  Create a virtual environment and install **all** dependencies (runtime + dev) so
+  that tests and pre-commit hooks work correctly:
   ```
   python -m venv venv
-  pip install -e ".[dev]" -q
-  ```
-  If `pyproject.toml` does not define a `[dev]` extra, fall back to:
-  ```
+  . venv/bin/activate
+  pip install -e . -q
   pip install -r requirements-dev.txt -q
   ```
+  **All subsequent `python`, `pytest`, and `pre-commit` commands in this session
+  must be prefixed with `. venv/bin/activate &&` to ensure the venv is active.**
 
   ## Step 4: Create Feature Branch
 
@@ -178,18 +178,18 @@ prompt: |
   ### Build Check
   Run Python compile check on all modified files:
   ```
-  python -m py_compile <modified_file_1> <modified_file_2> ...
+  . venv/bin/activate && python -m py_compile <modified_file_1> <modified_file_2> ...
   ```
   If that passes, also verify imports:
   ```
-  python -m pytest --collect-only -q 2>&1 | tail -5
+  . venv/bin/activate && python -m pytest --collect-only -q 2>&1 | tail -5
   ```
   Record: `"pass"` if no errors, `"fail"` if any error.
 
   ### Test Check
   Run the test suite:
   ```
-  python -m pytest tests/ -q --tb=short 2>&1
+  . venv/bin/activate && python -m pytest tests/ -q --tb=short 2>&1
   ```
   Record:
   - `"pass"` if all tests pass
@@ -208,11 +208,11 @@ prompt: |
 
   Before staging, run pre-commit hooks (DR-001 — mandatory):
   ```
-  pre-commit run --all-files
+  . venv/bin/activate && pre-commit run --all-files
   ```
   If pre-commit reports fixable issues it auto-fixed them — re-run once more to confirm clean:
   ```
-  pre-commit run --all-files
+  . venv/bin/activate && pre-commit run --all-files
   ```
   If pre-commit fails with un-fixable errors, fix them before continuing.
 
