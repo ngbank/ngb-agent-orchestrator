@@ -204,8 +204,7 @@ prompt: |
   ```
   git commit -m "feat({{ ticket_key }}): {work_plan summary}
 
-  Implements WorkPlan tasks for {{ ticket_key }}.
-  Co-authored-by: Goose <goose@block.xyz>"
+  Implements WorkPlan tasks for {{ ticket_key }}."
   ```
 
   Get the commit SHA:
