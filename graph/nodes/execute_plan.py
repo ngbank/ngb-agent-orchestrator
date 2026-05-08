@@ -15,6 +15,7 @@ from state.workflow_status import WorkflowStatus
 
 
 def _failure_summary(ticket_key: str, error: str) -> dict:
+    """Return a standard failed execution summary dict."""
     return {
         "ticket_key": ticket_key,
         "branch": "",
