@@ -81,4 +81,3 @@ def await_approval(state: OrchestratorState) -> dict:
         )
         click.echo(f"🚫 WorkPlan rejected by {actor}" + (f": {reason}" if reason else ""))
         return {"approval_decision": "rejected", "rejection_reason": reason}
-

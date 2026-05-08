@@ -35,6 +35,15 @@ extensions:
     timeout: 600
     bundled: true
     description: "File system and shell command access for reading files, running commands, and making code changes"
+  - type: stdio
+    name: agent-harness
+    display_name: Agent Harness
+    cmd: "{{ GOOSE_MCP_PYTHON | default('python') }}"
+    args:
+      - "-m"
+      - "mcp_server.server"
+    description: "MCP tools: get_repo_for_project and get_developer_rules"
+    bundled: false
 
 settings:
   temperature: 0.1
@@ -43,6 +52,20 @@ settings:
 prompt: |
   You are a code execution agent that implements approved WorkPlans by making precise code changes to a repository.
 
+  ## Step 0: Load Developer Rules
+
+  Before doing anything else, call the `get_developer_rules` MCP tool and read every rule carefully.
+  These rules are **mandatory** and override any conflicting instructions in this prompt.
+
+  Rules to load:
+  ```
+  get_developer_rules()
+  ```
+
+  Commit the rules to your working context. You must comply with all of them throughout the session.
+
+  ## Step 1: Write Pre-Execution Reasoning
+
   ## Your Task
 
   Implement the WorkPlan at: {{ work_plan_path }}
@@ -50,8 +73,6 @@ prompt: |
   Working directory (cloned target repo): {{ working_dir }}
   Write execution summary to: {{ output_path }}
   Write reasoning diary to: {{ reasoning_path }}
-
-  ## Step 0: Write Pre-Execution Reasoning
 
   Before touching any files, write your understanding and intent to `{{ reasoning_path }}`.
   This file is for debugging only — it will NOT be committed to the repository.
@@ -76,7 +97,7 @@ prompt: |
 
   Write this now — use the `write_file` tool or shell redirect. Do not skip this step.
 
-  ## Step 1: Read the WorkPlan
+  ## Step 2: Read the WorkPlan
 
   Read and parse the WorkPlan JSON file at {{ work_plan_path }}. Extract:
   - `ticket_key`: The JIRA ticket key
@@ -84,7 +105,7 @@ prompt: |
   - `tasks`: Ordered list of tasks to implement (each has `id`, `description`, `files_likely_affected`)
   - `approach`: Overall implementation approach
 
-  ## Step 2: Confirm Working Directory
+  ## Step 3: Confirm Working Directory
 
   You are already running inside the cloned target repository at `{{ working_dir }}`.
   Confirm this is correct:
@@ -92,7 +113,7 @@ prompt: |
   pwd && git remote get-url origin
   ```
 
-  ## Step 3: Create Feature Branch
+  ## Step 4: Create Feature Branch
 
   Generate a branch name following the repository convention:
   - Take the WorkPlan `summary` field
@@ -107,7 +128,7 @@ prompt: |
 
   If the branch already exists, append `-2` (and increment until unique).
 
-  ## Step 4: Implement Tasks
+  ## Step 5: Implement Tasks
 
   For each task in the WorkPlan `tasks` array (in order by `id`):
 
@@ -123,7 +144,7 @@ prompt: |
   - Do not add docstrings or comments to code you didn't change
   - Do not refactor unrelated code
 
-  ## Step 5: Run Checks
+  ## Step 6: Run Checks
 
   After implementing all tasks:
 
@@ -156,7 +177,17 @@ prompt: |
   ```
   Combine into a single list of changed and new files.
 
-  ## Step 6: Commit Changes
+  ## Step 7: Commit Changes
+
+  Before staging, run pre-commit hooks (DR-001 — mandatory):
+  ```
+  pre-commit run --all-files
+  ```
+  If pre-commit reports fixable issues it auto-fixed them — re-run once more to confirm clean:
+  ```
+  pre-commit run --all-files
+  ```
+  If pre-commit fails with un-fixable errors, fix them before continuing.
 
   Stage all changes:
   ```
@@ -181,7 +212,7 @@ prompt: |
   - NEVER run `git reset --hard` or `git force`
   - NEVER delete branches
 
-  ## Step 7: Push Branch and Create Pull Request
+  ## Step 8: Push Branch and Create Pull Request
 
   Push the feature branch to the remote:
   ```
@@ -215,7 +246,7 @@ prompt: |
 
   Capture the PR URL from the output of `gh pr create`. If `gh` is not available or the push fails, record `pr_url` as `""` in the summary and continue.
 
-  ## Step 8: Write Execution Diary
+  ## Step 9: Write Execution Diary
 
   Append an execution diary to `{{ reasoning_path }}` (do not overwrite — append).
   This is for debugging only and will NOT be committed.
@@ -236,7 +267,7 @@ prompt: |
   <Anything you had to guess at or work around>
   ```
 
-  ## Step 9: Write Execution Summary
+  ## Step 10: Write Execution Summary
 
   Write a JSON file to {{ output_path }}:
 

@@ -1,0 +1,95 @@
+"""
+Unit tests for MCP server tools.
+
+Tests cover:
+- get_repo_for_project: happy path, case-insensitivity, unknown key
+- get_developer_rules: returns expected structure and mandatory rules
+"""
+
+import pytest
+
+from mcp_server.server import get_developer_rules, get_repo_for_project, _load_mapping
+
+
+# ---------------------------------------------------------------------------
+# get_developer_rules tests
+# ---------------------------------------------------------------------------
+
+
+def test_get_developer_rules_returns_list():
+    rules = get_developer_rules()
+    assert isinstance(rules, list)
+    assert len(rules) > 0
+
+
+def test_get_developer_rules_each_has_required_fields():
+    rules = get_developer_rules()
+    for rule in rules:
+        assert "id" in rule, f"Rule missing 'id': {rule}"
+        assert "rule" in rule, f"Rule missing 'rule': {rule}"
+        assert "rationale" in rule, f"Rule missing 'rationale': {rule}"
+
+
+def test_get_developer_rules_ids_are_unique():
+    rules = get_developer_rules()
+    ids = [r["id"] for r in rules]
+    assert len(ids) == len(set(ids)), "Rule IDs are not unique"
+
+
+# ---------------------------------------------------------------------------
+# get_repo_for_project tests (smoke — mapping file must exist)
+# ---------------------------------------------------------------------------
+
+
+def test_get_repo_for_project_unknown_key_raises():
+    with pytest.raises(ValueError, match="No repository mapped"):
+        get_repo_for_project("TOTALLY_UNKNOWN_XYZ_9999")
+
+
+def test_get_repo_for_project_case_insensitive(tmp_path, monkeypatch):
+    mapping_file = tmp_path / "project-repo-mapping.md"
+    mapping_file.write_text(
+        "| Project Key | Repository URL | Description |\n"
+        "|---|---|---|\n"
+        "| MYPROJ | git@github.com:org/repo.git | Test |\n"
+    )
+
+    import mcp_server.server as server_module
+
+    monkeypatch.setattr(server_module, "_MAPPING_FILE", mapping_file)
+
+    assert get_repo_for_project("myproj") == "git@github.com:org/repo.git"
+    assert get_repo_for_project("MYPROJ") == "git@github.com:org/repo.git"
+    assert get_repo_for_project("MyProj") == "git@github.com:org/repo.git"
+
+
+def test_get_repo_for_project_returns_url(tmp_path, monkeypatch):
+    mapping_file = tmp_path / "project-repo-mapping.md"
+    mapping_file.write_text(
+        "| Project Key | Repository URL | Description |\n"
+        "|---|---|---|\n"
+        "| AOS | git@github.com:ngbank/ngb-agent-orchestrator.git | Orchestrator |\n"
+    )
+
+    import mcp_server.server as server_module
+
+    monkeypatch.setattr(server_module, "_MAPPING_FILE", mapping_file)
+
+    url = get_repo_for_project("AOS")
+    assert url == "git@github.com:ngbank/ngb-agent-orchestrator.git"
+
+
+def test_get_repo_for_project_unknown_key_includes_known_projects(tmp_path, monkeypatch):
+    mapping_file = tmp_path / "project-repo-mapping.md"
+    mapping_file.write_text(
+        "| Project Key | Repository URL | Description |\n"
+        "|---|---|---|\n"
+        "| AOS | git@github.com:ngbank/repo.git | Test |\n"
+    )
+
+    import mcp_server.server as server_module
+
+    monkeypatch.setattr(server_module, "_MAPPING_FILE", mapping_file)
+
+    with pytest.raises(ValueError, match="AOS"):
+        get_repo_for_project("UNKNOWN")

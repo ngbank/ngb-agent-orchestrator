@@ -456,6 +456,7 @@ class TestHandleHistory:
         assert "Workflow history for TEST-123" in result.output
         assert resolved_id in result.output
 
+
 def test_reject_handles_resume_error(test_db, cli_runner):
     """Test that reject path reports resume errors with existing message."""
     workflow_id = state_store.create_workflow("TEST-123", status=WorkflowStatus.PENDING_APPROVAL)
