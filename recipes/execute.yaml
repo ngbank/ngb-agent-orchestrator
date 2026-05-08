@@ -60,15 +60,12 @@ prompt: |
 
   ## Step 0: Load Developer Rules
 
-  Before doing anything else, call the `get_developer_rules` MCP tool and read every rule carefully.
-  These rules are **mandatory** and take precedence over any conflicting guidance elsewhere in this prompt.
+  Call the `get_developer_rules` MCP tool to retrieve the coding standards for this project.
+  Read each rule carefully and apply them throughout this session.
 
-  Rules to load:
   ```
   get_developer_rules()
   ```
-
-  Commit the rules to your working context. You must comply with all of them throughout the session.
 
   ## Step 1: Write Pre-Execution Reasoning
 
