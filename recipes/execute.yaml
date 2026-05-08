@@ -116,6 +116,19 @@ prompt: |
   pwd && git remote get-url origin
   ```
 
+  ## Step 3.5: Set Up Python Environment
+
+  Create a virtual environment and install dependencies so that pre-commit hooks
+  (specifically the `pytest` hook that uses `venv/bin/python`) work correctly:
+  ```
+  python -m venv venv
+  pip install -e ".[dev]" -q
+  ```
+  If `pyproject.toml` does not define a `[dev]` extra, fall back to:
+  ```
+  pip install -r requirements-dev.txt -q
+  ```
+
   ## Step 4: Create Feature Branch
 
   Generate a branch name following the repository convention:
