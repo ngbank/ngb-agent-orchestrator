@@ -350,14 +350,34 @@ def _handle_approve(ticket_key: str, workflow_id: Optional[str] = None) -> None:
 
         wf_id = final_state.get("workflow_id", resolved_id)
         ticket_key = final_state.get("ticket_key", "")
-        update_status(
-            wf_id,
-            WorkflowStatus.COMPLETED,
-            actor=actor,
-            reason="All stages completed successfully after approval",
-        )
-        click.echo("🎉 Workflow completed successfully")
-        _post_execution_comment(ticket_key, final_state.get("execution_summary"))
+        execution_summary = final_state.get("execution_summary") or {}
+        exec_status = execution_summary.get("status", "")
+
+        if exec_status in ("success", "partial"):
+            update_status(
+                wf_id,
+                WorkflowStatus.COMPLETED,
+                actor=actor,
+                reason="All stages completed successfully after approval",
+            )
+            click.echo("🎉 Workflow completed successfully")
+        else:
+            update_status(
+                wf_id,
+                WorkflowStatus.FAILED,
+                actor=actor,
+                reason=(
+                    f"Execution failed: "
+                    f"{execution_summary.get('error', exec_status or 'unknown')}"
+                ),
+            )
+            click.echo(
+                f"❌ Workflow failed — "
+                f"build: {execution_summary.get('build', 'unknown')}, "
+                f"tests: {execution_summary.get('tests', 'unknown')}",
+                err=True,
+            )
+        _post_execution_comment(ticket_key, execution_summary if execution_summary else None)
 
     except Exception as e:
         click.echo(f"❌ Error resuming workflow: {e}", err=True)

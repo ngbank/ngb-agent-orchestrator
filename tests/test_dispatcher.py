@@ -478,3 +478,135 @@ def test_get_actor_imported_from_graph_utils():
     from graph.utils import _get_actor as shared_get_actor
 
     assert run_module._get_actor is shared_get_actor
+
+
+class TestHandleApproveFailedExecution:
+    """Regression tests for approve path when execution fails.
+
+    Prior to the fix, _handle_approve unconditionally set the workflow status
+    to COMPLETED after graph.invoke() returned, even when execute_plan had
+    already written a 'failed' execution summary. This caused failed runs to
+    appear as completed in the database.
+    """
+
+    def _make_pending_workflow(self, ticket_key: str) -> str:
+        return state_store.create_workflow(ticket_key, status=WorkflowStatus.PENDING_APPROVAL)
+
+    def test_approve_marks_failed_when_execution_fails(self, test_db, cli_runner):
+        """When execute_plan returns a failed summary, status must stay FAILED."""
+        workflow_id = self._make_pending_workflow("TEST-123")
+
+        failed_summary = {
+            "ticket_key": "TEST-123",
+            "branch": "",
+            "build": "fail",
+            "tests": "skipped",
+            "files_changed": [],
+            "commit_sha": "",
+            "pr_url": "",
+            "status": "failed",
+            "error": "Execution summary not written by recipe",
+        }
+
+        with patch("dispatcher.run.build_orchestrator") as mock_build:
+            mock_graph = Mock()
+            mock_graph.invoke.return_value = {
+                "workflow_id": workflow_id,
+                "ticket_key": "TEST-123",
+                "execution_summary": failed_summary,
+            }
+            mock_build.return_value = mock_graph
+
+            with patch("dispatcher.run._post_execution_comment"):
+                result = cli_runner.invoke(run, ["--approve", "--workflow-id", workflow_id])
+
+        assert result.exit_code == 0
+        workflow = state_store.get_workflow(workflow_id)
+        assert workflow["status"] == WorkflowStatus.FAILED, (
+            "Expected FAILED but got %s — approve must not unconditionally set COMPLETED"
+            % workflow["status"]
+        )
+        assert "❌ Workflow failed" in result.output
+
+    def test_approve_marks_completed_when_execution_succeeds(self, test_db, cli_runner):
+        """When execute_plan returns a success summary, status must be COMPLETED."""
+        workflow_id = self._make_pending_workflow("TEST-123")
+
+        success_summary = {
+            "ticket_key": "TEST-123",
+            "branch": "feature/TEST-123+do-the-thing",
+            "build": "pass",
+            "tests": "pass",
+            "files_changed": ["src/foo.py"],
+            "commit_sha": "abc123",
+            "pr_url": "https://github.com/org/repo/pull/1",
+            "status": "success",
+        }
+
+        with patch("dispatcher.run.build_orchestrator") as mock_build:
+            mock_graph = Mock()
+            mock_graph.invoke.return_value = {
+                "workflow_id": workflow_id,
+                "ticket_key": "TEST-123",
+                "execution_summary": success_summary,
+            }
+            mock_build.return_value = mock_graph
+
+            with patch("dispatcher.run._post_execution_comment"):
+                result = cli_runner.invoke(run, ["--approve", "--workflow-id", workflow_id])
+
+        assert result.exit_code == 0
+        workflow = state_store.get_workflow(workflow_id)
+        assert workflow["status"] == WorkflowStatus.COMPLETED
+        assert "🎉 Workflow completed successfully" in result.output
+
+    def test_approve_marks_failed_when_summary_absent(self, test_db, cli_runner):
+        """When execution_summary is missing entirely, status must be FAILED."""
+        workflow_id = self._make_pending_workflow("TEST-123")
+
+        with patch("dispatcher.run.build_orchestrator") as mock_build:
+            mock_graph = Mock()
+            mock_graph.invoke.return_value = {
+                "workflow_id": workflow_id,
+                "ticket_key": "TEST-123",
+                # no execution_summary key
+            }
+            mock_build.return_value = mock_graph
+
+            with patch("dispatcher.run._post_execution_comment"):
+                result = cli_runner.invoke(run, ["--approve", "--workflow-id", workflow_id])
+
+        assert result.exit_code == 0
+        workflow = state_store.get_workflow(workflow_id)
+        assert workflow["status"] == WorkflowStatus.FAILED
+
+    def test_approve_marks_completed_for_partial_status(self, test_db, cli_runner):
+        """A 'partial' execution (build pass, tests fail) should be COMPLETED."""
+        workflow_id = self._make_pending_workflow("TEST-123")
+
+        partial_summary = {
+            "ticket_key": "TEST-123",
+            "branch": "feature/TEST-123+do-the-thing",
+            "build": "pass",
+            "tests": "fail",
+            "files_changed": ["src/foo.py"],
+            "commit_sha": "abc123",
+            "pr_url": "",
+            "status": "partial",
+        }
+
+        with patch("dispatcher.run.build_orchestrator") as mock_build:
+            mock_graph = Mock()
+            mock_graph.invoke.return_value = {
+                "workflow_id": workflow_id,
+                "ticket_key": "TEST-123",
+                "execution_summary": partial_summary,
+            }
+            mock_build.return_value = mock_graph
+
+            with patch("dispatcher.run._post_execution_comment"):
+                result = cli_runner.invoke(run, ["--approve", "--workflow-id", workflow_id])
+
+        assert result.exit_code == 0
+        workflow = state_store.get_workflow(workflow_id)
+        assert workflow["status"] == WorkflowStatus.COMPLETED
