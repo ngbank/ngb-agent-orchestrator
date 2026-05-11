@@ -1,0 +1,23 @@
+[
+  {
+    "id": "DR-001",
+    "rule": "Run pre-commit hooks before every commit",
+    "command": "pre-commit run --all-files",
+    "rationale": "Ensures code quality gates (linting, formatting, type checks) pass before changes enter version control."
+  },
+  {
+    "id": "DR-002",
+    "rule": "Never commit directly to main or master",
+    "rationale": "All changes must go through a feature branch and pull request to maintain code review and CI/CD integrity."
+  },
+  {
+    "id": "DR-003",
+    "rule": "Feature branches must follow naming convention: feature/{TICKET-ID}+{summary-slug}",
+    "rationale": "Consistent branch naming links code changes back to JIRA tickets and makes history easy to navigate."
+  },
+  {
+    "id": "DR-004",
+    "rule": "Run the full test suite before committing",
+    "rationale": "Prevents regressions from being committed. Use the test_command from get_project_setup for the project-specific command."
+  }
+]

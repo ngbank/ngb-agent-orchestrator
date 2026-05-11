@@ -21,14 +21,39 @@ from mcp_server.server import (
 # get_developer_rules tests
 # ---------------------------------------------------------------------------
 
+_SAMPLE_RULES = [
+    {
+        "id": "DR-001",
+        "rule": "Run pre-commit hooks before every commit",
+        "rationale": "Quality gates.",
+    },
+    {
+        "id": "DR-002",
+        "rule": "Never commit directly to main or master",
+        "rationale": "Code review.",
+    },
+]
 
-def test_get_developer_rules_returns_list():
+
+@pytest.fixture()
+def rules_file(tmp_path, monkeypatch):
+    """Write a minimal developer-rules.json and patch _RULES_FILE to point at it."""
+    path = tmp_path / "developer-rules.json"
+    path.write_text(json.dumps(_SAMPLE_RULES))
+
+    import mcp_server.server as server_module
+
+    monkeypatch.setattr(server_module, "_RULES_FILE", path)
+    return path
+
+
+def test_get_developer_rules_returns_list(rules_file):
     rules = get_developer_rules()
     assert isinstance(rules, list)
     assert len(rules) > 0
 
 
-def test_get_developer_rules_each_has_required_fields():
+def test_get_developer_rules_each_has_required_fields(rules_file):
     rules = get_developer_rules()
     for rule in rules:
         assert "id" in rule, f"Rule missing 'id': {rule}"
@@ -36,7 +61,7 @@ def test_get_developer_rules_each_has_required_fields():
         assert "rationale" in rule, f"Rule missing 'rationale': {rule}"
 
 
-def test_get_developer_rules_ids_are_unique():
+def test_get_developer_rules_ids_are_unique(rules_file):
     rules = get_developer_rules()
     ids = [r["id"] for r in rules]
     assert len(ids) == len(set(ids)), "Rule IDs are not unique"

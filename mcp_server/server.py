@@ -20,6 +20,7 @@ from mcp.server.fastmcp import FastMCP
 
 # Path to the mapping file, relative to this file's location (repo root/config/)
 _MAPPING_FILE = Path(__file__).parent.parent / "config" / "project-repo-mapping.md"
+_RULES_FILE = Path(__file__).parent.parent / "config" / "developer-rules.json"
 _SETUP_FILE = Path(__file__).parent.parent / "config" / "project-setup.json"
 
 mcp = FastMCP(
@@ -88,42 +89,6 @@ def get_repo_for_project(project_key: str) -> str:
 # Developer rules
 # ---------------------------------------------------------------------------
 
-_DEVELOPER_RULES: list[dict[str, str]] = [
-    {
-        "id": "DR-001",
-        "rule": "Run pre-commit hooks before every commit",
-        "command": "pre-commit run --all-files",
-        "rationale": (
-            "Ensures code quality gates (linting, formatting, type checks) pass"
-            " before changes enter version control."
-        ),
-    },
-    {
-        "id": "DR-002",
-        "rule": "Never commit directly to main or master",
-        "rationale": (
-            "All changes must go through a feature branch and pull request to"
-            " maintain code review and CI/CD integrity."
-        ),
-    },
-    {
-        "id": "DR-003",
-        "rule": (
-            "Feature branches must follow naming convention:" " feature/{TICKET-ID}+{summary-slug}"
-        ),
-        "rationale": (
-            "Consistent branch naming links code changes back to JIRA tickets and"
-            " makes history easy to navigate."
-        ),
-    },
-    {
-        "id": "DR-004",
-        "rule": "Run the full test suite before committing",
-        "command": "python -m pytest tests/ -q --tb=short",
-        "rationale": "Prevents regressions from being committed.",
-    },
-]
-
 
 @mcp.tool()
 def get_developer_rules() -> list[dict[str, str]]:
@@ -139,7 +104,7 @@ def get_developer_rules() -> list[dict[str, str]]:
     Returns:
         List of rule dicts that the agent must honour during execution.
     """
-    return _DEVELOPER_RULES
+    return json.loads(_RULES_FILE.read_text())
 
 
 @mcp.tool()
