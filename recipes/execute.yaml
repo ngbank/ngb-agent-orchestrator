@@ -175,59 +175,61 @@ prompt: |
   - NEVER write file content via shell heredocs (`cat << 'EOF'`, etc.) — heredocs corrupt escape sequences (e.g. `\n`, `\t`), backslashes, and quotes, causing syntax errors
   - If you need to replace a specific section of a file, read the file first then use `str_replace` with exact context lines
 
-  ## Step 5: Run Checks
+  ## Step 5: Commit Loop
 
-  After implementing all tasks:
+  The goal of this step is a successful `git commit`. Pre-commit hooks run automatically
+  on commit and are the authoritative check — they cover formatting, linting, and tests.
+  Some hooks (e.g. auto-formatters) mutate files and then abort the commit so that you
+  can review their changes; this is expected and is not an error.
 
-  ### Lint and Test Check
-  Run the `lint_command` from Step 2. This covers formatting, linting, and tests in one pass.
-  Some checks (e.g. auto-formatters) may rewrite files and cause the first run to exit
-  non-zero — that is expected:
-  ```
-  <lint_command>
-  ```
-  If the first run modified files, re-run once to confirm all checks now pass:
-  ```
-  <lint_command>
-  ```
-  **If the second run exits non-zero for any reason, do NOT proceed to commit.** Investigate
-  the specific errors, fix the code, and re-run until `lint_command` exits 0. Classifying
-  hook failures as "infrastructure limitations" or "acceptable" is not permitted. If you
-  cannot fix the failures after a genuine attempt, write a failed execution summary and
-  stop — do not commit.
+  Repeat the following loop until `git commit` exits 0 or you exhaust genuine fix attempts:
 
-  Record from the lint output:
-  - `tests`: `"pass"` if the pytest hook passed, `"fail"` if it failed, `"skipped"` if unavailable
-  - `build`: `"pass"` if all lint checks passed, `"fail"` otherwise
+  1. Stage all changes:
+     ```
+     git add -A
+     ```
+
+  2. Attempt the commit using `vcs.commit_template` from Step 2:
+     ```
+     git commit -m "{filled-in commit message}"
+     ```
+
+  3. **If the commit succeeds (exit 0)** — you are done with this step. Record:
+     - `tests`: `"pass"` if the pytest hook passed, `"fail"` if it failed, `"skipped"` if unavailable
+     - `build`: `"pass"`
+     - Proceed to Step 6.
+
+  4. **If the commit fails because hooks auto-fixed files** — the hooks rewrote files
+     and aborted the commit so you can inspect the changes. Go back to step 1 and retry.
+
+  5. **If the commit fails due to a real error** (failing tests, lint violation that was
+     not auto-fixed, etc.):
+     - Diagnose the specific failure from the hook output
+     - Fix the code
+     - Go back to step 1 and retry
+     - Classifying failures as "infrastructure limitations" or "acceptable" is not permitted
+     - If you cannot fix the failures after a genuine attempt, write a failed execution
+       summary and stop
+
+  Get the commit SHA after a successful commit:
+  ```
+  git rev-parse HEAD
+  ```
 
   ### Files Changed
   Run `vcs.files_changed_command` from Step 2. Combine the results into a single
   list of changed and new files.
 
-  ## Step 6: Commit Changes
+  ## Step 6: Push Branch and Create Pull Request
 
-  Stage all changes:
-  ```
-  git add -A
-  ```
-
-  Commit using `vcs.commit_template` from Step 2 — substitute `{ticket_key}`,
-  `{summary}` with the actual values:
-  ```
-  git commit -m "{filled-in commit message}"
-  ```
-
-  Get the commit SHA:
-  ```
-  git rev-parse HEAD
-  ```
+  A successful PR creation is the true indicator that the overall task succeeded.
 
   **IMPORTANT safety constraints:**
   - NEVER commit to `main` or any pre-existing branch
   - NEVER run `git reset --hard` or `git force`
   - NEVER delete branches
 
-  ## Step 7: Push Branch and Create Pull Request
+  ## Step 6 (continued): Push Branch and Create Pull Request
 
   Push the branch using `vcs.push_command` from Step 2 — substitute `{branch}`
   with the actual branch name:
@@ -245,7 +247,7 @@ prompt: |
      - **JIRA Ticket**: Ticket ID = `{{ ticket_key }}`, Link = `https://mirandags.atlassian.net/browse/{{ ticket_key }}`
      - **Type of Change**: mark the relevant checkbox based on the WorkPlan
      - **Changes Made**: list each task from the WorkPlan
-     - **Testing**: reflect actual build/test results from Step 5 (Run Checks)
+     - **Testing**: reflect actual build/test results from Step 5 (Commit Loop)
   3. If the template **does not exist**, use a minimal description with the same information.
 
   Write the PR body to `/tmp/pr_body_{{ ticket_key }}.md` using the `write_file`
@@ -259,7 +261,7 @@ prompt: |
   Capture the PR URL from the command output. If the PR tool is not available or
   the push fails, record `pr_url` as `""` in the summary and continue.
 
-  ## Step 8: Write Execution Diary
+  ## Step 7: Write Execution Diary
 
   Append an execution diary to `{{ reasoning_path }}` (do not overwrite — append).
   This is for debugging only and will NOT be committed.
@@ -280,7 +282,7 @@ prompt: |
   <Anything you had to guess at or work around>
   ```
 
-  ## Step 9: Write Summary File and Call final_output
+  ## Step 8: Write Summary File and Call final_output
 
   First, write the execution summary JSON to `{{ output_path }}` so the dispatcher
   can read it (use `write_file` — do not use a shell heredoc):
