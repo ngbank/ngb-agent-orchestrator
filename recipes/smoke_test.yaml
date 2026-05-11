@@ -1,0 +1,75 @@
+version: "1.0.0"
+title: "Guardrail Smoke Test"
+description: "Smoke test that injects the content of changed recipe and rule files into the LLM context to detect guardrail triggers"
+
+parameters:
+  - key: output_dir
+    input_type: string
+    requirement: required
+    description: "Directory where llm_guardrail_check.txt should be created"
+
+  - key: changed_files
+    input_type: string
+    requirement: required
+    description: "Comma-separated list of watched file paths that have staged changes (e.g. recipes/plan.yaml,config/developer-rules.json)"
+
+  - key: GOOSE_MCP_PYTHON
+    input_type: string
+    requirement: optional
+    description: "Python interpreter used to launch the MCP server (defaults to 'python')"
+    default: "python"
+
+extensions:
+  - type: builtin
+    name: developer
+    display_name: Developer
+    timeout: 120
+    bundled: true
+    description: "File system and shell command access for smoke-test file creation"
+
+  - type: stdio
+    name: agent-harness
+    display_name: Agent Harness
+    cmd: "{{ GOOSE_MCP_PYTHON | default('python') }}"
+    args:
+      - "-m"
+      - "mcp_server.server"
+    description: "MCP tools: get_developer_rules"
+    bundled: false
+
+settings:
+  temperature: 0.0
+  max_turns: 10
+
+prompt: |
+  You are running a guardrail smoke test. Your goal is to verify that recently-changed
+  files do not trigger LLM content-safety filters.
+
+  ## Step 1: Load Developer Rules
+
+  Call the get_developer_rules tool to load the current developer rules from
+  config/developer-rules.json. This exercises the same rule injection that happens
+  at runtime so any guardrail-triggering content in that file is detected here.
+
+  ## Step 2: Read Changed Files
+
+  The following watched file(s) have staged changes and must be read:
+
+  {{ changed_files }}
+
+  Split on commas to get individual file paths. Use shell `cat` commands to read each
+  file's full contents. Reading these files exercises the same prompt content the LLM
+  would receive at runtime — if any of it triggers a safety filter, this step will
+  surface the problem.
+
+  ## Step 3: Create Verification File
+
+  Create a file named `llm_guardrail_check.txt` in this directory: {{ output_dir }}
+
+  Write exactly this content (replace <TIMESTAMP> with the current UTC datetime in ISO 8601 format, e.g. 2026-05-11T14:46:00Z):
+  llm guardrail check <TIMESTAMP>
+
+  ## Step 4: Verify
+
+  Verify the file exists at {{ output_dir }}/llm_guardrail_check.txt.
+  If it does, the smoke test has passed.

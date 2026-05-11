@@ -54,7 +54,14 @@ repos:
   # ── SQL migration safety ──────────────────────────────────────────────────
       - id: check-sql-migrations
         name: check-sql-migrations
-        entry: python scripts/check_sql_migrations.py
+        entry: venv/bin/python scripts/check_sql_migrations.py
         language: system
         files: ^state/migrations/.*\.sql$
         pass_filenames: true
+
+      - id: guardrail-smoke-check
+        name: guardrail-smoke-check
+        entry: venv/bin/python scripts/guardrail_smoke_check.py
+        language: system
+        pass_filenames: false
+        always_run: true

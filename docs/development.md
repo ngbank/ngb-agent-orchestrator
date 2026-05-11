@@ -42,6 +42,7 @@ pre-commit install
 | `mypy` | Type checking (`--ignore-missing-imports`) |
 | `pytest` | Runs the full test suite |
 | `check-sql-migrations` | Blocks bare `DROP TABLE` without `IF EXISTS` in migration files |
+| `guardrail-smoke-check` | Runs Goose smoke test when staged changes include injected prompt files |
 
 ### Running Hooks Manually
 
@@ -52,6 +53,28 @@ pre-commit run --all-files
 # Run a specific hook
 pre-commit run black --all-files
 pre-commit run pytest --all-files
+```
+
+### Guardrail Smoke Check
+
+The `guardrail-smoke-check` hook runs only when staged changes include one of:
+
+- `recipes/plan.yaml`
+- `recipes/execute.yaml`
+- `config/developer-rules.json`
+
+When triggered, it runs `recipes/smoke_test.yaml` via Goose in a temporary directory and expects `hello_world.txt` to be created. If the file is not created, commit is blocked with a message indicating likely prompt guardrail interference.
+
+To run it manually:
+
+```bash
+python scripts/guardrail_smoke_check.py
+```
+
+To force-check specific paths (for local validation/tests):
+
+```bash
+python scripts/guardrail_smoke_check.py --staged-files recipes/plan.yaml
 ```
 
 ### Skipping Hooks (Emergency Only)
