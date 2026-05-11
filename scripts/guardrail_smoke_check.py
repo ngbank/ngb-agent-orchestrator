@@ -39,7 +39,7 @@ def should_run_smoke_test(staged_files: list[str]) -> bool:
     return any(path in WATCHED_FILES for path in staged_files)
 
 
-def _goose_command(output_dir: str) -> list[str]:
+def _goose_command(output_dir: str, changed_files: list[str]) -> list[str]:
     return [
         "goose",
         "run",
@@ -47,17 +47,21 @@ def _goose_command(output_dir: str) -> list[str]:
         "recipes/smoke_test.yaml",
         "--params",
         f"output_dir={output_dir}",
+        "--params",
+        f"changed_files={','.join(changed_files)}",
+        "--params",
+        f"GOOSE_MCP_PYTHON={sys.executable}",
     ]
 
 
-def run_smoke_test() -> tuple[bool, str]:
+def run_smoke_test(changed_files: list[str]) -> tuple[bool, str]:
     """Execute smoke test recipe and assert hello_world.txt exists."""
     if shutil.which("goose") is None:
         return False, "goose CLI not found in PATH"
 
     temp_dir = tempfile.mkdtemp(prefix="guardrail-smoke-")
     try:
-        cmd = _goose_command(temp_dir)
+        cmd = _goose_command(temp_dir, changed_files)
         result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
         hello_path = Path(temp_dir) / "hello_world.txt"
@@ -107,12 +111,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[guardrail-smoke] Unable to determine staged files: {exc}", file=sys.stderr)
         return 1
 
-    if not should_run_smoke_test(staged_files):
-        print("[guardrail-smoke] Skipped (no watched injected files staged).")
+    matched = [f for f in staged_files if f in WATCHED_FILES]
+    if not matched:
+        print("[guardrail-smoke] Skipped (no watched injected files staged.)")
         return 0
 
     print("[guardrail-smoke] Watched files staged; running Goose smoke test...")
-    ok, message = run_smoke_test()
+    ok, message = run_smoke_test(matched)
     stream = sys.stdout if ok else sys.stderr
     print(f"[guardrail-smoke] {message}", file=stream)
     return 0 if ok else 1

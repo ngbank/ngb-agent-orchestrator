@@ -19,7 +19,7 @@ def test_run_smoke_test_missing_output_has_clear_message():
         patch("scripts.guardrail_smoke_check.shutil.which", return_value="/usr/bin/goose"),
         patch("scripts.guardrail_smoke_check.subprocess.run", return_value=completed),
     ):
-        ok, message = gsc.run_smoke_test()
+        ok, message = gsc.run_smoke_test(["recipes/plan.yaml"])
 
     assert not ok
     assert "hello_world.txt was not created" in message
@@ -33,10 +33,13 @@ def test_main_skips_when_no_watched_files(capsys):
 
 
 def test_main_runs_and_fails_with_actionable_output(capsys):
-    with patch("scripts.guardrail_smoke_check.run_smoke_test", return_value=(False, "bad")):
+    with patch(
+        "scripts.guardrail_smoke_check.run_smoke_test", return_value=(False, "bad")
+    ) as mock_run:
         code = gsc.main(["--staged-files", "recipes/execute.yaml"])
 
     assert code == 1
+    mock_run.assert_called_once_with(["recipes/execute.yaml"])
     captured = capsys.readouterr()
     assert "Watched files staged" in captured.out
     assert "bad" in captured.err
