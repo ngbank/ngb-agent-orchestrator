@@ -124,32 +124,32 @@ prompt: |
   pwd && git remote get-url origin
   ```
 
-  Then call `get_project_setup` to retrieve the platform-specific setup commands for
-  this project:
+  Then call `get_project_setup` to retrieve platform-specific commands for this project:
   ```
   get_project_setup("{{ ticket_key }}")
   ```
 
-  Run each command in `setup_commands` in order. These commands include venv
-  activation as a prefix — run them exactly as returned.
+  Store all returned values now — they drive every subsequent step:
+  - `setup_commands` — environment install commands; run each in order, exactly as returned
+  - `test_command` — test suite command; use verbatim in Step 5
+  - `lint_command` — linter/hooks command; use verbatim in Step 6
+  - `vcs.branch_pattern` — branch naming template; use in Step 3
+  - `vcs.commit_template` — commit message template; use in Step 6
+  - `vcs.files_changed_command` — command to list changed files; use in Step 5
+  - `vcs.push_command` — command to push the branch; use in Step 7
+  - `vcs.pr_command` — base command to create a pull request; use in Step 7
 
-  Store the `test_command` and `lint_command` values — use them verbatim in
-  Steps 5 and 6 instead of hardcoding any commands.
-
-  **All subsequent shell commands that require the venv must use the same
-  `. venv/bin/activate &&` prefix that the setup_commands use.**
+  Run each command in `setup_commands` in order, exactly as returned.
 
   ## Step 3: Create Feature Branch
 
-  Generate a branch name following the repository convention:
-  - Take the WorkPlan `summary` field
-  - Convert to lowercase, replace spaces and special chars with hyphens
-  - Truncate to 40 characters, trim trailing hyphens
-  - Branch name: `feature/{{ ticket_key }}+{slug}` (note: `+` separator between ticket and slug)
+  Construct the branch name using `vcs.branch_pattern` from Step 2:
+  - Replace `{ticket_key}` with `{{ ticket_key }}`
+  - Replace `{slug}` with the WorkPlan `summary`: lowercase, hyphens only, max 40 chars, no trailing hyphens
 
   Run:
   ```
-  git checkout -b feature/{{ ticket_key }}+{slug}
+  git checkout -b {branch}
   ```
 
   If the branch already exists, append `-2` (and increment until unique).
@@ -179,34 +179,21 @@ prompt: |
 
   After implementing all tasks:
 
-  ### Build Check
-  Run Python compile check on all modified files:
-  ```
-  . venv/bin/activate && python -m py_compile <modified_file_1> <modified_file_2> ...
-  ```
-  If that passes, also verify imports:
-  ```
-  . venv/bin/activate && python -m pytest --collect-only -q 2>&1 | tail -5
-  ```
-  Record: `"pass"` if no errors, `"fail"` if any error.
-
   ### Test Check
-  Run the test suite using the `test_command` returned by `get_project_setup` in Step 2:
+  Run the test suite using `test_command` from Step 2:
   ```
   <test_command>
   ```
   Record:
   - `"pass"` if all tests pass
   - `"fail"` if any tests fail
-  - `"skipped"` if tests directory doesn't exist or pytest is not available
+  - `"skipped"` if the test infrastructure is unavailable
+
+  Record `build` as `"pass"` if the test suite passed, `"fail"` otherwise.
 
   ### Files Changed
-  Get the list of modified files:
-  ```
-  git diff --name-only
-  git ls-files --others --exclude-standard
-  ```
-  Combine into a single list of changed and new files.
+  Run `vcs.files_changed_command` from Step 2. Combine the results into a single
+  list of changed and new files.
 
   ## Step 6: Commit Changes
 
@@ -226,11 +213,10 @@ prompt: |
   git add -A
   ```
 
-  Commit with a conventional commit message:
+  Commit using `vcs.commit_template` from Step 2 — substitute `{ticket_key}`,
+  `{summary}` with the actual values:
   ```
-  git commit -m "feat({{ ticket_key }}): {work_plan summary}
-
-  Implements WorkPlan tasks for {{ ticket_key }}."
+  git commit -m "{filled-in commit message}"
   ```
 
   Get the commit SHA:
@@ -245,9 +231,10 @@ prompt: |
 
   ## Step 7: Push Branch and Create Pull Request
 
-  Push the feature branch to the remote:
+  Push the branch using `vcs.push_command` from Step 2 — substitute `{branch}`
+  with the actual branch name:
   ```
-  git push origin feature/{{ ticket_key }}+{slug}
+  {push_command with branch substituted}
   ```
 
   Build the PR description:
@@ -263,19 +250,16 @@ prompt: |
      - **Testing**: reflect actual build/test results from Step 5 (Run Checks)
   3. If the template **does not exist**, use a minimal description with the same information.
 
-  Write the PR body to a temp file, then create a PR:
+  Write the PR body to `/tmp/pr_body_{{ ticket_key }}.md` using the `write_file`
+  tool, then create the PR using `vcs.pr_command` from Step 2:
   ```
-  cat > /tmp/pr_body_{{ ticket_key }}.md << 'PR_EOF'
-  <filled-in PR body>
-  PR_EOF
-
-  gh pr create \
+  {vcs.pr_command} \
     --title "[{{ ticket_key }}] {WorkPlan summary}" \
-    --body-file /tmp/pr_body_{{ ticket_key }}.md \
-    --base main
+    --body-file /tmp/pr_body_{{ ticket_key }}.md
   ```
 
-  Capture the PR URL from the output of `gh pr create`. If `gh` is not available or the push fails, record `pr_url` as `""` in the summary and continue.
+  Capture the PR URL from the command output. If the PR tool is not available or
+  the push fails, record `pr_url` as `""` in the summary and continue.
 
   ## Step 8: Write Execution Diary
 

@@ -7,6 +7,13 @@
       ". venv/bin/activate && pip install -r requirements-dev.txt -q"
     ],
     "test_command": ". venv/bin/activate && python -m pytest tests/ -q --tb=short",
-    "lint_command": ". venv/bin/activate && pre-commit run --all-files"
+    "lint_command": ". venv/bin/activate && pre-commit run --all-files",
+    "vcs": {
+      "branch_pattern": "feature/{ticket_key}+{slug}",
+      "commit_template": "feat({ticket_key}): {summary}\n\nImplements WorkPlan tasks for {ticket_key}.",
+      "files_changed_command": "git diff --name-only HEAD && git ls-files --others --exclude-standard",
+      "push_command": "git push origin {branch}",
+      "pr_command": "gh pr create --base main"
+    }
   }
 }

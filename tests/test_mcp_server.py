@@ -114,6 +114,13 @@ _SAMPLE_SETUP = {
         ],
         "test_command": ". venv/bin/activate && python -m pytest tests/ -q --tb=short",
         "lint_command": ". venv/bin/activate && pre-commit run --all-files",
+        "vcs": {
+            "branch_pattern": "feature/{ticket_key}+{slug}",
+            "commit_template": "feat({ticket_key}): {summary}",
+            "files_changed_command": "git diff --name-only HEAD",
+            "push_command": "git push origin {branch}",
+            "pr_command": "gh pr create --base main",
+        },
     }
 }
 
@@ -139,8 +146,20 @@ def test_get_project_setup_returns_python_setup(setup_file):
 
 def test_get_project_setup_has_required_fields(setup_file):
     result = get_project_setup("MYPROJ")
-    for field in ("platform", "setup_commands", "test_command", "lint_command"):
+    for field in ("platform", "setup_commands", "test_command", "lint_command", "vcs"):
         assert field in result, f"Missing field '{field}' in get_project_setup response"
+
+
+def test_get_project_setup_vcs_has_required_fields(setup_file):
+    vcs = get_project_setup("MYPROJ")["vcs"]
+    for key in (
+        "branch_pattern",
+        "commit_template",
+        "files_changed_command",
+        "push_command",
+        "pr_command",
+    ):
+        assert key in vcs, f"Missing vcs key '{key}' in get_project_setup response"
 
 
 def test_get_project_setup_case_insensitive(setup_file):

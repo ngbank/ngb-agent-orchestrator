@@ -152,6 +152,9 @@ def get_project_setup(project_key: str) -> dict:
       - setup_commands: ordered list of shell commands to set up the environment
       - test_command: shell command to run the full test suite
       - lint_command: shell command to run the linter / pre-commit hooks
+      - vcs: version control workflow config with keys:
+          branch_pattern, commit_template, files_changed_command,
+          push_command, pr_command
 
     All commands include any required environment activation (e.g. venv) as a
     prefix so they can be run directly without prior activation.
@@ -160,7 +163,7 @@ def get_project_setup(project_key: str) -> dict:
         project_key: The JIRA project key, e.g. "AOS". Case-insensitive.
 
     Returns:
-        Dict with platform, setup_commands, test_command, lint_command.
+        Dict with platform, setup_commands, test_command, lint_command, vcs.
 
     Raises:
         ValueError: If no setup configuration is found for the project key.
