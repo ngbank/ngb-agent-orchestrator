@@ -100,10 +100,10 @@ Returns a structured list of mandatory developer rules that the execute-plan age
 
 | ID | Rule | Command |
 |---|---|---|
-| DR-001 | Run pre-commit hooks before every commit | `pre-commit run --all-files` |
+| DR-001 | Ensure pre-commit hooks are installed before making any commits | — |
 | DR-002 | Never commit directly to `main` or `master` | — |
 | DR-003 | Feature branches must follow `feature/{TICKET-ID}+{summary-slug}` | — |
-| DR-004 | Run the full test suite before committing | `python -m pytest tests/ -q --tb=short` |
+| DR-004 | Run the full test suite before committing | — |
 
 ### Return format
 
@@ -125,4 +125,4 @@ for r in rules:
 
 ### How the execute recipe uses it
 
-The execute recipe (`recipes/execute.yaml`) calls `get_developer_rules()` as **Step 0** — before any other action — and injects the returned rules into the agent's working context. The agent is then required to comply with all rules throughout the session, in particular running `pre-commit run --all-files` before every `git commit`.
+The execute recipe (`recipes/execute.yaml`) calls `get_developer_rules()` as **Step 1** — before any other action — and injects the returned rules into the agent's working context. The agent is required to comply with all rules throughout the session; project-specific commands (how to install hooks, how to run the test suite) are injected separately via `get_project_setup`.

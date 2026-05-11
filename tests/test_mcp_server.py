@@ -24,7 +24,7 @@ from mcp_server.server import (
 _SAMPLE_RULES = [
     {
         "id": "DR-001",
-        "rule": "Run pre-commit hooks before every commit",
+        "rule": "Ensure pre-commit hooks are installed before making any commits",
         "rationale": "Quality gates.",
     },
     {

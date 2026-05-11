@@ -197,8 +197,7 @@ prompt: |
 
   ## Step 6: Commit Changes
 
-  Before staging, run pre-commit hooks (DR-001 — mandatory) using the `lint_command`
-  returned by `get_project_setup` in Step 2:
+  Ensure pre-commit hooks are installed (DR-001) using the `lint_command` from Step 2.
   ```
   <lint_command>
   ```
