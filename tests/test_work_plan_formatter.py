@@ -11,7 +11,6 @@ Tests cover:
 import pytest
 
 from dispatcher.work_plan_formatter import (
-    WorkPlanCommentFormatter,
     format_execution_summary_comment,
     format_work_plan_comment,
 )
@@ -84,161 +83,132 @@ def blocked_work_plan():
     }
 
 
-class TestWorkPlanCommentFormatter:
-    """Test suite for WorkPlanCommentFormatter class."""
+def test_format_complete_plan(complete_work_plan):
+    """Test formatting a complete WorkPlan with all sections."""
+    comment = format_work_plan_comment(complete_work_plan, "AOS-39")
 
-    def test_format_complete_plan(self, complete_work_plan):
-        """Test formatting a complete WorkPlan with all sections."""
-        formatter = WorkPlanCommentFormatter()
-        comment = formatter.format(complete_work_plan, "AOS-39")
+    assert "# 🤖 Agent WorkPlan for AOS-39" in comment
+    assert "## 📋 Plan Summary" in comment
+    assert "## ✅ Task List" in comment
+    assert "## ⚠️ Risks" in comment
+    assert "## ❓ Questions for Reviewer" in comment
+    assert "## 🎯 Approval Instructions" in comment
 
-        # Verify required sections are present
-        assert "# 🤖 Agent WorkPlan for AOS-39" in comment
-        assert "## 📋 Plan Summary" in comment
-        assert "## ✅ Task List" in comment
-        assert "## ⚠️ Risks" in comment
-        assert "## ❓ Questions for Reviewer" in comment
-        assert "## 🎯 Approval Instructions" in comment
+    assert "Post WorkPlan to Jira as formatted comment" in comment
+    assert "Implement ACLI integration" in comment
+    assert "Extend Jira client for comment posting" in comment
+    assert "ACLI might not be authenticated" in comment
+    assert "Should we support updating existing comments?" in comment
 
-        # Verify content
-        assert "Post WorkPlan to Jira as formatted comment" in comment
-        assert "Implement ACLI integration" in comment
-        assert "Extend Jira client for comment posting" in comment
-        assert "ACLI might not be authenticated" in comment
-        assert "Should we support updating existing comments?" in comment
+    assert "dispatcher approve AOS-39" in comment
+    assert "dispatcher reject AOS-39" in comment
 
-        # Verify approval instructions
-        assert "dispatcher approve AOS-39" in comment
-        assert "dispatcher reject AOS-39" in comment
+    assert "✅ PASS" in comment
 
-        # Verify status indicator
-        assert "✅ PASS" in comment
+    assert "<!-- WorkPlan v1.0 -->" in comment
+    assert "*WorkPlan Schema Version: 1.0*" in comment
 
-        # Verify version marker
-        assert "<!-- WorkPlan v1.0 -->" in comment
-        assert "*WorkPlan Schema Version: 1.0*" in comment
 
-    def test_format_minimal_plan(self, minimal_work_plan):
-        """Test formatting a minimal WorkPlan with empty arrays."""
-        formatter = WorkPlanCommentFormatter()
-        comment = formatter.format(minimal_work_plan, "AOS-40")
+def test_format_minimal_plan(minimal_work_plan):
+    """Test formatting a minimal WorkPlan with empty arrays."""
+    comment = format_work_plan_comment(minimal_work_plan, "AOS-40")
 
-        # Verify required sections still present
-        assert "# 🤖 Agent WorkPlan for AOS-40" in comment
-        assert "## 📋 Plan Summary" in comment
-        assert "## ✅ Task List" in comment
-        assert "## ⚠️ Risks" in comment
-        assert "## ❓ Questions for Reviewer" in comment
-        assert "## 🎯 Approval Instructions" in comment
+    assert "# 🤖 Agent WorkPlan for AOS-40" in comment
+    assert "## 📋 Plan Summary" in comment
+    assert "## ✅ Task List" in comment
+    assert "## ⚠️ Risks" in comment
+    assert "## ❓ Questions for Reviewer" in comment
+    assert "## 🎯 Approval Instructions" in comment
 
-        # Verify empty section handling
-        assert "*No risks identified*" in comment
-        assert "*No questions*" in comment
+    assert "*No risks identified*" in comment
+    assert "*No questions*" in comment
 
-        # Verify status indicator for concerns
-        assert "⚠️ CONCERNS" in comment
+    assert "⚠️ CONCERNS" in comment
 
-    def test_format_blocked_plan(self, blocked_work_plan):
-        """Test formatting a blocked WorkPlan."""
-        formatter = WorkPlanCommentFormatter()
-        comment = formatter.format(blocked_work_plan, "AOS-41")
 
-        # Verify blocked status indicator
-        assert "🚫 BLOCKED" in comment
+def test_format_blocked_plan(blocked_work_plan):
+    """Test formatting a blocked WorkPlan."""
+    comment = format_work_plan_comment(blocked_work_plan, "AOS-41")
 
-        # Verify content
-        assert "Cannot proceed" in comment
-        assert "Critical blocker found" in comment
-        assert "How should we proceed?" in comment
+    assert "🚫 BLOCKED" in comment
 
-    def test_task_formatting(self, complete_work_plan):
-        """Test that tasks are formatted correctly."""
-        formatter = WorkPlanCommentFormatter()
-        comment = formatter.format(complete_work_plan, "AOS-39")
+    assert "Cannot proceed" in comment
+    assert "Critical blocker found" in comment
+    assert "How should we proceed?" in comment
 
-        # Verify task structure
-        assert "### Task 1" in comment
-        assert "### Task 2" in comment
-        assert "### Task 3" in comment
 
-        # Verify files listed
-        assert "dispatcher/jira_client.py" in comment
-        assert "dispatcher/work_plan_formatter.py" in comment
-        assert "dispatcher/run.py" in comment
-        assert "state/state_store.py" in comment
+def test_task_formatting(complete_work_plan):
+    """Test that tasks are formatted correctly."""
+    comment = format_work_plan_comment(complete_work_plan, "AOS-39")
 
-        # Verify file formatting
-        assert "*Files likely affected:*" in comment
+    assert "### Task 1" in comment
+    assert "### Task 2" in comment
+    assert "### Task 3" in comment
 
-    def test_approval_instructions(self, complete_work_plan):
-        """Test that approval instructions are formatted correctly."""
-        formatter = WorkPlanCommentFormatter()
-        comment = formatter.format(complete_work_plan, "AOS-39")
+    assert "dispatcher/jira_client.py" in comment
+    assert "dispatcher/work_plan_formatter.py" in comment
+    assert "dispatcher/run.py" in comment
+    assert "state/state_store.py" in comment
 
-        # Check for code blocks
-        assert "{code}" in comment
-        assert "dispatcher approve AOS-39" in comment
-        assert "dispatcher reject AOS-39" in comment
+    assert "*Files likely affected:*" in comment
 
-    def test_convenience_function(self, complete_work_plan):
-        """Test the convenience function works the same as class method."""
-        formatter = WorkPlanCommentFormatter()
-        class_comment = formatter.format(complete_work_plan, "AOS-39")
 
-        function_comment = format_work_plan_comment(complete_work_plan, "AOS-39")
+def test_approval_instructions(complete_work_plan):
+    """Test that approval instructions are formatted correctly."""
+    comment = format_work_plan_comment(complete_work_plan, "AOS-39")
 
-        assert class_comment == function_comment
+    assert "{code}" in comment
+    assert "dispatcher approve AOS-39" in comment
+    assert "dispatcher reject AOS-39" in comment
 
-    def test_missing_optional_fields(self):
-        """Test handling of missing optional fields."""
-        incomplete_plan = {
-            "schema_version": "1.0",
-            "ticket_key": "AOS-42",
-            "summary": "Test",
-            "approach": "Test approach",
-            "tasks": [],
-            "risks": [],
-            "questions_for_reviewer": [],
-            "status": "pass",
-        }
 
-        formatter = WorkPlanCommentFormatter()
-        comment = formatter.format(incomplete_plan, "AOS-42")
+def test_missing_optional_fields():
+    """Test handling of missing optional fields."""
+    incomplete_plan = {
+        "schema_version": "1.0",
+        "ticket_key": "AOS-42",
+        "summary": "Test",
+        "approach": "Test approach",
+        "tasks": [],
+        "risks": [],
+        "questions_for_reviewer": [],
+        "status": "pass",
+    }
 
-        # Should not crash and should have placeholders
-        assert "AOS-42" in comment
-        assert "*No tasks defined*" in comment
-        assert "*No risks identified*" in comment
-        assert "*No questions*" in comment
+    comment = format_work_plan_comment(incomplete_plan, "AOS-42")
 
-    def test_special_characters_in_content(self):
-        """Test that special characters are preserved in formatting."""
-        plan_with_special_chars = {
-            "schema_version": "1.0",
-            "ticket_key": "AOS-43",
-            "summary": 'Task with <special> & "characters"',
-            "approach": "Handle edge cases: *asterisks*, _underscores_, [brackets]",
-            "tasks": [
-                {
-                    "id": 1,
-                    "description": "Fix bug in component: <Button />",
-                    "files_likely_affected": ["src/Button.tsx"],
-                }
-            ],
-            "risks": ['Risk with "quotes" and & ampersands'],
-            "questions_for_reviewer": ["What about $variables?"],
-            "status": "pass",
-        }
+    assert "AOS-42" in comment
+    assert "*No tasks defined*" in comment
+    assert "*No risks identified*" in comment
+    assert "*No questions*" in comment
 
-        formatter = WorkPlanCommentFormatter()
-        comment = formatter.format(plan_with_special_chars, "AOS-43")
 
-        # Verify special characters are preserved
-        assert "<special>" in comment
-        assert "&" in comment
-        assert '"characters"' in comment
-        assert "*asterisks*" in comment
-        assert "<Button />" in comment
+def test_special_characters_in_content():
+    """Test that special characters are preserved in formatting."""
+    plan_with_special_chars = {
+        "schema_version": "1.0",
+        "ticket_key": "AOS-43",
+        "summary": 'Task with <special> & "characters"',
+        "approach": "Handle edge cases: *asterisks*, _underscores_, [brackets]",
+        "tasks": [
+            {
+                "id": 1,
+                "description": "Fix bug in component: <Button />",
+                "files_likely_affected": ["src/Button.tsx"],
+            }
+        ],
+        "risks": ['Risk with "quotes" and & ampersands'],
+        "questions_for_reviewer": ["What about $variables?"],
+        "status": "pass",
+    }
+
+    comment = format_work_plan_comment(plan_with_special_chars, "AOS-43")
+
+    assert "<special>" in comment
+    assert "&" in comment
+    assert '"characters"' in comment
+    assert "*asterisks*" in comment
+    assert "<Button />" in comment
 
 
 class TestFormatExecutionSummaryComment:
@@ -258,32 +228,42 @@ class TestFormatExecutionSummaryComment:
         }
         comment = format_execution_summary_comment(summary)
 
-        assert "✅ Execution Summary" in comment
-        assert "feature/AOS-42+branch-push-and-pr" in comment
-        assert "SUCCESS" in comment
-        assert "dispatcher/run.py" in comment
-        assert "abc123def456" in comment
-        assert "https://github.com/org/repo/pull/99" in comment
+        assert "# ✅ Execution Summary" in comment
+        assert "*Branch:* {code}feature/AOS-42+branch-push-and-pr{code}" in comment
+        assert "*Status:* SUCCESS" in comment
+        assert "*Build:* pass" in comment
+        assert "*Tests:* pass" in comment
+        assert "*Files changed:*" in comment
+        assert "- {code}dispatcher/run.py{code}" in comment
+        assert "- {code}dispatcher/work_plan_formatter.py{code}" in comment
+        assert "*Commit:* {code}abc123def456{code}" in comment
+        assert (
+            "*Pull Request:* [https://github.com/org/repo/pull/99|https://github.com/org/repo/pull/99]"
+            in comment
+        )
 
-    def test_success_without_pr_url(self):
-        """Test that missing pr_url is handled gracefully (no PR line in output)."""
+    def test_partial_without_pr_url(self):
+        """Test formatting a partial execution summary without PR URL."""
         summary = {
             "ticket_key": "AOS-42",
             "branch": "feature/AOS-42+branch-push-and-pr",
             "build": "pass",
-            "tests": "pass",
-            "files_changed": [],
-            "commit_sha": "abc123",
+            "tests": "fail",
+            "files_changed": ["dispatcher/run.py"],
+            "commit_sha": "abcdef123456",
             "pr_url": "",
-            "status": "success",
+            "status": "partial",
         }
         comment = format_execution_summary_comment(summary)
 
-        assert "✅ Execution Summary" in comment
-        assert "Pull Request" not in comment
+        assert "# ⚠️ Execution Summary" in comment
+        assert "*Status:* PARTIAL" in comment
+        assert "*Build:* pass" in comment
+        assert "*Tests:* fail" in comment
+        assert "*Pull Request:*" not in comment
 
     def test_failed_with_error(self):
-        """Test formatting a failed execution summary."""
+        """Test formatting a failed execution summary with error text."""
         summary = {
             "ticket_key": "AOS-42",
             "branch": "",
@@ -293,28 +273,32 @@ class TestFormatExecutionSummaryComment:
             "commit_sha": "",
             "pr_url": "",
             "status": "failed",
-            "error": "Tests failed: 3 failures",
+            "error": "Goose command timed out",
         }
         comment = format_execution_summary_comment(summary)
 
-        assert "❌ Execution Summary" in comment
-        assert "FAILED" in comment
-        assert "Tests failed: 3 failures" in comment
+        assert "# ❌ Execution Summary" in comment
+        assert "*Status:* FAILED" in comment
+        assert "*Build:* fail" in comment
+        assert "*Tests:* skipped" in comment
+        assert "*Error:* Goose command timed out" in comment
+        assert "*Branch:*" not in comment
+        assert "*Commit:*" not in comment
+        assert "*Files changed:*" not in comment
 
-    def test_partial_status(self):
-        """Test formatting a partial (build pass, tests fail) execution summary."""
+    def test_unknown_status_fallback(self):
+        """Unknown status should use fallback emoji and uppercase status text."""
         summary = {
             "ticket_key": "AOS-42",
-            "branch": "feature/AOS-42+branch-push-and-pr",
+            "branch": "",
             "build": "pass",
-            "tests": "fail",
-            "files_changed": ["some/file.py"],
-            "commit_sha": "deadbeef",
-            "pr_url": "https://github.com/org/repo/pull/100",
-            "status": "partial",
+            "tests": "pass",
+            "files_changed": [],
+            "commit_sha": "",
+            "pr_url": "",
+            "status": "mystery",
         }
         comment = format_execution_summary_comment(summary)
 
-        assert "⚠️ Execution Summary" in comment
-        assert "PARTIAL" in comment
-        assert "https://github.com/org/repo/pull/100" in comment
+        assert "# ❓ Execution Summary" in comment
+        assert "*Status:* MYSTERY" in comment
