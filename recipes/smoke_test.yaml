@@ -1,0 +1,30 @@
+version: "1.0.0"
+title: "Guardrail Smoke Test"
+description: "Minimal smoke test recipe to validate prompt guardrails are not blocking tool execution"
+
+parameters:
+  - key: output_dir
+    input_type: string
+    requirement: required
+    description: "Directory where hello_world.txt should be created"
+
+extensions:
+  - type: builtin
+    name: developer
+    display_name: Developer
+    timeout: 120
+    bundled: true
+    description: "File system tool access for smoke-test file creation"
+
+settings:
+  temperature: 0.0
+  max_turns: 10
+
+prompt: |
+  You are running a smoke test to validate tool execution.
+
+  Create a file named `hello_world.txt` in this directory: {{ output_dir }}
+  Write exactly this content in the file:
+  hello world
+
+  Use developer file tools only and then verify the file exists.

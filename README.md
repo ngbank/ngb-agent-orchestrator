@@ -46,6 +46,7 @@ See [docs/architecture.md](docs/architecture.md) for a full sequence diagram and
 | `graph/` | LangGraph state machine — nodes, edges, approval interrupt |
 | `recipes/plan.yaml` | Goose recipe: JIRA ticket → WorkPlan JSON |
 | `recipes/execute.yaml` | Goose recipe: WorkPlan → feature branch + commit |
+| `recipes/smoke_test.yaml` | Goose smoke recipe used by guardrail hook checks |
 | `state/` | SQLite persistence — workflows, audit log, migrations |
 | `schemas/work_plan_v1.json` | JSON schema contract for WorkPlan documents |
 | `mcp_server/server.py` | MCP server: resolves JIRA project key → Git repo URL |
@@ -157,6 +158,12 @@ dispatcher --clear-db
 ```
 
 ---
+
+## Guardrail Smoke Test
+
+When staged changes include `recipes/plan.yaml`, `recipes/execute.yaml`, or `config/developer-rules.json`, pre-commit runs `scripts/guardrail_smoke_check.py`.
+The hook invokes Goose with `recipes/smoke_test.yaml` in a temporary directory and expects `hello_world.txt` to be created.
+If the file is not produced, the commit is blocked with a failure message indicating likely guardrail interference. For emergency-only bypass, use `git commit --no-verify`.
 
 ## Documentation
 
