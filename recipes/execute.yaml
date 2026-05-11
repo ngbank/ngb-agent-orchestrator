@@ -179,26 +179,10 @@ prompt: |
 
   After implementing all tasks:
 
-  ### Test Check
-  Run the test suite using `test_command` from Step 2:
-  ```
-  <test_command>
-  ```
-  Record:
-  - `"pass"` if all tests pass
-  - `"fail"` if any tests fail
-  - `"skipped"` if the test infrastructure is unavailable
-
-  Record `build` as `"pass"` if the test suite passed, `"fail"` otherwise.
-
-  ### Files Changed
-  Run `vcs.files_changed_command` from Step 2. Combine the results into a single
-  list of changed and new files.
-
-  ## Step 6: Commit Changes
-
-  Run the `lint_command` from Step 2. Some checks (e.g. auto-formatters) may rewrite files
-  and cause the first run to exit non-zero — that is expected:
+  ### Lint and Test Check
+  Run the `lint_command` from Step 2. This covers formatting, linting, and tests in one pass.
+  Some checks (e.g. auto-formatters) may rewrite files and cause the first run to exit
+  non-zero — that is expected:
   ```
   <lint_command>
   ```
@@ -211,6 +195,16 @@ prompt: |
   hook failures as "infrastructure limitations" or "acceptable" is not permitted. If you
   cannot fix the failures after a genuine attempt, write a failed execution summary and
   stop — do not commit.
+
+  Record from the lint output:
+  - `tests`: `"pass"` if the pytest hook passed, `"fail"` if it failed, `"skipped"` if unavailable
+  - `build`: `"pass"` if all lint checks passed, `"fail"` otherwise
+
+  ### Files Changed
+  Run `vcs.files_changed_command` from Step 2. Combine the results into a single
+  list of changed and new files.
+
+  ## Step 6: Commit Changes
 
   Stage all changes:
   ```
