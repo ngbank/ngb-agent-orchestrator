@@ -41,6 +41,7 @@ pre-commit install
 | `flake8` | Linting: unused imports, line length, undefined names |
 | `mypy` | Type checking (`--ignore-missing-imports`) |
 | `pytest` | Runs the full test suite |
+| `guardrail-smoke-check` | Runs `scripts/guardrail_smoke_check.py` when `recipes/plan.yaml`, `recipes/execute.yaml`, or `config/developer-rules.json` are staged |
 | `check-sql-migrations` | Blocks bare `DROP TABLE` without `IF EXISTS` in migration files |
 
 ### Running Hooks Manually
@@ -58,6 +59,12 @@ pre-commit run pytest --all-files
 
 ```bash
 git commit --no-verify -m "message"
+```
+
+For intentional prompt-injection guardrail updates, you can bypass only the smoke hook once:
+
+```bash
+SKIP=guardrail-smoke-check git commit -m "message"
 ```
 
 Use sparingly. The CI pipeline runs all checks independently.

@@ -51,6 +51,14 @@ repos:
         pass_filenames: false
         always_run: true
 
+  # ── Guardrail smoke check ────────────────────────────────────────────────
+      - id: guardrail-smoke-check
+        name: guardrail-smoke-check
+        entry: venv/bin/python scripts/guardrail_smoke_check.py
+        language: system
+        pass_filenames: false
+        files: ^(recipes/plan\.yaml|recipes/execute\.yaml|config/developer-rules\.json)$
+
   # ── SQL migration safety ──────────────────────────────────────────────────
       - id: check-sql-migrations
         name: check-sql-migrations

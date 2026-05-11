@@ -1,0 +1,46 @@
+version: 1
+name: Guardrail smoke test
+
+description: |
+  Smoke-check recipe used by pre-commit guardrail checks to verify prompt-injection
+  sensitive recipe/rule files are still safely consumable by the agent runtime.
+
+params:
+  changed_files:
+    type: string
+    required: false
+    default: ""
+
+steps:
+  - type: tool
+    tool: agent-harness.get_developer_rules
+
+  - type: shell
+    run: |
+      set -euo pipefail
+      TMPDIR="$(mktemp -d)"
+      export TMPDIR
+      echo "$TMPDIR" > /tmp/goose_guardrail_tmpdir
+
+      if [ -n "${changed_files}" ]; then
+        IFS=',' read -r -a files <<< "${changed_files}"
+        for f in "${files[@]}"; do
+          if [ -n "$f" ] && [ -f "$f" ]; then
+            cat "$f" >/dev/null
+          fi
+        done
+      fi
+
+      touch "$TMPDIR/hello_world.txt"
+
+  - type: shell
+    run: |
+      set -euo pipefail
+      TMPDIR="$(cat /tmp/goose_guardrail_tmpdir)"
+      if [ ! -f "$TMPDIR/hello_world.txt" ]; then
+        echo "Guardrail smoke recipe failed: expected hello_world.txt was not created after injection checks."
+        rm -rf "$TMPDIR"
+        exit 1
+      fi
+      rm -rf "$TMPDIR"
+      rm -f /tmp/goose_guardrail_tmpdir
