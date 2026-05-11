@@ -1,0 +1,12 @@
+{
+  "AOS": {
+    "platform": "python",
+    "setup_commands": [
+      "python -m venv venv",
+      ". venv/bin/activate && pip install -e . -q",
+      ". venv/bin/activate && pip install -r requirements-dev.txt -q"
+    ],
+    "test_command": ". venv/bin/activate && python -m pytest tests/ -q --tb=short",
+    "lint_command": ". venv/bin/activate && pre-commit run --all-files"
+  }
+}

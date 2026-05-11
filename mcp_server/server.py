@@ -4,6 +4,7 @@ MCP Server: Agent Harness
 Exposes tools:
   - get_repo_for_project: resolves a JIRA project key to its Git repository URL
   - get_developer_rules: returns the standard developer rules enforced on every execution
+  - get_project_setup: returns platform-specific setup commands for a project
 
 Run with:
     python -m mcp_server.server
@@ -11,6 +12,7 @@ Run with:
 Or register in your MCP client config (e.g. goose, claude desktop) pointing at this module.
 """
 
+import json
 import re
 from pathlib import Path
 
@@ -18,6 +20,7 @@ from mcp.server.fastmcp import FastMCP
 
 # Path to the mapping file, relative to this file's location (repo root/config/)
 _MAPPING_FILE = Path(__file__).parent.parent / "config" / "project-repo-mapping.md"
+_SETUP_FILE = Path(__file__).parent.parent / "config" / "project-setup.json"
 
 mcp = FastMCP(
     name="agent-harness",
@@ -25,7 +28,9 @@ mcp = FastMCP(
         "Use get_repo_for_project to resolve a JIRA project key to its Git repository URL"
         " before cloning. "
         "Use get_developer_rules to retrieve the mandatory developer rules that must be"
-        " followed during every execution session."
+        " followed during every execution session. "
+        "Use get_project_setup to retrieve platform-specific setup commands (install"
+        " dependencies, run tests, run linter) for a given JIRA project key."
     ),
 )
 
@@ -104,8 +109,7 @@ _DEVELOPER_RULES: list[dict[str, str]] = [
     {
         "id": "DR-003",
         "rule": (
-            "Feature branches must follow naming convention:"
-            " feature/{TICKET-ID}+{summary-slug}"
+            "Feature branches must follow naming convention:" " feature/{TICKET-ID}+{summary-slug}"
         ),
         "rationale": (
             "Consistent branch naming links code changes back to JIRA tickets and"
@@ -136,6 +140,41 @@ def get_developer_rules() -> list[dict[str, str]]:
         List of rule dicts that the agent must honour during execution.
     """
     return _DEVELOPER_RULES
+
+
+@mcp.tool()
+def get_project_setup(project_key: str) -> dict:
+    """
+    Return platform-specific setup commands for a given JIRA project key.
+
+    The returned dict contains:
+      - platform: the technology stack (e.g. "python", "node", "java")
+      - setup_commands: ordered list of shell commands to set up the environment
+      - test_command: shell command to run the full test suite
+      - lint_command: shell command to run the linter / pre-commit hooks
+
+    All commands include any required environment activation (e.g. venv) as a
+    prefix so they can be run directly without prior activation.
+
+    Args:
+        project_key: The JIRA project key, e.g. "AOS". Case-insensitive.
+
+    Returns:
+        Dict with platform, setup_commands, test_command, lint_command.
+
+    Raises:
+        ValueError: If no setup configuration is found for the project key.
+    """
+    key = project_key.strip().upper()
+    config = json.loads(_SETUP_FILE.read_text())
+    if key not in config:
+        known = ", ".join(sorted(config.keys())) or "none configured"
+        raise ValueError(
+            f"No setup configuration for project '{project_key}'. "
+            f"Known projects: {known}. "
+            f"Add an entry to config/project-setup.json."
+        )
+    return config[key]
 
 
 if __name__ == "__main__":

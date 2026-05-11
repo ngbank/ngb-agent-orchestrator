@@ -119,12 +119,25 @@ prompt: |
 
   ## Step 2: Confirm Working Directory and Set Up Environment
 
-  Run both commands in sequence — confirm working directory then set up the environment:
+  First confirm the working directory:
   ```
   pwd && git remote get-url origin
-  python -m venv venv && . venv/bin/activate && pip install -e . -q && pip install -r requirements-dev.txt -q
   ```
-  **All subsequent `python`, `pytest`, and `pre-commit` commands must be prefixed with `. venv/bin/activate &&`.**
+
+  Then call `get_project_setup` to retrieve the platform-specific setup commands for
+  this project:
+  ```
+  get_project_setup("{{ ticket_key }}")
+  ```
+
+  Run each command in `setup_commands` in order. These commands include venv
+  activation as a prefix — run them exactly as returned.
+
+  Store the `test_command` and `lint_command` values — use them verbatim in
+  Steps 5 and 6 instead of hardcoding any commands.
+
+  **All subsequent shell commands that require the venv must use the same
+  `. venv/bin/activate &&` prefix that the setup_commands use.**
 
   ## Step 3: Create Feature Branch
 
@@ -178,9 +191,9 @@ prompt: |
   Record: `"pass"` if no errors, `"fail"` if any error.
 
   ### Test Check
-  Run the test suite:
+  Run the test suite using the `test_command` returned by `get_project_setup` in Step 2:
   ```
-  . venv/bin/activate && python -m pytest tests/ -q --tb=short 2>&1
+  <test_command>
   ```
   Record:
   - `"pass"` if all tests pass
@@ -197,13 +210,14 @@ prompt: |
 
   ## Step 6: Commit Changes
 
-  Before staging, run pre-commit hooks (DR-001 — mandatory):
+  Before staging, run pre-commit hooks (DR-001 — mandatory) using the `lint_command`
+  returned by `get_project_setup` in Step 2:
   ```
-  . venv/bin/activate && pre-commit run --all-files
+  <lint_command>
   ```
   If pre-commit reports fixable issues it auto-fixed them — re-run once more to confirm clean:
   ```
-  . venv/bin/activate && pre-commit run --all-files
+  <lint_command>
   ```
   If pre-commit fails with un-fixable errors, fix them before continuing.
 
