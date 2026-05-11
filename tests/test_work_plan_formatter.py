@@ -87,29 +87,23 @@ def test_format_complete_plan(complete_work_plan):
     """Test formatting a complete WorkPlan with all sections."""
     comment = format_work_plan_comment(complete_work_plan, "AOS-39")
 
-    # Verify required sections are present
-    assert "# 🤖 Agent WorkPlan for AOS-39" in comment
-    assert "## 📋 Plan Summary" in comment
-    assert "## ✅ Task List" in comment
-    assert "## ⚠️ Risks" in comment
-    assert "## ❓ Questions for Reviewer" in comment
-    assert "## 🎯 Approval Instructions" in comment
+    assert "# Agent WorkPlan for AOS-39" in comment
+    assert "**Status:** PASS — *Post WorkPlan to Jira as formatted comment*" in comment
+    assert "Approach" in comment
+    assert "Tasks" in comment
+    assert "Risks" in comment
+    assert "Questions for Reviewer" in comment
+    assert "Approval" in comment
 
-    # Verify content
-    assert "Post WorkPlan to Jira as formatted comment" in comment
     assert "Implement ACLI integration" in comment
-    assert "Extend Jira client for comment posting" in comment
+    assert "**1. Extend Jira client for comment posting**" in comment
+    assert "Files: `dispatcher/jira_client.py`" in comment
     assert "ACLI might not be authenticated" in comment
     assert "Should we support updating existing comments?" in comment
 
-    # Verify approval instructions
-    assert "dispatcher approve AOS-39" in comment
-    assert "dispatcher reject AOS-39" in comment
+    assert "Approve: `dispatcher approve AOS-39`" in comment
+    assert "Reject: `dispatcher reject AOS-39`" in comment
 
-    # Verify status indicator
-    assert "✅ PASS" in comment
-
-    # Verify version marker
     assert "<!-- WorkPlan v1.0 -->" in comment
     assert "*WorkPlan Schema Version: 1.0*" in comment
 
@@ -119,19 +113,19 @@ def test_format_minimal_plan(minimal_work_plan):
     comment = format_work_plan_comment(minimal_work_plan, "AOS-40")
 
     # Verify required sections still present
-    assert "# 🤖 Agent WorkPlan for AOS-40" in comment
-    assert "## 📋 Plan Summary" in comment
-    assert "## ✅ Task List" in comment
-    assert "## ⚠️ Risks" in comment
-    assert "## ❓ Questions for Reviewer" in comment
-    assert "## 🎯 Approval Instructions" in comment
+    assert "# Agent WorkPlan for AOS-40" in comment
+    assert "Approach" in comment
+    assert "Tasks" in comment
+    assert "Risks" in comment
+    assert "Questions for Reviewer" in comment
+    assert "Approval" in comment
 
     # Verify empty section handling
-    assert "*No risks identified*" in comment
-    assert "*No questions*" in comment
+    assert "_No risks identified_" in comment
+    assert "_No questions_" in comment
 
     # Verify status indicator for concerns
-    assert "⚠️ CONCERNS" in comment
+    assert "CONCERNS" in comment
 
 
 def test_format_blocked_plan(blocked_work_plan):
@@ -139,7 +133,7 @@ def test_format_blocked_plan(blocked_work_plan):
     comment = format_work_plan_comment(blocked_work_plan, "AOS-41")
 
     # Verify blocked status indicator
-    assert "🚫 BLOCKED" in comment
+    assert "BLOCKED" in comment
 
     # Verify content
     assert "Cannot proceed" in comment
@@ -152,9 +146,9 @@ def test_task_formatting(complete_work_plan):
     comment = format_work_plan_comment(complete_work_plan, "AOS-39")
 
     # Verify task structure
-    assert "### Task 1" in comment
-    assert "### Task 2" in comment
-    assert "### Task 3" in comment
+    assert "**1. Extend Jira client for comment posting**" in comment
+    assert "**2. Create WorkPlan comment formatter**" in comment
+    assert "**3. Integrate into dispatcher**" in comment
 
     # Verify files listed
     assert "dispatcher/jira_client.py" in comment
@@ -163,7 +157,7 @@ def test_task_formatting(complete_work_plan):
     assert "state/state_store.py" in comment
 
     # Verify file formatting
-    assert "*Files likely affected:*" in comment
+    assert "Files:" in comment
 
 
 def test_approval_instructions(complete_work_plan):
@@ -171,7 +165,7 @@ def test_approval_instructions(complete_work_plan):
     comment = format_work_plan_comment(complete_work_plan, "AOS-39")
 
     # Check for code blocks
-    assert "{code}" in comment
+    assert "`" in comment
     assert "dispatcher approve AOS-39" in comment
     assert "dispatcher reject AOS-39" in comment
 
@@ -193,9 +187,9 @@ def test_missing_optional_fields():
 
     # Should not crash and should have placeholders
     assert "AOS-42" in comment
-    assert "*No tasks defined*" in comment
-    assert "*No risks identified*" in comment
-    assert "*No questions*" in comment
+    assert "_No tasks defined_" in comment
+    assert "_No risks identified_" in comment
+    assert "_No questions_" in comment
 
 
 def test_special_characters_in_content():
@@ -208,7 +202,7 @@ def test_special_characters_in_content():
         "tasks": [
             {
                 "id": 1,
-                "description": "Fix issue #123: parse {code} blocks",
+                "description": "Fix issue #123: parse ` blocks",
                 "files_likely_affected": ["file_with-dashes.py", "path/to/file.py"],
             }
         ],
@@ -224,7 +218,7 @@ def test_special_characters_in_content():
     assert "_underscores_" in comment
     assert "[brackets]" in comment
     assert "issue #123" in comment
-    assert "{code}" in comment
+    assert "`" in comment
 
 
 def test_no_tasks_handling():
@@ -242,8 +236,8 @@ def test_no_tasks_handling():
 
     comment = format_work_plan_comment(plan_no_tasks, "AOS-44")
 
-    assert "*No tasks defined*" in comment
-    assert "## ✅ Task List" in comment
+    assert "_No tasks defined_" in comment
+    assert "Tasks" in comment
 
 
 def test_unknown_status_handling():
@@ -262,7 +256,7 @@ def test_unknown_status_handling():
     comment = format_work_plan_comment(plan_unknown_status, "AOS-45")
 
     # Unknown status should get question mark emoji
-    assert "❓ IN_PROGRESS" in comment
+    assert "IN_PROGRESS" in comment
 
 
 def test_execution_summary_success():
