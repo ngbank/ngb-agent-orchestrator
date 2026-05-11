@@ -13,10 +13,5 @@
     "id": "DR-003",
     "rule": "Feature branches must follow naming convention: feature/{TICKET-ID}+{summary-slug}",
     "rationale": "Consistent branch naming links code changes back to JIRA tickets and makes history easy to navigate."
-  },
-  {
-    "id": "DR-004",
-    "rule": "Run the full test suite before committing",
-    "rationale": "Prevents regressions from being committed. Use the test_command from get_project_setup for the project-specific command."
   }
 ]

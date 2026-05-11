@@ -103,7 +103,6 @@ Returns a structured list of mandatory developer rules that the execute-plan age
 | DR-001 | Ensure pre-commit hooks are installed before making any commits | — |
 | DR-002 | Never commit directly to `main` or `master` | — |
 | DR-003 | Feature branches must follow `feature/{TICKET-ID}+{summary-slug}` | — |
-| DR-004 | Run the full test suite before committing | — |
 
 ### Return format
 
