@@ -55,7 +55,7 @@ def _goose_command(output_dir: str, changed_files: list[str]) -> list[str]:
 
 
 def run_smoke_test(changed_files: list[str]) -> tuple[bool, str]:
-    """Execute smoke test recipe and assert hello_world.txt exists."""
+    """Execute smoke test recipe and assert llm_guardrail_check.txt exists."""
     if shutil.which("goose") is None:
         return False, "goose CLI not found in PATH"
 
@@ -64,7 +64,7 @@ def run_smoke_test(changed_files: list[str]) -> tuple[bool, str]:
         cmd = _goose_command(temp_dir, changed_files)
         result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
-        hello_path = Path(temp_dir) / "hello_world.txt"
+        hello_path = Path(temp_dir) / "llm_guardrail_check.txt"
         if result.returncode != 0:
             output = "\n".join(
                 part for part in [result.stdout.strip(), result.stderr.strip()] if part
@@ -83,7 +83,7 @@ def run_smoke_test(changed_files: list[str]) -> tuple[bool, str]:
             )
             return (
                 False,
-                "Guardrail smoke test failed: hello_world.txt was not created.\n"
+                "Guardrail smoke test failed: llm_guardrail_check.txt was not created.\n"
                 "This may indicate a guardrail blocked file-writing instructions\n"
                 "in injected prompts.\n"
                 f"Command: {' '.join(shlex.quote(c) for c in cmd)}\n"

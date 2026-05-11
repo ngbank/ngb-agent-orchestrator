@@ -22,7 +22,7 @@ def test_run_smoke_test_missing_output_has_clear_message():
         ok, message = gsc.run_smoke_test(["recipes/plan.yaml"])
 
     assert not ok
-    assert "hello_world.txt was not created" in message
+    assert "llm_guardrail_check.txt was not created" in message
 
 
 def test_main_skips_when_no_watched_files(capsys):
