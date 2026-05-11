@@ -55,6 +55,43 @@ settings:
   temperature: 0.1
   max_turns: 100
 
+response:
+  json_schema:
+    type: object
+    required:
+      - ticket_key
+      - branch
+      - build
+      - tests
+      - files_changed
+      - commit_sha
+      - pr_url
+      - status
+    properties:
+      ticket_key:
+        type: string
+      branch:
+        type: string
+      build:
+        type: string
+        enum: [pass, fail]
+      tests:
+        type: string
+        enum: [pass, fail, skipped]
+      files_changed:
+        type: array
+        items:
+          type: string
+      commit_sha:
+        type: string
+      pr_url:
+        type: string
+      status:
+        type: string
+        enum: [success, partial, failed]
+      error:
+        type: string
+
 prompt: |
   You are a code execution agent that implements approved WorkPlans by making precise code changes to a repository.
 
@@ -247,33 +284,30 @@ prompt: |
   <Anything you had to guess at or work around>
   ```
 
-  ## Step 9: Write Execution Summary
+  ## Step 9: Write Summary File and Call final_output
 
-  Write a JSON file to {{ output_path }}:
+  First, write the execution summary JSON to `{{ output_path }}` so the dispatcher
+  can read it (use `write_file` — do not use a shell heredoc):
 
+  On success the content should be:
   ```json
   {
     "ticket_key": "{{ ticket_key }}",
     "branch": "feature/{{ ticket_key }}+{slug}",
-    "build": "pass|fail",
-    "tests": "pass|fail|skipped",
-    "files_changed": ["path/to/file1", "path/to/file2"],
+    "build": "pass",
+    "tests": "pass",
+    "files_changed": ["list of changed files"],
     "commit_sha": "<full sha>",
     "pr_url": "<GitHub PR URL or empty string>",
-    "status": "success|partial|failed"
+    "status": "success"
   }
   ```
 
-  Status rules:
-  - `"success"`: build=pass AND tests=pass
-  - `"partial"`: build=pass AND tests=fail
-  - `"failed"`: build=fail
-
-  If any unrecoverable error occurred during Steps 2–5, write:
+  If any unrecoverable error occurred:
   ```json
   {
     "ticket_key": "{{ ticket_key }}",
-    "branch": "<branch name if created, else empty string>",
+    "branch": "",
     "build": "fail",
     "tests": "skipped",
     "files_changed": [],
@@ -284,12 +318,9 @@ prompt: |
   }
   ```
 
-  Create parent directories if needed:
-  ```
-  mkdir -p $(dirname {{ output_path }})
-  ```
+  Status rules:
+  - `"success"`: build=pass AND tests=pass
+  - `"partial"`: build=pass AND tests=fail
+  - `"failed"`: build=fail
 
-  Verify the file was written:
-  ```
-  test -f {{ output_path }} && echo "Summary written"
-  ```
+  Then call the `final_output` tool with the **same values** to end the session.
