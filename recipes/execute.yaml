@@ -172,7 +172,7 @@ prompt: |
 
   **File editing rules — CRITICAL:**
   - Always use the `write_file` or `str_replace` tools from the developer extension to create or modify files
-  - NEVER write file content via shell heredocs (`cat << 'EOF'`, `python - << 'PY'`, etc.) — heredocs corrupt escape sequences (e.g. `\n`, `\t`), backslashes, quotes, and f-strings, causing syntax errors
+  - NEVER write file content via shell heredocs (`cat << 'EOF'`, etc.) — heredocs corrupt escape sequences (e.g. `\n`, `\t`), backslashes, and quotes, causing syntax errors
   - If you need to replace a specific section of a file, read the file first then use `str_replace` with exact context lines
 
   ## Step 5: Run Checks
@@ -197,15 +197,20 @@ prompt: |
 
   ## Step 6: Commit Changes
 
-  Ensure pre-commit hooks are installed (DR-001) using the `lint_command` from Step 2.
+  Run the `lint_command` from Step 2. Some checks (e.g. auto-formatters) may rewrite files
+  and cause the first run to exit non-zero — that is expected:
   ```
   <lint_command>
   ```
-  If pre-commit reports fixable issues it auto-fixed them — re-run once more to confirm clean:
+  If the first run modified files, re-run once to confirm all checks now pass:
   ```
   <lint_command>
   ```
-  If pre-commit fails with un-fixable errors, fix them before continuing.
+  **If the second run exits non-zero for any reason, do NOT proceed to commit.** Investigate
+  the specific errors, fix the code, and re-run until `lint_command` exits 0. Classifying
+  hook failures as "infrastructure limitations" or "acceptable" is not permitted. If you
+  cannot fix the failures after a genuine attempt, write a failed execution summary and
+  stop — do not commit.
 
   Stage all changes:
   ```
