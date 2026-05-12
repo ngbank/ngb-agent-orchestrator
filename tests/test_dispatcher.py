@@ -610,3 +610,133 @@ class TestHandleApproveFailedExecution:
         assert result.exit_code == 0
         workflow = state_store.get_workflow(workflow_id)
         assert workflow["status"] == WorkflowStatus.COMPLETED
+
+
+# ---------------------------------------------------------------------------
+# --clarify tests
+# ---------------------------------------------------------------------------
+
+
+class TestHandleClarify:
+    """Tests for the --clarify CLI handler."""
+
+    def _make_pending_clarification_workflow(self, ticket_key: str) -> str:
+        """Create a workflow stuck at PENDING_WORKPLAN_CLARIFICATION with questions."""
+        workflow_id = state_store.create_workflow(
+            ticket_key, status=WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION
+        )
+        state_store.update_work_plan(
+            workflow_id,
+            {
+                "schema_version": "1.0",
+                "ticket_key": ticket_key,
+                "summary": "Test",
+                "approach": "test",
+                "tasks": [{"id": 1, "description": "Do it", "files_likely_affected": []}],
+                "risks": ["Risk A"],
+                "questions_for_reviewer": ["What DB?", "Which API?"],
+                "status": "concerns",
+            },
+        )
+        return workflow_id
+
+    def test_clarify_requires_ticket_or_workflow_id(self, test_db, cli_runner):
+        result = cli_runner.invoke(run, ["--clarify"])
+        assert result.exit_code == 1
+        assert "--clarify requires --ticket or --workflow-id" in result.output
+
+    def test_clarify_no_pending_workflow(self, test_db, cli_runner):
+        result = cli_runner.invoke(run, ["--clarify", "--ticket", "TEST-123"])
+        assert result.exit_code == 1
+        assert "No workflow pending clarification" in result.output
+
+    def test_clarify_wrong_status_fails(self, test_db, cli_runner):
+        """--clarify on a PENDING_APPROVAL workflow should exit with error."""
+        workflow_id = state_store.create_workflow("TEST-123", status=WorkflowStatus.PENDING_APPROVAL)
+
+        result = cli_runner.invoke(run, ["--clarify", "--workflow-id", workflow_id])
+        assert result.exit_code == 1
+        assert "not pending clarification" in result.output
+
+    def test_clarify_workflow_not_found(self, test_db, cli_runner):
+        result = cli_runner.invoke(
+            run, ["--clarify", "--workflow-id", "00000000-0000-1000-8000-000000000000"]
+        )
+        assert result.exit_code == 1
+        assert "Workflow not found" in result.output
+
+    def test_clarify_resumes_graph_with_answers(self, test_db, cli_runner):
+        """--clarify feeds answers to the graph via Command(resume=...)."""
+        workflow_id = self._make_pending_clarification_workflow("TEST-123")
+
+        with patch("dispatcher.run.build_orchestrator") as mock_build:
+            mock_graph = Mock()
+            mock_graph.invoke.return_value = {
+                "workflow_id": workflow_id,
+                "ticket_key": "TEST-123",
+            }
+            mock_build.return_value = mock_graph
+
+            # Simulate user typing answers for 2 questions
+            result = cli_runner.invoke(
+                run,
+                ["--clarify", "--workflow-id", workflow_id],
+                input="SQLite\nREST\n",
+            )
+
+        assert result.exit_code == 0
+        # Verify graph was resumed with a Command containing answers
+        from langgraph.types import Command
+
+        call_args = mock_graph.invoke.call_args
+        command = call_args[0][0]
+        assert isinstance(command, Command)
+        answers = command.resume["answers"]
+        assert len(answers) == 2
+        assert answers[0]["question"] == "What DB?"
+        assert answers[0]["answer"] == "SQLite"
+        assert answers[1]["question"] == "Which API?"
+        assert answers[1]["answer"] == "REST"
+
+    def test_clarify_by_ticket_key(self, test_db, cli_runner):
+        """--clarify --ticket resolves the pending workflow automatically."""
+        self._make_pending_clarification_workflow("TEST-123")
+
+        with patch("dispatcher.run.build_orchestrator") as mock_build:
+            mock_graph = Mock()
+            mock_graph.invoke.return_value = {"workflow_id": "any", "ticket_key": "TEST-123"}
+            mock_build.return_value = mock_graph
+
+            result = cli_runner.invoke(
+                run,
+                ["--clarify", "--ticket", "TEST-123"],
+                input="SQLite\nREST\n",
+            )
+
+        assert result.exit_code == 0
+        mock_graph.invoke.assert_called_once()
+
+    def test_clarify_shows_approval_instructions_after_success(self, test_db, cli_runner):
+        """After the clarification loop posts a new plan, show approval instructions."""
+        workflow_id = self._make_pending_clarification_workflow("TEST-123")
+
+        def _invoke_and_transition(command, config):
+            # Simulate the graph transitioning to PENDING_APPROVAL during invocation
+            state_store.update_status(
+                workflow_id, WorkflowStatus.PENDING_APPROVAL, actor="test", reason="plan done"
+            )
+            return {"workflow_id": workflow_id, "ticket_key": "TEST-123"}
+
+        with patch("dispatcher.run.build_orchestrator") as mock_build:
+            mock_graph = Mock()
+            mock_graph.invoke.side_effect = _invoke_and_transition
+            mock_build.return_value = mock_graph
+
+            result = cli_runner.invoke(
+                run,
+                ["--clarify", "--workflow-id", workflow_id],
+                input="SQLite\nREST\n",
+            )
+
+        assert result.exit_code == 0
+        assert "--approve" in result.output

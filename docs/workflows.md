@@ -82,6 +82,44 @@ python -m dispatcher.run --reject  --workflow-id b04fd4e0-... --reason "needs mo
 
 ---
 
+## WorkPlan Clarification Loop
+
+When the plan recipe generates a WorkPlan with `status: "concerns"` or `"blocked"`, or with non-empty `questions_for_reviewer`, the workflow pauses instead of failing. The workflow status transitions to `pending_workplan_clarification`.
+
+The dispatcher prints the questions and risks to the CLI, then suspends:
+
+```
+⏸️  WorkPlan needs clarification (round 1/3)
+   Status: concerns
+   Workflow ID: b04fd4e0-...
+
+   Risks identified:
+     1. External dependency on third-party API
+
+   Questions for reviewer:
+     1. Which database engine should we use?
+     2. Should this be async or synchronous?
+
+   To clarify:  dispatcher --clarify --ticket AOS-36
+```
+
+To provide answers and regenerate the plan:
+
+```bash
+dispatcher --clarify --ticket AOS-36
+
+# or by workflow ID
+dispatcher --clarify --workflow-id b04fd4e0-1edc-4f95-8489-da914470b58d
+```
+
+The CLI will prompt for an answer to each question interactively. After all answers are collected, the graph resumes and the plan recipe re-runs with the answers as context.
+
+- If the regenerated plan passes, the workflow proceeds to the approval gate as normal.
+- If the regenerated plan still has concerns, the workflow pauses again for another round.
+- A maximum of **3 clarification rounds** is enforced. If exceeded, the workflow fails with an error — start a fresh workflow with a clearer ticket description.
+
+
+
 ## Workflow Lifecycle
 
 ```
@@ -90,6 +128,9 @@ pending
   ▼
 in_progress  ──────────────────────────────────────────►  failed
   │
+  ▼ (plan status: concerns/blocked/questions?)
+pending_workplan_clarification  ──── (on clarify) ────►  in_progress (loop)
+  │ (plan OK after clarification)
   ▼
 pending_approval  ──── rejected ──────────────────────►  rejected
   │
@@ -104,6 +145,7 @@ completed  (or failed if execute_plan errors)
 |---|---|
 | `pending` | Workflow created, not yet started |
 | `in_progress` | Planning phase executing |
+| `pending_workplan_clarification` | WorkPlan has questions/concerns; waiting for reviewer answers |
 | `pending_approval` | WorkPlan posted; waiting for developer decision |
 | `approved` | Developer approved; execute phase starting |
 | `rejected` | Developer rejected; no code changes made |

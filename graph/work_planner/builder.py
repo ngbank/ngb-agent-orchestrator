@@ -17,6 +17,9 @@ Graph topology:
         ↓ (error or empty work_plan_data → error_handler)
     validate_plan
         ↓ (error → error_handler)
+        ↓ (concerns/blocked/questions → await_workplan_clarification)
+    await_workplan_clarification [interrupt()]
+        ↓ (on resume → generate_plan)  ← loop
     store_plan
         ↓
     post_to_jira
@@ -33,12 +36,14 @@ from graph.work_planner.edges import (
     route_after_generate_plan,
     route_after_validate_input,
     route_after_validate_plan,
+    route_after_workplan_clarification,
 )
 from graph.work_planner.nodes.check_duplicate import check_duplicate
 from graph.work_planner.nodes.create_workflow_record import create_workflow_record
 from graph.work_planner.nodes.error_handler import error_handler
 from graph.work_planner.nodes.fetch_ticket import fetch_ticket
 from graph.work_planner.nodes.generate_plan import generate_plan
+from graph.work_planner.nodes.await_workplan_clarification import await_workplan_clarification
 from graph.work_planner.nodes.post_to_jira import post_to_jira
 from graph.work_planner.nodes.store_plan import store_plan
 from graph.work_planner.nodes.validate_input import validate_input
@@ -66,6 +71,7 @@ def build_work_planner(checkpointer=None):
     builder.add_node("create_workflow_record", create_workflow_record)
     builder.add_node("generate_plan", generate_plan)
     builder.add_node("validate_plan", validate_plan)
+    builder.add_node("await_workplan_clarification", await_workplan_clarification)
     builder.add_node("store_plan", store_plan)
     builder.add_node("post_to_jira", post_to_jira)
     builder.add_node("error_handler", error_handler)
@@ -101,7 +107,16 @@ def build_work_planner(checkpointer=None):
     builder.add_conditional_edges(
         "validate_plan",
         route_after_validate_plan,
-        {"store_plan": "store_plan", "error_handler": "error_handler"},
+        {
+            "store_plan": "store_plan",
+            "await_workplan_clarification": "await_workplan_clarification",
+            "error_handler": "error_handler",
+        },
+    )
+    builder.add_conditional_edges(
+        "await_workplan_clarification",
+        route_after_workplan_clarification,
+        {"generate_plan": "generate_plan", "error_handler": "error_handler"},
     )
     builder.add_edge("store_plan", "post_to_jira")
     builder.add_edge("post_to_jira", END)

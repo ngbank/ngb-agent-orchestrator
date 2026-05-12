@@ -71,6 +71,27 @@ sequenceDiagram
         SQLite-->>Dispatcher: ✅ Stored
     end
 
+    rect rgb(255, 245, 210)
+        Note over User,Dispatcher: Step 6b: WorkPlan Clarification Loop (AOS-73)
+        alt WorkPlan status is 'concerns'/'blocked' or has questions_for_reviewer
+            Dispatcher->>SQLite: update_status(PENDING_WORKPLAN_CLARIFICATION)
+            SQLite-->>Dispatcher: ✅ Status updated
+            Note over Dispatcher: Graph suspended at await_workplan_clarification<br/>Prints questions/risks to CLI<br/>Status → PENDING_WORKPLAN_CLARIFICATION in SQLite
+            User->>Dispatcher: dispatcher --clarify --ticket {ticket_key}
+            Dispatcher->>User: Prompt for answers to each question
+            User->>Dispatcher: Provide answers interactively
+            Dispatcher->>SQLite: update_status(IN_PROGRESS)
+            SQLite-->>Dispatcher: ✅ Status updated
+            Dispatcher->>Goose: Re-run plan recipe with<br/>clarifications_path param
+            Goose->>Recipe: Initialize recipe (with prior Q&A context)
+            Note over Recipe,LLM: Regenerate plan incorporating answers<br/>(up to 3 rounds max)
+            Recipe->>LLM: Generate revised WorkPlan JSON<br/>(incorporating answers)
+            LLM-->>Recipe: Revised WorkPlan JSON
+            Recipe->>Dispatcher: Revised WorkPlan
+            Note over Dispatcher: Loop back to validate_plan<br/>If still needs clarification → repeat
+        end
+    end
+
     rect rgb(245, 235, 255)
         Note over Dispatcher,ACLI: Step 7: Post to Jira (AOS-39)
         Dispatcher->>Formatter: format_work_plan_comment()<br/>(WorkPlan, ticket_key)

@@ -10,6 +10,7 @@ from graph.work_planner.edges import (
     route_after_generate_plan,
     route_after_validate_input,
     route_after_validate_plan,
+    route_after_workplan_clarification,
 )
 
 # ---------------------------------------------------------------------------
@@ -81,7 +82,7 @@ def test_route_validate_plan_with_error():
     state = {
         "ticket_key": "AOS-50",
         "dry_run": False,
-        "error": "WorkPlan status is 'blocked'",
+        "error": "Schema validation failed",
     }
     assert route_after_validate_plan(state) == "error_handler"
 
@@ -90,6 +91,79 @@ def test_route_validate_plan_none_error():
     """Explicit None error must not trigger the error path."""
     state = {"ticket_key": "AOS-50", "dry_run": False, "error": None}
     assert route_after_validate_plan(state) == "store_plan"
+
+
+def test_route_validate_plan_status_concerns_routes_to_clarification():
+    """'concerns' status must route to await_workplan_clarification."""
+    state = {
+        "ticket_key": "AOS-50",
+        "work_plan_data": {"status": "concerns", "questions_for_reviewer": []},
+    }
+    assert route_after_validate_plan(state) == "await_workplan_clarification"
+
+
+def test_route_validate_plan_status_blocked_routes_to_clarification():
+    """'blocked' status must route to await_workplan_clarification."""
+    state = {
+        "ticket_key": "AOS-50",
+        "work_plan_data": {"status": "blocked", "questions_for_reviewer": []},
+    }
+    assert route_after_validate_plan(state) == "await_workplan_clarification"
+
+
+def test_route_validate_plan_questions_present_routes_to_clarification():
+    """Non-empty questions_for_reviewer must route to await_workplan_clarification."""
+    state = {
+        "ticket_key": "AOS-50",
+        "work_plan_data": {
+            "status": "pass",
+            "questions_for_reviewer": ["What database should we use?"],
+        },
+    }
+    assert route_after_validate_plan(state) == "await_workplan_clarification"
+
+
+def test_route_validate_plan_pass_with_no_questions_routes_to_store():
+    """'pass' status with empty questions must route to store_plan."""
+    state = {
+        "ticket_key": "AOS-50",
+        "work_plan_data": {"status": "pass", "questions_for_reviewer": []},
+    }
+    assert route_after_validate_plan(state) == "store_plan"
+
+
+def test_route_validate_plan_error_takes_priority_over_clarification():
+    """An error must route to error_handler even if plan needs clarification."""
+    state = {
+        "ticket_key": "AOS-50",
+        "error": "Schema error",
+        "work_plan_data": {"status": "blocked", "questions_for_reviewer": ["Q?"]},
+    }
+    assert route_after_validate_plan(state) == "error_handler"
+
+
+# ---------------------------------------------------------------------------
+# route_after_workplan_clarification
+# ---------------------------------------------------------------------------
+
+
+def test_route_workplan_clarification_no_error():
+    state = {"ticket_key": "AOS-50", "clarifications": [{"round": 1, "answers": []}]}
+    assert route_after_workplan_clarification(state) == "generate_plan"
+
+
+def test_route_workplan_clarification_with_error():
+    state = {
+        "ticket_key": "AOS-50",
+        "error": "Maximum clarification rounds exceeded.",
+    }
+    assert route_after_workplan_clarification(state) == "error_handler"
+
+
+def test_route_workplan_clarification_none_error():
+    """Explicit None error must not trigger the error path."""
+    state = {"ticket_key": "AOS-50", "error": None}
+    assert route_after_workplan_clarification(state) == "generate_plan"
 
 
 # ---------------------------------------------------------------------------

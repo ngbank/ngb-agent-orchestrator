@@ -19,10 +19,12 @@ def validate_plan(state: WorkPlannerState) -> dict:
         click.echo(f"❌ {error}", err=True)
         return {"error": error}
 
-    if work_plan.status == "blocked":
-        error = "WorkPlan status is 'blocked' — workflow cannot proceed."
-        click.echo(f"❌ {error}", err=True)
-        return {"error": error}
+    status = work_plan.status
+    questions = work_plan_data.get("questions_for_reviewer", [])
+    needs_clarification = status in ("concerns", "blocked") or bool(questions)
 
-    click.echo(f"✅ WorkPlan validated (status: {work_plan.status})")
+    if needs_clarification:
+        click.echo(f"⚠️  WorkPlan validated but needs clarification (status: {status})")
+    else:
+        click.echo(f"✅ WorkPlan validated (status: {status})")
     return {}

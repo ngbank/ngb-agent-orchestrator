@@ -46,7 +46,20 @@ def route_after_generate_plan(
 
 def route_after_validate_plan(
     state: WorkPlannerState,
-) -> Literal["store_plan", "error_handler"]:
+) -> Literal["store_plan", "await_workplan_clarification", "error_handler"]:
     if state.get("error"):
         return "error_handler"
+    work_plan_data = state.get("work_plan_data") or {}
+    status = work_plan_data.get("status", "")
+    questions = work_plan_data.get("questions_for_reviewer", [])
+    if status in ("concerns", "blocked") or bool(questions):
+        return "await_workplan_clarification"
     return "store_plan"
+
+
+def route_after_workplan_clarification(
+    state: WorkPlannerState,
+) -> Literal["generate_plan", "error_handler"]:
+    if state.get("error"):
+        return "error_handler"
+    return "generate_plan"
