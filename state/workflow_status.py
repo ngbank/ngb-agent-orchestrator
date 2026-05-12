@@ -6,6 +6,7 @@ from enum import Enum
 class WorkflowStatus(Enum):
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
+    PENDING_WORKPLAN_CLARIFICATION = "pending_workplan_clarification"
     PENDING_APPROVAL = "pending_approval"
     APPROVED = "approved"
     REJECTED = "rejected"
@@ -18,6 +19,7 @@ class WorkflowStatus(Enum):
         return self in (
             WorkflowStatus.PENDING,
             WorkflowStatus.IN_PROGRESS,
+            WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION,
             WorkflowStatus.PENDING_APPROVAL,
             WorkflowStatus.APPROVED,
         )

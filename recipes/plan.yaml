@@ -13,6 +13,11 @@ parameters:
     requirement: required
     description: "Path where the WorkPlan JSON will be written (e.g., workplan.json)"
 
+  - key: clarifications_path
+    input_type: string
+    requirement: optional
+    description: "Path to a JSON file containing previous clarification rounds from the reviewer. Each round has questions, risks, and the reviewer's answers."
+
 extensions:
   - type: builtin
     name: developer
@@ -87,7 +92,31 @@ prompt: |
   Generate a valid WorkPlan JSON for the JIRA ticket: {{ ticket_key }}
   Output file: {{ output_path }}
 
-  ## Step 1: Fetch JIRA Ticket Data
+  ## Step 1: Check for Previous Clarifications
+
+  {% if clarifications_path %}
+  **IMPORTANT**: This is a re-generation after the reviewer provided clarifications.
+  Read the clarifications file first:
+  ```
+  cat {{ clarifications_path }}
+  ```
+
+  The file contains a JSON array of clarification rounds. Each round has:
+  - `round`: The round number
+  - `questions`: Questions that were asked in the previous plan
+  - `risks`: Risks identified in the previous plan
+  - `answers`: The reviewer's answers (array of `{question, answer}` objects)
+
+  You MUST incorporate the reviewer's answers into your new plan:
+  - Adjust the approach based on the answers
+  - Update tasks to reflect clarified requirements
+  - Remove questions that have been answered from `questions_for_reviewer`
+  - Only add NEW questions if the answers reveal additional ambiguity
+  - Update `status` to "pass" if all concerns have been addressed
+  - Keep `risks` that are still relevant; remove those addressed by answers
+  {% endif %}
+
+  ## Step 2: Fetch JIRA Ticket Data
 
   Use the `acli jira workitem view` command to fetch ticket details:
   ```
@@ -103,7 +132,7 @@ prompt: |
   - Priority/Estimate: If available
   - Acceptance Criteria: If available in description
 
-  ## Step 2: Analyze Repository Structure
+  ## Step 3: Analyze Repository Structure
 
   Examine the current workspace repository (ngb-agent-orchestrator) to identify affected files.
 
@@ -124,7 +153,7 @@ prompt: |
 
   Use shell commands (ls, cat, head) or the tree tool for exploration.
 
-  ## Step 3: Generate WorkPlan JSON
+  ## Step 4: Generate WorkPlan JSON
 
   Based on the ticket and repository analysis, create a WorkPlan JSON document with these fields:
 
@@ -164,7 +193,7 @@ prompt: |
   - All string fields must not be empty (minLength: 1)
   - Each task MUST have id (integer >= 1), description (string), and files_likely_affected (array)
 
-  ## Step 4: Validate the JSON
+  ## Step 5: Validate the JSON
 
   Before writing, validate using Python:
   ```python
@@ -203,7 +232,7 @@ prompt: |
   - "Additional property 'extra_field'" → Remove the extra field
   - "Empty string" → Add actual content
 
-  ## Step 5: Write to File and Call final_output
+  ## Step 6: Write to File and Call final_output
 
   Once validation passes:
   1. Create parent directories if needed: `mkdir -p $(dirname {{ output_path }})`

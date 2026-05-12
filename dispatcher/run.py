@@ -81,6 +81,12 @@ from state.workflow_status import WorkflowStatus  # noqa: E402
     help="Cancel any active workflow (use with --ticket or --workflow-id)",
 )
 @click.option(
+    "--clarify",
+    "do_clarify",
+    is_flag=True,
+    help="Answer WorkPlan clarification questions (use with --ticket or --workflow-id)",
+)
+@click.option(
     "--list",
     "do_list",
     is_flag=True,
@@ -122,6 +128,7 @@ def run(
     do_approve: bool,
     do_reject: bool,
     do_cancel: bool,
+    do_clarify: bool,
     do_list: bool,
     do_history: bool,
     do_clear_db: bool,
@@ -157,6 +164,12 @@ def run(
 
         # Cancel an active workflow by workflow ID
         dispatcher --cancel --workflow-id <uuid>
+
+        # Answer WorkPlan clarification questions by ticket key
+        dispatcher --clarify --ticket AOS-36
+
+        # Answer WorkPlan clarification questions by workflow ID
+        dispatcher --clarify --workflow-id <uuid>
 
         # List all workflows
         dispatcher --list
@@ -201,6 +214,13 @@ def run(
             click.echo("❌ --cancel requires --ticket or --workflow-id", err=True)
             sys.exit(1)
         _handle_cancel(ticket, reason, workflow_id)
+        return
+
+    if do_clarify:
+        if not ticket and not workflow_id:
+            click.echo("❌ --clarify requires --ticket or --workflow-id", err=True)
+            sys.exit(1)
+        _handle_clarify(ticket, workflow_id)
         return
 
     if do_approve:
@@ -441,6 +461,7 @@ def _handle_clear_db() -> None:
 _STATUS_DISPLAY = {
     "pending": ("🕐", "pending"),
     "in_progress": ("⚙️ ", "in_progress"),
+    "pending_workplan_clarification": ("💬", "pending_workplan_clarification"),
     "pending_approval": ("⏸️ ", "pending_approval"),
     "approved": ("✅", "approved"),
     "rejected": ("🚫", "rejected"),
@@ -579,6 +600,115 @@ def _handle_cancel(
             reason=reason or "Cancelled by user",
         )
         click.echo(f"🚫 Workflow {wf['id']} cancelled" + (f": {reason}" if reason else ""))
+
+
+def _handle_clarify(ticket_key: Optional[str], workflow_id: Optional[str] = None) -> None:
+    """Interactively collect clarification answers and resume a suspended WorkPlan workflow."""
+    if workflow_id:
+        resolved_id = workflow_id
+        workflow = get_workflow(resolved_id)
+        if workflow is None:
+            click.echo(f"❌ Workflow not found: {resolved_id}", err=True)
+            sys.exit(1)
+    else:
+        pending = [
+            w
+            for w in get_workflow_by_ticket(ticket_key)
+            if w["status"] == WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION
+        ]
+        if not pending:
+            click.echo(
+                f"❌ No workflow pending clarification found for ticket: {ticket_key}", err=True
+            )
+            sys.exit(1)
+        workflow = pending[0]
+        resolved_id = workflow["id"]
+
+    if workflow["status"] != WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION:
+        status_val = workflow["status"].value
+        click.echo(
+            f"❌ Workflow {resolved_id} is not pending clarification (status: {status_val})",
+            err=True,
+        )
+        sys.exit(1)
+
+    work_plan = workflow.get("work_plan") or {}
+    questions = work_plan.get("questions_for_reviewer", [])
+    risks = work_plan.get("risks", [])
+
+    if not questions and not risks:
+        click.echo(
+            "⚠️  No questions or risks found in the stored WorkPlan for this workflow.", err=True
+        )
+        click.echo(
+            "   The workflow may have been interrupted before the plan was stored.", err=True
+        )
+        sys.exit(1)
+
+    click.echo("")
+    click.echo(f"📋 WorkPlan clarification for workflow: {resolved_id}")
+    click.echo(f"   Ticket: {workflow.get('ticket_key', ticket_key)}")
+    click.echo("")
+
+    if risks:
+        click.echo("   Risks identified:")
+        for i, risk in enumerate(risks, 1):
+            click.echo(f"     {i}. {risk}")
+        click.echo("")
+
+    answers = []
+    if questions:
+        click.echo("   Please answer the following questions:")
+        click.echo("")
+        for question in questions:
+            answer = click.prompt(f"   Q: {question}\n   A")
+            answers.append({"question": question, "answer": answer})
+    else:
+        # Only risks present — ask for a general response
+        answer = click.prompt("   How should the planner proceed given the risks above?\n   A")
+        answers.append({"question": "How should the planner proceed?", "answer": answer})
+
+    thread_config = {"configurable": {"thread_id": resolved_id}}
+
+    try:
+        graph = build_orchestrator()
+        final_state = graph.invoke(
+            Command(resume={"answers": answers}),
+            config=thread_config,
+        )
+
+        if final_state.get("error"):
+            click.echo(f"❌ Workflow error: {final_state['error']}", err=True)
+            sys.exit(1)
+
+        # Check if the graph has suspended again for another clarification round
+        wf_id = final_state.get("workflow_id", resolved_id)
+        refreshed = get_workflow(wf_id)
+        if refreshed and refreshed["status"] == WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION:
+            click.echo("")
+            click.echo("⏸️  The plan still needs clarification.")
+            click.echo(f"   Run:  dispatcher --clarify --ticket {workflow.get('ticket_key', ticket_key)}")
+            return
+
+        if refreshed and refreshed["status"] == WorkflowStatus.PENDING_APPROVAL:
+            click.echo("")
+            click.echo("✅ Plan regenerated and posted to JIRA.")
+            click.echo(f"   To approve:  dispatcher --approve --ticket {workflow.get('ticket_key', ticket_key)}")
+            click.echo(f"   To reject:   dispatcher --reject  --ticket {workflow.get('ticket_key', ticket_key)} --reason \"...\"")
+
+    except GraphInterrupt:
+        # Another clarification round is needed — await_workplan_clarification suspended again.
+        refreshed = get_workflow(resolved_id)
+        if refreshed and refreshed["status"] == WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION:
+            click.echo("")
+            click.echo("⏸️  The plan still needs clarification.")
+            click.echo(f"   Run:  dispatcher --clarify --ticket {workflow.get('ticket_key', ticket_key)}")
+        else:
+            click.echo("⏸️  Workflow suspended — check status with:  dispatcher --list")
+
+    except Exception as e:
+        click.echo(f"❌ Error resuming workflow: {e}", err=True)
+        sys.exit(1)
 
 
 def _handle_reject(ticket_key: str, reason: str, workflow_id: Optional[str] = None) -> None:

@@ -22,6 +22,7 @@ def generate_plan(state: WorkPlannerState) -> dict:
     """
     ticket_key = state.get("ticket_key", "")
     workflow_id = state.get("workflow_id") or ticket_key
+    clarifications = state.get("clarifications") or []
 
     summary_fd, output_path = tempfile.mkstemp(
         suffix="_workplan.json",
@@ -29,24 +30,43 @@ def generate_plan(state: WorkPlannerState) -> dict:
     )
     os.close(summary_fd)
 
+    # Write clarifications to a temp file so the recipe can read them
+    clarifications_path = None
+    if clarifications:
+        clar_fd, clarifications_path = tempfile.mkstemp(
+            suffix="_clarifications.json",
+            prefix=f"{ticket_key}_",
+        )
+        os.close(clar_fd)
+        with open(clarifications_path, "w") as f:
+            json.dump(clarifications, f, indent=2)
+
     try:
         lp = log_path(workflow_id, "plan")
-        click.echo(f"🪿 Running plan recipe for {ticket_key}... (log: {lp})")
-        with open(lp, "w") as log_file:
-            result = run_and_tee(
-                [
-                    "goose",
-                    "run",
-                    "--recipe",
-                    "recipes/plan.yaml",
-                    "--params",
-                    f"ticket_key={ticket_key}",
-                    "--params",
-                    f"output_path={output_path}",
-                ],
-                log_file,
-                env=goose_env(),
+        round_num = len(clarifications)
+        if round_num:
+            click.echo(
+                f"🪿 Re-running plan recipe for {ticket_key} "
+                f"with {round_num} clarification round(s)... (log: {lp})"
             )
+        else:
+            click.echo(f"🪿 Running plan recipe for {ticket_key}... (log: {lp})")
+
+        cmd = [
+            "goose",
+            "run",
+            "--recipe",
+            "recipes/plan.yaml",
+            "--params",
+            f"ticket_key={ticket_key}",
+            "--params",
+            f"output_path={output_path}",
+        ]
+        if clarifications_path:
+            cmd.extend(["--params", f"clarifications_path={clarifications_path}"])
+
+        with open(lp, "w") as log_file:
+            result = run_and_tee(cmd, log_file, env=goose_env())
 
         if result.returncode != 0:
             return {"error": f"Goose plan recipe exited with code {result.returncode}"}
@@ -68,3 +88,5 @@ def generate_plan(state: WorkPlannerState) -> dict:
     finally:
         if os.path.exists(output_path):
             os.unlink(output_path)
+        if clarifications_path and os.path.exists(clarifications_path):
+            os.unlink(clarifications_path)
