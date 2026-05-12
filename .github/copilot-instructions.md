@@ -88,7 +88,7 @@ Example: `docs(AOS-39): Update plan-recipe-flow.mmd and workflows.md with WorkPl
 
 Complete the following steps in order:
 
-1. **Update JIRA ticket**: Transition the ticket to "Closed" status
+1. **Update JIRA ticket**: Transition the ticket to "Done" status
 2. **Switch to main branch**: `git checkout main`
 3. **Pull latest changes**: `git pull origin main`
 4. **Delete the local feature branch**: `git branch -d feature/{jira_id}+{summary}`
@@ -115,6 +115,7 @@ acli jira workitem transition --key "TICKET-ID" --status "In Progress" -y
 # - Commit documentation with code changes
 
 # After PR is merged:
+acli jira workitem transition --key "TICKET-ID" --status "Done" -y
 git checkout main
 git pull origin main
 git branch -d feature/TICKET-ID+brief-summary
