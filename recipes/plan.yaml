@@ -25,6 +25,60 @@ settings:
   temperature: 0.3
   max_turns: 50
 
+response:
+  json_schema:
+    type: object
+    required:
+      - schema_version
+      - ticket_key
+      - summary
+      - approach
+      - tasks
+      - risks
+      - questions_for_reviewer
+      - status
+    properties:
+      schema_version:
+        type: string
+        enum: ["1.0"]
+      ticket_key:
+        type: string
+        pattern: "^[A-Z][A-Z0-9]+-[0-9]+$"
+      summary:
+        type: string
+        minLength: 1
+      approach:
+        type: string
+        minLength: 1
+      tasks:
+        type: array
+        minItems: 1
+        items:
+          type: object
+          required: ["id", "description", "files_likely_affected"]
+          properties:
+            id:
+              type: integer
+              minimum: 1
+            description:
+              type: string
+              minLength: 1
+            files_likely_affected:
+              type: array
+              items:
+                type: string
+      risks:
+        type: array
+        items:
+          type: string
+      questions_for_reviewer:
+        type: array
+        items:
+          type: string
+      status:
+        type: string
+        enum: ["pass", "concerns", "blocked"]
+
 prompt: |
   You are a technical planner agent that generates WorkPlan JSON documents from JIRA tickets.
 
@@ -149,27 +203,13 @@ prompt: |
   - "Additional property 'extra_field'" → Remove the extra field
   - "Empty string" → Add actual content
 
-  ## Step 5: Write to File
-
-  **IMPORTANT**: You MUST write the JSON to `{{ output_path }}` using a shell command.
-  Do NOT use any `final_output` or structured response tool — the dispatcher reads the file directly.
+  ## Step 5: Write to File and Call final_output
 
   Once validation passes:
   1. Create parent directories if needed: `mkdir -p $(dirname {{ output_path }})`
-  2. Write the validated JSON using a shell command, e.g.:
-     ```
-     cat > {{ output_path }} << 'WORKPLAN_EOF'
-     { ... validated json ... }
-     WORKPLAN_EOF
-     ```
+  2. Write the validated JSON to `{{ output_path }}` using the `write_file` tool — do NOT use a shell heredoc (`cat << 'EOF'`) as heredocs corrupt escape sequences (`\n`, `\t`), backslashes, and quotes, causing JSON parse errors
   3. Verify the file was written: `test -f {{ output_path }} && echo "✅ File written" || echo "❌ File missing"`
-
-  ## Final Confirmation
-
-  After successfully writing the file, confirm with:
-  "✅ WorkPlan JSON successfully generated and written to {{ output_path }}"
-
-  **Do NOT call final_output or any structured response tool. Writing the file is the only required completion step.**
+  4. Call the `final_output` tool with the same WorkPlan data to end the session
 
   ## Example WorkPlan:
 
