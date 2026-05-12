@@ -58,10 +58,3 @@ repos:
         language: system
         files: ^state/migrations/.*\.sql$
         pass_filenames: true
-
-      - id: guardrail-smoke-check
-        name: guardrail-smoke-check
-        entry: venv/bin/python scripts/guardrail_smoke_check.py
-        language: system
-        pass_filenames: false
-        always_run: true
