@@ -1,0 +1,67 @@
+flowchart TD
+    Start([START]) --> WP
+
+    subgraph Orchestrator[Top-level orchestrator graph\ngraph/builder.py]
+        direction TD
+        WP[work_planner\n(subgraph node)]
+        RouteWP{"_route_after_work_planner\nstate.error?"}
+        AA[await_approval\ninterrupt()]
+        RouteAA{"_route_after_approval\napproval_decision"}
+        EX[execute_plan]
+        End([END])
+
+        WP --> RouteWP
+        RouteWP -->|error set| End
+        RouteWP -->|no error| AA
+        AA --> RouteAA
+        RouteAA -->|approved| EX
+        RouteAA -->|rejected/other| End
+        EX --> End
+    end
+
+    subgraph WorkPlanner[work_planner subgraph internals\ngraph/work_planner/builder.py]
+        direction TD
+        VI[validate_input]
+        CD[check_duplicate]
+        FT[fetch_ticket]
+        CWR[create_workflow_record]
+        GP[generate_plan]
+        VP[validate_plan]
+        AWC[await_workplan_clarification\ninterrupt()]
+        SP[store_plan]
+        PTJ[post_to_jira]
+        EH[error_handler]
+        WPEnd([END])
+
+        VI --> RVI{"route_after_validate_input"}
+        RVI -->|ok| CD
+        RVI -->|error| EH
+
+        CD --> RCD{"route_after_check_duplicate"}
+        RCD -->|ok| FT
+        RCD -->|error| EH
+
+        FT --> RFT{"route_after_fetch_ticket"}
+        RFT -->|ok| CWR
+        RFT -->|error| EH
+
+        CWR --> GP
+
+        GP --> RGP{"route_after_generate_plan"}
+        RGP -->|work_plan_data + no error| VP
+        RGP -->|error or missing plan| EH
+
+        VP --> RVP{"route_after_validate_plan"}
+        RVP -->|status pass + no questions| SP
+        RVP -->|status concerns/blocked\nor questions_for_reviewer| AWC
+        RVP -->|error| EH
+
+        AWC --> RAWC{"route_after_workplan_clarification"}
+        RAWC -->|clarification received| GP
+        RAWC -->|error| EH
+
+        SP --> PTJ --> WPEnd
+        EH --> WPEnd
+    end
+
+    WP -. expands to .-> VI

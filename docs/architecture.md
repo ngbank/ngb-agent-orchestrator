@@ -6,7 +6,7 @@ This document describes the components of the NGB Agent Orchestrator and how the
 
 ## Sequence Diagram
 
-The full orchestration flow is captured in [`plan-recipe-flow.mmd`](plan-recipe-flow.mmd). A high-level view:
+The full orchestration flow is captured in [`plan-recipe-flow.mmd`](plan-recipe-flow.mmd), and the current LangGraph topology (including nested work-planner internals) is captured in the root-level [`diagram.mmd`](../diagram.mmd). A high-level view:
 
 ```
 User
