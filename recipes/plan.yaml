@@ -16,6 +16,7 @@ parameters:
   - key: clarifications_path
     input_type: string
     requirement: optional
+    default: ""
     description: "Path to a JSON file containing previous clarification rounds from the reviewer. Each round has questions, risks, and the reviewer's answers."
 
 extensions:
