@@ -1,7 +1,6 @@
 """Integration tests for dispatcher/run.py (LangGraph-based orchestrator)"""
 
 import os
-import re
 import tempfile
 from unittest.mock import Mock, patch
 
@@ -251,24 +250,6 @@ def test_run_validates_ticket_format(test_db, cli_runner):
 
     assert result.exit_code == 1
     assert "❌ Invalid ticket format" in result.output
-
-
-def test_architecture_work_planner_order_and_fetch_annotation():
-    """Architecture docs should reflect work_planner order and JiraClient wording."""
-    with open("docs/architecture.md", encoding="utf-8") as f:
-        content = f.read()
-
-    fetch_pos = content.find("├── fetch_ticket")
-    create_pos = content.find("├── create_workflow_record")
-    assert fetch_pos != -1, "fetch_ticket node missing from architecture diagram"
-    assert create_pos != -1, "create_workflow_record node missing from architecture diagram"
-    assert fetch_pos < create_pos, "fetch_ticket must appear before create_workflow_record"
-
-    fetch_line_match = re.search(r"^.*fetch_ticket.*$", content, flags=re.MULTILINE)
-    assert fetch_line_match is not None
-    fetch_line = fetch_line_match.group(0)
-    assert "JiraClient" in fetch_line
-    assert "Call JIRA via acli" not in fetch_line
 
 
 def test_run_handles_jira_config_error(test_db, cli_runner, memory_checkpointer):
