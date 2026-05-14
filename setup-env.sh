@@ -151,6 +151,9 @@ if $DO_DEPS; then
     "$VENV_DIR/bin/pip" install --quiet -r requirements.txt
     "$VENV_DIR/bin/pip" install --quiet -r requirements-dev.txt
     "$VENV_DIR/bin/pip" install --quiet -e .
+
+    info "Installing pre-commit hooks..."
+    "$VENV_DIR/bin/pre-commit" install
     success "Virtual environment ready."
 fi
 
