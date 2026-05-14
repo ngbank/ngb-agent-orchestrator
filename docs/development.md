@@ -117,7 +117,6 @@ ngb-agent-orchestrator/
 ├── config/
 │   └── litellm.yaml              # LiteLLM proxy model routing
 ├── dispatcher/
-│   ├── cli.py                    # Utility CLI (status, init, goose)
 │   ├── jira_client.py            # JIRA API client
 │   ├── run.py                    # Main dispatcher entry point
 │   ├── work_plan_formatter.py    # WorkPlan → JIRA comment formatter
