@@ -44,4 +44,3 @@ htmlcov/
 # Logs
 *.log
 logs/
-.envrc
