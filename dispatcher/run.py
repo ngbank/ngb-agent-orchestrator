@@ -611,6 +611,10 @@ def _handle_clarify(ticket_key: Optional[str], workflow_id: Optional[str] = None
             click.echo(f"❌ Workflow not found: {resolved_id}", err=True)
             sys.exit(1)
     else:
+        if ticket_key is None:
+            click.echo("❌ Ticket key is required when workflow id is not provided", err=True)
+            sys.exit(1)
+
         pending = [
             w
             for w in get_workflow_by_ticket(ticket_key)
@@ -687,14 +691,20 @@ def _handle_clarify(ticket_key: Optional[str], workflow_id: Optional[str] = None
         if refreshed and refreshed["status"] == WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION:
             click.echo("")
             click.echo("⏸️  The plan still needs clarification.")
-            click.echo(f"   Run:  dispatcher --clarify --ticket {workflow.get('ticket_key', ticket_key)}")
+            click.echo(
+                f"   Run:  dispatcher --clarify --ticket {workflow.get('ticket_key', ticket_key)}"
+            )
             return
 
         if refreshed and refreshed["status"] == WorkflowStatus.PENDING_APPROVAL:
             click.echo("")
             click.echo("✅ Plan regenerated and posted to JIRA.")
-            click.echo(f"   To approve:  dispatcher --approve --ticket {workflow.get('ticket_key', ticket_key)}")
-            click.echo(f"   To reject:   dispatcher --reject  --ticket {workflow.get('ticket_key', ticket_key)} --reason \"...\"")
+            approve_ticket = workflow.get("ticket_key", ticket_key)
+            click.echo(f"   To approve:  dispatcher --approve --ticket {approve_ticket}")
+            reject_ticket = workflow.get("ticket_key", ticket_key)
+            click.echo(
+                f"   To reject:   dispatcher --reject  --ticket {reject_ticket} " '--reason "..."'
+            )
 
     except GraphInterrupt:
         # Another clarification round is needed — await_workplan_clarification suspended again.
@@ -702,7 +712,9 @@ def _handle_clarify(ticket_key: Optional[str], workflow_id: Optional[str] = None
         if refreshed and refreshed["status"] == WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION:
             click.echo("")
             click.echo("⏸️  The plan still needs clarification.")
-            click.echo(f"   Run:  dispatcher --clarify --ticket {workflow.get('ticket_key', ticket_key)}")
+            click.echo(
+                f"   Run:  dispatcher --clarify --ticket {workflow.get('ticket_key', ticket_key)}"
+            )
         else:
             click.echo("⏸️  Workflow suspended — check status with:  dispatcher --list")
 
