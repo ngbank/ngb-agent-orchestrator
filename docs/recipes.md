@@ -107,6 +107,7 @@ Use `goose run --recipe recipes/plan.yaml --explain` to see a recipe's parameter
 **Safety constraints** (enforced in the prompt):
 - Loads developer rules via MCP at startup; all rules are mandatory
 - Never runs `git reset --hard` or deletes branches
+- Applies a mandatory scope audit before commit: every changed file must map to a WorkPlan task; unrelated edits must be removed and logged in the execution diary
 
 ---
 

@@ -167,8 +167,16 @@ prompt: |
   **Implementation principles:**
   - Match the coding style, indentation, and patterns of existing files
   - Do not add features beyond what the task describes
+  - Do not modify files, symbols, behavior, tests, or docs that are not required by the current ticket tasks
+  - Every changed file must be directly traceable to at least one WorkPlan task `description` or `files_likely_affected`
+  - If you discover an unrelated issue, record it in the execution diary and leave the code untouched
   - Do not add docstrings or comments to code you didn't change
   - Do not refactor unrelated code
+
+  **Scope guard — mandatory:**
+  - Before changing any file, map it to a specific task `id` and reason
+  - If a candidate edit cannot be mapped to a task, do not make that edit
+  - If unrelated local changes appear during execution, remove only those unrelated changes before commit
 
   **File editing rules — CRITICAL:**
   - Always use the `write_file` or `str_replace` tools from the developer extension to create or modify files
@@ -183,6 +191,12 @@ prompt: |
   can review their changes; this is expected and is not an error.
 
   Repeat the following loop until `git commit` exits 0 or you exhaust genuine fix attempts:
+
+    0. Run a scope audit before staging:
+      - List all changed files (`git status --short` and `git diff --name-only`)
+      - Verify each changed file is task-related
+      - If any changed file is unrelated to the WorkPlan tasks, undo only those unrelated edits and re-check
+      - Do not proceed to staging until all remaining changes are in scope
 
   1. Stage all changes:
      ```
