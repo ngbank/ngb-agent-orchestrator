@@ -5,6 +5,7 @@ import getpass
 import os
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.request
@@ -131,8 +132,11 @@ def goose_session():
         with open(config_path, "w") as f:
             f.write(config_yaml)
 
+        # Resolve the litellm binary relative to the running Python interpreter
+        # so it works regardless of whether the venv is activated in the shell.
+        litellm_bin = Path(sys.executable).parent / "litellm"
         proc = subprocess.Popen(
-            ["litellm", "--config", config_path, "--port", str(port)],
+            [str(litellm_bin), "--config", config_path, "--port", str(port)],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
