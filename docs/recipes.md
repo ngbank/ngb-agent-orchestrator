@@ -53,6 +53,9 @@ Use `goose run --recipe recipes/plan.yaml --explain` to see a recipe's parameter
 - `concerns` — implementable but has risks or open questions
 - `blocked` — missing critical information; see `questions_for_reviewer`
 
+**Status invariant**:
+- If `risks` or `questions_for_reviewer` is non-empty, status must not be `pass`.
+
 ---
 
 ## `recipes/execute.yaml` — WorkPlan Executor

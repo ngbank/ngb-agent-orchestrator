@@ -142,7 +142,7 @@ prompt: |
 
   Follow these steps exactly:
   1. List the top-level directory structure (e.g., `ls` or `tree . --depth 2`)
-  2. Read key files to understand conventions: dispatcher/run.py, dispatcher/cli.py
+  2. Read key files to understand conventions: dispatcher/run.py
   3. List relevant directories: dispatcher/, schemas/, state/, tests/, recipes/
   4. Based on the ticket description and existing patterns, identify files likely to be CREATED or MODIFIED
   5. Note any related test files that would need to be added or updated
@@ -184,12 +184,18 @@ prompt: |
   - **"blocked"**: Ticket is ambiguous, missing critical information, or has unclear requirements
     → When blocked, add specific clarifying questions to `questions_for_reviewer`
 
+  ### Status Invariants (MUST follow):
+  - If `questions_for_reviewer` is non-empty, status MUST be `"concerns"` or `"blocked"` (never `"pass"`).
+  - If `risks` is non-empty and there are no critical blockers, status MUST be `"concerns"` (never `"pass"`).
+  - Use `"blocked"` only when implementation cannot proceed without additional reviewer input.
+
   ### Critical Schema Rules:
   - `schema_version` MUST be exactly "1.0" (string, not number)
   - `ticket_key` MUST match pattern [A-Z][A-Z0-9]+-[0-9]+ (e.g., "AOS-38")
   - `tasks` array MUST have at least 1 task
   - `risks` and `questions_for_reviewer` CAN be empty arrays []
   - `status` MUST be one of: "pass", "concerns", "blocked"
+  - `status` MUST NOT be `"pass"` when `risks` or `questions_for_reviewer` are non-empty
   - Do NOT add any additional fields not in the schema
   - All string fields must not be empty (minLength: 1)
   - Each task MUST have id (integer >= 1), description (string), and files_likely_affected (array)
@@ -276,7 +282,7 @@ prompt: |
       "Performance impact of middleware on all dashboard requests needs monitoring"
     ],
     "questions_for_reviewer": [],
-    "status": "pass"
+    "status": "concerns"
   }
   ```
 

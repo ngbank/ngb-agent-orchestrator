@@ -52,7 +52,8 @@ def route_after_validate_plan(
     work_plan_data = state.get("work_plan_data") or {}
     status = work_plan_data.get("status", "")
     questions = work_plan_data.get("questions_for_reviewer", [])
-    if status in ("concerns", "blocked") or bool(questions):
+    risks = work_plan_data.get("risks", [])
+    if status in ("concerns", "blocked") or bool(questions) or bool(risks):
         return "await_workplan_clarification"
     return "store_plan"
 
