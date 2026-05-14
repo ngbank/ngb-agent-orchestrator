@@ -149,6 +149,7 @@ if $DO_DEPS; then
     info "Installing/updating dependencies..."
     "$VENV_DIR/bin/pip" install --quiet --upgrade pip
     "$VENV_DIR/bin/pip" install --quiet -r requirements.txt
+    "$VENV_DIR/bin/pip" install --quiet -r requirements-dev.txt
     success "Virtual environment ready."
 fi
 
