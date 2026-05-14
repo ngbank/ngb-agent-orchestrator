@@ -24,8 +24,8 @@ LangGraph Graph (graph/)
  ├── work_planner subgraph
  │    ├── validate_input        Validate ticket key format
  │    ├── check_duplicate       Reject if an active workflow exists
+ │    ├── fetch_ticket          Fetch ticket from JIRA via JiraClient (REST API)
  │    ├── create_workflow_record  Create SQLite row (status=IN_PROGRESS)
- │    ├── fetch_ticket          Call JIRA via acli
  │    ├── generate_plan         Invoke Goose plan recipe → WorkPlan JSON
  │    ├── validate_plan         Validate WorkPlan against JSON schema
  │    ├── store_plan            Persist WorkPlan to SQLite

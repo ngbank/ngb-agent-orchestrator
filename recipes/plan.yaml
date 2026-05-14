@@ -154,6 +154,18 @@ prompt: |
 
   Use shell commands (ls, cat, head) or the tree tool for exploration.
 
+  ## Planning Scope Guard — Mandatory
+
+  This recipe is planning-only. Do not modify repository code, tests, docs, config, migrations, or recipes.
+
+  Allowed file writes are limited to:
+  - `{{ output_path }}` (final WorkPlan JSON)
+  - temporary validation files under `/tmp/` only
+
+  If you identify unrelated issues while analyzing the repository:
+  - Record them as `risks` or `questions_for_reviewer` in the WorkPlan
+  - Do not change any repository file to address them
+
   ## Step 4: Generate WorkPlan JSON
 
   Based on the ticket and repository analysis, create a WorkPlan JSON document with these fields:
@@ -245,7 +257,8 @@ prompt: |
   1. Create parent directories if needed: `mkdir -p $(dirname {{ output_path }})`
   2. Write the validated JSON to `{{ output_path }}` using the `write_file` tool — do NOT use a shell heredoc (`cat << 'EOF'`) as heredocs corrupt escape sequences (`\n`, `\t`), backslashes, and quotes, causing JSON parse errors
   3. Verify the file was written: `test -f {{ output_path }} && echo "✅ File written" || echo "❌ File missing"`
-  4. Call the `final_output` tool with the same WorkPlan data to end the session
+  4. Ensure no repository files were modified as part of planning; only `{{ output_path }}` and `/tmp/*` writes are permitted
+  5. Call the `final_output` tool with the same WorkPlan data to end the session
 
   ## Example WorkPlan:
 

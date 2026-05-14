@@ -652,7 +652,9 @@ class TestHandleClarify:
 
     def test_clarify_wrong_status_fails(self, test_db, cli_runner):
         """--clarify on a PENDING_APPROVAL workflow should exit with error."""
-        workflow_id = state_store.create_workflow("TEST-123", status=WorkflowStatus.PENDING_APPROVAL)
+        workflow_id = state_store.create_workflow(
+            "TEST-123", status=WorkflowStatus.PENDING_APPROVAL
+        )
 
         result = cli_runner.invoke(run, ["--clarify", "--workflow-id", workflow_id])
         assert result.exit_code == 1

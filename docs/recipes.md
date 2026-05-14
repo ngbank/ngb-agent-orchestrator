@@ -56,6 +56,11 @@ Use `goose run --recipe recipes/plan.yaml --explain` to see a recipe's parameter
 **Status invariant**:
 - If `risks` or `questions_for_reviewer` is non-empty, status must not be `pass`.
 
+**Safety constraints** (enforced in the prompt):
+- Planning-only run: do not modify repository source files, tests, docs, config, migrations, or recipes
+- Only write `output_path` and temporary validation files under `/tmp/`
+- If unrelated issues are discovered, capture them as `risks`/`questions_for_reviewer` instead of changing code
+
 ---
 
 ## `recipes/execute.yaml` — WorkPlan Executor
@@ -107,6 +112,7 @@ Use `goose run --recipe recipes/plan.yaml --explain` to see a recipe's parameter
 **Safety constraints** (enforced in the prompt):
 - Loads developer rules via MCP at startup; all rules are mandatory
 - Never runs `git reset --hard` or deletes branches
+- Applies a mandatory scope audit before commit: every changed file must map to a WorkPlan task; unrelated edits must be removed and logged in the execution diary
 
 ---
 
