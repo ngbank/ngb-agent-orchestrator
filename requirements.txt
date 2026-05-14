@@ -21,8 +21,8 @@ langgraph>=0.2.0
 langchain-core>=0.3.0
 langgraph-checkpoint-sqlite>=3.0.0
 
-# LiteLLM — model abstraction proxy layer
-# [proxy] extras required for running the proxy server (includes websockets, etc.)
+# LiteLLM — model abstraction layer
+# [proxy] extras required for running the ephemeral proxy server in goose_session().
 litellm[proxy]>=1.0.0
 
 # MCP Server

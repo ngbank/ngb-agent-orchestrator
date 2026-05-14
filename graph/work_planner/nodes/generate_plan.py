@@ -6,7 +6,7 @@ import tempfile
 
 import click
 
-from graph.utils import goose_env, log_path, run_and_tee
+from graph.utils import goose_session, log_path, run_and_tee
 from graph.work_planner.state import WorkPlannerState
 
 
@@ -66,7 +66,8 @@ def generate_plan(state: WorkPlannerState) -> dict:
             cmd.extend(["--params", f"clarifications_path={clarifications_path}"])
 
         with open(lp, "w") as log_file:
-            result = run_and_tee(cmd, log_file, env=goose_env())
+            with goose_session() as goose_env:
+                result = run_and_tee(cmd, log_file, env=goose_env)
 
         if result.returncode != 0:
             return {"error": f"Goose plan recipe exited with code {result.returncode}"}

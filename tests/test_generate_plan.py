@@ -2,6 +2,7 @@
 
 import json
 import os
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -28,6 +29,19 @@ def _make_run_result(returncode=0):
 
 _PATCH_TEE = "graph.work_planner.nodes.generate_plan.run_and_tee"
 _PATCH_LOG = "graph.work_planner.nodes.generate_plan.log_path"
+_PATCH_SESSION = "graph.work_planner.nodes.generate_plan.goose_session"
+
+
+@pytest.fixture(autouse=True)
+def mock_goose_session():
+    """Prevent goose_session from starting a real litellm proxy in tests."""
+
+    @contextmanager
+    def _noop():
+        yield {}
+
+    with patch(_PATCH_SESSION, _noop):
+        yield
 
 
 @pytest.fixture

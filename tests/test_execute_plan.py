@@ -1,7 +1,24 @@
 """Unit tests for graph/nodes/execute_plan.py."""
 
 import tempfile
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
+
+import pytest
+
+_PATCH_SESSION = "graph.nodes.execute_plan.goose_session"
+
+
+@pytest.fixture(autouse=True)
+def mock_goose_session():
+    """Prevent goose_session from starting a real litellm proxy in tests."""
+
+    @contextmanager
+    def _noop():
+        yield {}
+
+    with patch(_PATCH_SESSION, _noop):
+        yield
 
 
 def test_execute_plan_uses_mkdtemp_for_working_dir():

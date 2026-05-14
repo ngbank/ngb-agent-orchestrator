@@ -49,7 +49,6 @@ See [docs/architecture.md](docs/architecture.md) for a full sequence diagram and
 | `state/` | SQLite persistence — workflows, audit log, migrations |
 | `schemas/work_plan_v1.json` | JSON schema contract for WorkPlan documents |
 | `mcp_server/server.py` | MCP server: resolves JIRA project key → Git repo URL |
-| `config/litellm.yaml` | LiteLLM proxy config (routes Goose → your LLM provider) |
 | `config/project-repo-mapping.md` | Maps JIRA project keys to target Git repository URLs |
 
 ---
@@ -62,7 +61,7 @@ See [docs/architecture.md](docs/architecture.md) for a full sequence diagram and
 - [Goose CLI](https://github.com/block/goose) (`~/.local/bin/goose`)
 - `acli` (Atlassian CLI) configured with JIRA credentials
 - A JIRA account on `mirandags.atlassian.net`
-- An LLM provider API key (Anthropic, OpenAI, or Azure)
+- An LLM provider API key (Anthropic, OpenAI, or Azure) — set as `GOOSE_MODEL` with provider prefix
 
 ### Installation
 
@@ -94,16 +93,6 @@ pre-commit install
 
 # 7. Verify setup
 dispatcher --help
-```
-
-### Running the LiteLLM Proxy
-
-Goose routes all model calls through a local LiteLLM proxy. Start it before running any recipe:
-
-```bash
-# In a dedicated terminal
-source venv/bin/activate
-litellm --config config/litellm.yaml --port 4000
 ```
 
 ### Registering the MCP Server (Agent Harness)

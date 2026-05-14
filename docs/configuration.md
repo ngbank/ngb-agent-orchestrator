@@ -19,13 +19,15 @@ cp .env.example .env
 | `JIRA_EMAIL` | Yes | `user@example.com` | Your Atlassian account email |
 | `JIRA_API_TOKEN` | Yes | `ATATxxx...` | JIRA API token (see below) |
 
-### LiteLLM Proxy
+### LiteLLM SDK (model routing)
 
-| Variable | Required | Example | Description |
-|---|---|---|---|
-| `LITELLM_MASTER_KEY` | Yes | `sk-local-master-key` | Auth key for the local proxy API |
-| `LITELLM_MODEL` | Yes | `anthropic/claude-3-5-sonnet-20241022` | Model identifier sent to the provider |
-| `LITELLM_BASE_URL` | Yes | `http://localhost:4000` | URL of the running LiteLLM proxy |
+No proxy server is required. Set `GOOSE_MODEL` to a LiteLLM model string — the provider is inferred automatically from the prefix and the matching credentials are picked up from the environment.
+
+| Model string prefix | Provider | Credentials used |
+|---|---|---|
+| `anthropic/…` | Anthropic | `ANTHROPIC_API_KEY` |
+| `azure/…` | Azure AI Foundry / Azure OpenAI | `AZURE_API_KEY`, `AZURE_API_BASE`, `AZURE_API_VERSION` |
+| `openai/…` or bare name | OpenAI | `OPENAI_API_KEY` |
 
 ### LLM Provider (one required)
 
@@ -33,17 +35,15 @@ cp .env.example .env
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Anthropic | `sk-ant-...` |
 | `OPENAI_API_KEY` | OpenAI | `sk-...` |
-| `AZURE_API_KEY` | Azure OpenAI | — |
-| `AZURE_API_BASE` | Azure OpenAI | `https://...openai.azure.com/` |
-| `AZURE_API_VERSION` | Azure OpenAI | `2024-02-01` |
+| `AZURE_API_KEY` | Azure AI Foundry | — |
+| `AZURE_API_BASE` | Azure AI Foundry | `https://your-resource.cognitiveservices.azure.com` |
+| `AZURE_API_VERSION` | Azure AI Foundry | `2024-12-01-preview` |
 
 ### Goose
 
 | Variable | Required | Example | Description |
 |---|---|---|---|
-| `GOOSE_PROVIDER` | Yes | `openai` | Provider name — set to `openai` to route through LiteLLM |
-| `GOOSE_MODEL` | Yes | `azure-gpt4` | Model name matching a `model_name` in `config/litellm.yaml` |
-| `GOOSE_BASE_URL` | Yes | `http://localhost:4000` | Point Goose at the LiteLLM proxy |
+| `GOOSE_MODEL` | Yes | `azure/gpt-4.1` | LiteLLM model string — provider inferred from prefix |
 
 ### Database
 
@@ -71,22 +71,19 @@ The `JIRA_EMAIL` must exactly match your Atlassian account email.
 
 ---
 
-## LiteLLM Proxy Configuration
+## LiteLLM SDK — Model Routing
 
-Model routing is defined in `config/litellm.yaml`. Each entry maps a `model_name` (what Goose and LangGraph call) to a provider and model:
+Model routing is handled in-process by the LiteLLM Python SDK. Set `GOOSE_MODEL` to a LiteLLM model string; `graph/utils.goose_env()` parses the prefix and injects the correct provider env vars before shelling out to Goose — no proxy server or config file is needed.
 
-```yaml
-model_list:
-  - model_name: azure-gpt4
-    litellm_params:
-      model: azure/gpt-4
-      api_base: ...
-      api_key: ...
-```
+Examples:
 
-Available model names (defined in `config/litellm.yaml`): `azure-gpt4` | `claude` | `gpt4o`
+| `GOOSE_MODEL` value | Connects to |
+|---|---|
+| `anthropic/claude-3-5-sonnet-20241022` | Anthropic API |
+| `azure/gpt-4.1` | Azure AI Foundry (using `AZURE_API_*` vars) |
+| `openai/gpt-4o` or `gpt-4o` | OpenAI API |
 
-To add a new backend, add an entry to `config/litellm.yaml` and restart the proxy. No changes to recipes or application code are needed.
+To switch providers, update `GOOSE_MODEL` in `.env` and ensure the matching API key is set.
 
 ---
 
@@ -95,7 +92,4 @@ To add a new backend, add an entry to `config/litellm.yaml` and restart the prox
 ```bash
 # Check the dispatcher can connect to JIRA and find required config
 python -m dispatcher.run --ticket AOS-1 --dry-run
-
-# Check the LiteLLM proxy is reachable (replace sk-local-master-key with your LITELLM_MASTER_KEY)
-curl http://localhost:4000/models -H "Authorization: Bearer sk-local-master-key"
 ```
