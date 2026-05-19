@@ -1,0 +1,196 @@
+<mxfile host="65bd71144e">
+    <diagram id="FzOmDSFTnUNf7mG8tcir" name="Page-1">
+        <mxGraphModel dx="622" dy="549" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="2" value="AGENT ORCHESTRATION SYSTEM ARCHITECTURE" style="text;html=1;align=center;verticalAlign=middle;fontSize=20;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="440" y="610" width="1120" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="3" value="1. HUMAN INTERFACE LAYER" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D9E1F2;strokeColor=#2F5597;fontStyle=1;verticalAlign=top;" vertex="1" parent="1">
+                    <mxGeometry x="280" y="660" width="1840" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="4" value="Jira / Teams / Developer Portal" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2F5597;fontSize=14;" vertex="1" parent="1">
+                    <mxGeometry x="760" y="685" width="480" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="5" value="2. AGENT ORCHESTRATOR" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E7E6E6;strokeColor=#595959;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="280" y="840" width="1020" height="380" as="geometry"/>
+                </mxCell>
+                <mxCell id="6" value="START WORKFLOW / TASK" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#7F6000;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="310" y="940" width="160" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="7" value="Task assigned&#xa;to Agent A" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE699;strokeColor=#7F6000;" vertex="1" parent="1">
+                    <mxGeometry x="490" y="940" width="150" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="8" value="Agent A" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C6E0B4;strokeColor=#548235;" vertex="1" parent="1">
+                    <mxGeometry x="660" y="940" width="110" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="9" value="Conditional&#xa;Routing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CBAD;strokeColor=#A13D00;" vertex="1" parent="1">
+                    <mxGeometry x="790" y="940" width="140" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="10" value="State&#xa;Management" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D0CECE;strokeColor=#595959;" vertex="1" parent="1">
+                    <mxGeometry x="950" y="940" width="140" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="11" value="Parallel / Iterative Agent Execution" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7F7F7F;dashed=1;verticalAlign=top;" vertex="1" parent="1">
+                    <mxGeometry x="460" y="1015" width="650" height="175" as="geometry"/>
+                </mxCell>
+                <mxCell id="12" value="Agent A" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C6E0B4;strokeColor=#548235;" vertex="1" parent="1">
+                    <mxGeometry x="490" y="1050" width="90" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="13" value="Agent B" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F4B6C2;strokeColor=#A61C3C;" vertex="1" parent="1">
+                    <mxGeometry x="605" y="1050" width="90" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="14" value="Agent A" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C6E0B4;strokeColor=#548235;" vertex="1" parent="1">
+                    <mxGeometry x="490" y="1095" width="90" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="15" value="Agent B" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F4B6C2;strokeColor=#A61C3C;" vertex="1" parent="1">
+                    <mxGeometry x="605" y="1095" width="90" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="16" value="Agent A" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C6E0B4;strokeColor=#548235;" vertex="1" parent="1">
+                    <mxGeometry x="490" y="1140" width="90" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="17" value="Agent B" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F4B6C2;strokeColor=#A61C3C;" vertex="1" parent="1">
+                    <mxGeometry x="605" y="1140" width="90" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="18" value="Agent C" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BDD7EE;strokeColor=#2F5597;" vertex="1" parent="1">
+                    <mxGeometry x="725" y="1120" width="90" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="19" value="FINAL STATE /&#xa;WORKFLOW COMPLETED" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="1155" y="1120" width="130" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="20" value="3. LITELLM LAYER (LLM-AGNOSTIC PROXY)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DEEAF6;strokeColor=#2F5597;fontStyle=1;verticalAlign=top;" vertex="1" parent="1">
+                    <mxGeometry x="1530" y="835" width="590" height="180" as="geometry"/>
+                </mxCell>
+                <mxCell id="21" value="LiteLLM Proxy&#xa;Translates model requests into provider-specific and returns unified responses." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2F5597;" vertex="1" parent="1">
+                    <mxGeometry x="1550" y="875" width="220" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="22" value="LLM Providers&lt;br&gt;• OpenAI (GPT-4)&lt;br&gt;• Azure OpenAI&lt;br&gt;• Ollama&lt;br&gt;• Hugging Face" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2F5597;" vertex="1" parent="1">
+                    <mxGeometry x="1920" y="870" width="160" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="23" value="4. AGENT HARNESS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E2F0D9;strokeColor=#548235;fontStyle=1;verticalAlign=top;" vertex="1" parent="1">
+                    <mxGeometry x="1530" y="1035" width="590" height="260" as="geometry"/>
+                </mxCell>
+                <mxCell id="24" value="MCP SERVER&#xa;(Model Context Protocol)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#548235;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="1550" y="1070" width="200" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="25" value="RAG GROUP" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#548235;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="1550" y="1135" width="200" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="26" value="DOCUMENTS STORE" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#548235;" vertex="1" parent="1">
+                    <mxGeometry x="1565" y="1165" width="170" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="27" value="GOALS DB" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#548235;" vertex="1" parent="1">
+                    <mxGeometry x="1360" y="1415" width="170" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="28" value="SYSTEM CONFIG" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#548235;" vertex="1" parent="1">
+                    <mxGeometry x="1360" y="1445" width="170" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="29" value="ONTOLOGY GRAPH" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#548235;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="1890" y="1095" width="175" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="30" value="EXTERNAL TOOL REGISTRY" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#548235;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="1890" y="1190" width="175" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="31" value="Registry-Based&#xa;Dispatch System" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#548235;" vertex="1" parent="1">
+                    <mxGeometry x="1565" y="1420" width="175" height="65" as="geometry"/>
+                </mxCell>
+                <mxCell id="32" value="5. OBSERVABILITY LAYER" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FCE4D6;strokeColor=#C65911;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="315" y="1415" width="1440" height="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="33" value="SYSTEM OBSERVABILITY&#xa;(GRAFANA CLOUD)&#xa;Did the system work?&#xa;• LiteLLM / Model Providers" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C65911;" vertex="1" parent="1">
+                    <mxGeometry x="345" y="1460" width="360" height="95" as="geometry"/>
+                </mxCell>
+                <mxCell id="34" value="SHARED TRACE /&#xa;CORRELATION MODEL&#xa;(Workflow ID)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C65911;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="755" y="1460" width="360" height="95" as="geometry"/>
+                </mxCell>
+                <mxCell id="35" value="AGENT OBSERVABILITY&#xa;(LANGSMITH)&#xa;• Agent execution traces&#xa;• Prompt/Response data&#xa;• Tool Usage details&#xa;• Intermediate reasoning steps&#xa;• Evaluation signals" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C65911;" vertex="1" parent="1">
+                    <mxGeometry x="1155" y="1447" width="570" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="36" style="endArrow=block;html=1;" edge="1" parent="1" source="4" target="6">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="37" value="User Requests / Task Assignment" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;" vertex="1" parent="1">
+                    <mxGeometry x="570" y="745" width="220" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="38" style="endArrow=block;html=1;" edge="1" parent="1" source="19" target="4">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="39" value="Status Updates / Human Interface (HITL)" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;" vertex="1" parent="1">
+                    <mxGeometry x="930" y="745" width="270" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="40" style="endArrow=block;html=1;" edge="1" parent="1" source="6" target="7">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="41" style="endArrow=block;html=1;" edge="1" parent="1" source="7" target="8">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="42" style="endArrow=block;html=1;" edge="1" parent="1" source="8" target="9">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="43" style="endArrow=block;html=1;" edge="1" parent="1" source="9" target="10">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="44" style="endArrow=block;html=1;" edge="1" parent="1" source="10" target="11">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="45" style="endArrow=block;html=1;exitX=1.005;exitY=0.794;exitDx=0;exitDy=0;exitPerimeter=0;" edge="1" parent="1" source="11" target="19">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="46" style="endArrow=block;startArrow=block;html=1;" edge="1" parent="1" source="12" target="13">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="47" style="endArrow=block;startArrow=block;html=1;" edge="1" parent="1" source="14" target="15">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="48" style="endArrow=block;startArrow=block;html=1;" edge="1" parent="1" source="16" target="17">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="49" value="MODEL REQUEST" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2F5597;fontSize=11;rotation=-15;" vertex="1" parent="1">
+                    <mxGeometry x="1320" y="915" width="120" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="50" value="UNIFIED RESPONSE" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2F5597;fontSize=11;rotation=-15;" vertex="1" parent="1">
+                    <mxGeometry x="1340" y="1000" width="120" height="25" as="geometry"/>
+                </mxCell>
+                <mxCell id="51" style="endArrow=block;html=1;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" edge="1" parent="1" source="11" target="21">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1240.1162790697676" y="1000" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="52" style="endArrow=block;html=1;exitX=0;exitY=0.75;exitDx=0;exitDy=0;" edge="1" parent="1" source="21" target="11">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1240" y="1026.529126213592" as="sourcePoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="53" style="endArrow=block;startArrow=block;html=1;" edge="1" parent="1" source="21" target="22">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="54" style="endArrow=block;startArrow=block;html=1;" edge="1" parent="1" source="11" target="24">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="55" style="endArrow=block;html=1;" edge="1" parent="1" source="24" target="31">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="56" style="endArrow=block;html=1;" edge="1" parent="1" source="31">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1652.5" y="1410" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="57" value="Telemetry (Traces, Metrics, Logs)" style="dashed=1;endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="11" target="34">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="58" value="Telemetry (Traces, Metrics, Logs)" style="dashed=1;endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="21" target="34">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="59" value="Telemetry (Traces, Metrics, Logs)" style="dashed=1;endArrow=block;html=1;fontSize=10;" edge="1" parent="1" source="24" target="34">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="60" style="endArrow=block;html=1;" edge="1" parent="1" source="34" target="33">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="61" style="endArrow=block;html=1;" edge="1" parent="1" source="34" target="35">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

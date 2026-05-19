@@ -1,0 +1,81 @@
+flowchart TB
+  %% AGENT ORCHESTRATION SYSTEM ARCHITECTURE
+
+  %% ---------- Layer 1 ----------
+  subgraph L1["1. HUMAN INTERFACE LAYER"]
+    HI["Jira / Slack / Teams"]
+  end
+
+  %% ---------- Layer 2 ----------
+  subgraph L2["2. AGENT ORCHESTRATOR"]
+    S["START WORKFLOW / TASK"] --> TA["Task assigned to Agent A"]
+    TA --> A1["Agent A"]
+    A1 --> CR["Conditional Routing"]
+    CR --> SM["State Management"]
+
+    subgraph LOOP["Parallel / Iterative Agent Execution"]
+      direction LR
+      A2["Agent A"] <--> B1["Agent B"]
+      A3["Agent A"] <--> B2["Agent B"]
+      A4["Agent A"] <--> B3["Agent B"]
+      C1["Agent C"]
+    end
+
+    SM --> LOOP
+    LOOP --> FS["FINAL STATE / WORKFLOW COMPLETED"]
+  end
+
+  %% ---------- Layer 3 ----------
+  subgraph L3["3. LITELLM LAYER (LLM-AGNOSTIC PROXY)"]
+    LL["LiteLLM Proxy<br/>Translates model requests into provider-specific<br/>and returns unified responses."]
+    Providers["LLM Providers:<br/>• OpenAI (GPT-4)<br/>• Azure OpenAI<br/>• Cohere<br/>• Hugging Face"]
+    LL <--> Providers
+
+    MR["MODEL REQUEST"] --> LL --> UR["UNIFIED RESPONSE"]
+  end
+
+  %% ---------- Layer 4 ----------
+  subgraph L4["4. AGENT HARNESS"]
+    MCP["MCP SERVER<br/>(Model Context Protocol)"]
+
+    subgraph RAG["RAG GROUP"]
+      DS["DOCUMENTS STORE"]
+      GDB["GOALS DB"]
+      CFG["SYSTEM CONFIG"]
+    end
+
+    OGraph["ONTOLOGY GRAPH"]
+    Tools["EXTERNAL TOOL REGISTRY"]
+    Dispatch["Registry-Based<br/>Dispatch System"]
+
+    MCP --> Dispatch
+    Dispatch --> Tools
+    MCP --> RAG
+    MCP --> OGraph
+  end
+
+  %% ---------- Layer 5 ----------
+  subgraph L5["5. OBSERVABILITY LAYER"]
+    GRAF["SYSTEM OBSERVABILITY<br/>(GRAFANA CLOUD)<br/>Did the system work?<br/>• LiteLLM / Model Providers"]
+    CORR["SHARED TRACE /<br/>CORRELATION MODEL<br/>(Workflow ID)"]
+    LANG["AGENT OBSERVABILITY<br/>(LANGSMITH)<br/>• Agent execution traces<br/>• Prompt/Response data<br/>• Tool usage details<br/>• Intermediate reasoning steps<br/>• Evaluation signals"]
+  end
+
+  %% ---------- Cross-layer flows ----------
+  HI -->|"User Requests / Task Assignment"| S
+  FS -->|"Status Updates / Human Interface (HITL)"| HI
+
+  %% Orchestrator ↔ LiteLLM
+  LOOP -->|"Model Request"| MR
+  UR -->|"Model Output"| LOOP
+
+  %% Orchestrator ↔ MCP harness
+  LOOP <--> MCP
+
+  %% Telemetry flows
+  LOOP -.->|"Telemetry (Traces, Metrics, Logs)"| CORR
+  LL   -.->|"Telemetry (Traces, Metrics, Logs)"| CORR
+  MCP  -.->|"Telemetry (Traces, Metrics, Logs)"| CORR
+
+  CORR --> GRAF
+  CORR --> LANG
