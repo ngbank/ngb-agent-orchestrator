@@ -66,11 +66,38 @@ sequenceDiagram
             WP->>Validator: validate_work_plan(work_plan_data)
             alt Validation fails or status == "blocked"
                 Validator-->>WP: error → route to error_handler
-            else Passes
+            else Plan has concerns/blocked or questions_for_reviewer (AOS-73)
+                Validator-->>WP: ⚠️  Plan needs clarification
+                Note over WP: Route to await_workplan_clarification
+            else Passes validation cleanly
                 Validator-->>WP: ✅ validated WorkPlan
+                Note over WP: Continue to store_plan
             end
         else No work_plan_data (stub returns None)
             Note over WP: Skip — no plan to validate
+        end
+    end
+
+    rect rgb(255, 230, 245)
+        Note over WP,SQLite: Node 6b — await_workplan_clarification (AOS-73)
+        alt Plan needs clarification
+            WP->>SQLite: update_status() → PENDING_WORKPLAN_CLARIFICATION
+            WP-->>CLI: Print questions/risks and exit
+            Note over CLI: Workflow suspended (LangGraph interrupt)
+
+            User->>CLI: dispatcher --clarify --ticket {ticket_key}
+            CLI->>WP: Resume with clarification answers
+            WP->>SQLite: update_status() → IN_PROGRESS
+            WP->>Goose: Re-invoke plan recipe with clarifications
+            Goose-->>WP: Revised work_plan_data
+
+            Note over WP: Loop back to Node 6 (validate_plan)<br/>Max 3 clarification rounds
+            WP->>Validator: Re-validate revised WorkPlan
+            alt Still needs clarification
+                Validator-->>WP: ⚠️  Continue loop
+            else Passes validation
+                Validator-->>WP: ✅ Clarification resolved<br/>Continue to store_plan
+            end
         end
     end
 
