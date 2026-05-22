@@ -21,8 +21,10 @@ def validate_plan(state: WorkPlannerState) -> dict:
 
     status = work_plan.status
     questions = work_plan_data.get("questions_for_reviewer", [])
-    risks = work_plan_data.get("risks", [])
-    needs_clarification = status in ("concerns", "blocked") or bool(questions) or bool(risks)
+    # When status is "pass", risks have been acknowledged — no clarification needed.
+    needs_clarification = (
+        status in ("concerns", "blocked") or bool(questions)
+    ) and status != "pass"
 
     if needs_clarification:
         click.echo(f"⚠️  WorkPlan validated but needs clarification (status: {status})")

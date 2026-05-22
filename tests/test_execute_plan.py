@@ -14,7 +14,7 @@ def mock_goose_session():
     """Prevent goose_session from starting a real litellm proxy in tests."""
 
     @contextmanager
-    def _noop():
+    def _noop(*args, **kwargs):
         yield {}
 
     with patch(_PATCH_SESSION, _noop):

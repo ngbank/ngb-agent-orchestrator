@@ -57,6 +57,7 @@ No proxy server is required. Set `GOOSE_MODEL` to a LiteLLM model string — the
 |---|---|---|
 | `DEFAULT_PROJECT_KEY` | `AOS` | Default JIRA project for commands that accept a project |
 | `LOG_LEVEL` | `INFO` | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `LOGS_DIR` | `logs` | Directory for run logs, including `llm_token_usage.jsonl` with per-request token usage |
 
 ---
 

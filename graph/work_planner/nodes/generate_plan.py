@@ -66,7 +66,7 @@ def generate_plan(state: WorkPlannerState) -> dict:
             cmd.extend(["--params", f"clarifications_path={clarifications_path}"])
 
         with open(lp, "w") as log_file:
-            with goose_session() as goose_env:
+            with goose_session(workflow_id=workflow_id, stage="plan") as goose_env:
                 result = run_and_tee(cmd, log_file, env=goose_env)
 
         if result.returncode != 0:

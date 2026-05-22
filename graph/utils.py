@@ -10,7 +10,7 @@ import tempfile
 import time
 import urllib.request
 from pathlib import Path
-from typing import IO, List
+from typing import IO, List, Optional
 
 
 def _get_actor() -> str:
@@ -47,11 +47,19 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-def _wait_for_proxy(port: int, timeout: float = 30.0) -> None:
+def _wait_for_proxy(
+    port: int, timeout: float = 30.0, proc: Optional[subprocess.Popen] = None
+) -> None:
     """Block until the litellm proxy on *port* responds to /health, or raise."""
     deadline = time.monotonic() + timeout
     url = f"http://127.0.0.1:{port}/health"
     while time.monotonic() < deadline:
+        # If the process died, fail fast with diagnostics.
+        if proc is not None and proc.poll() is not None:
+            raise RuntimeError(
+                f"litellm proxy process exited with code {proc.returncode}"
+                f" before becoming healthy. Check the proxy log for details."
+            )
         try:
             urllib.request.urlopen(url, timeout=1)
             return
@@ -98,11 +106,12 @@ def _litellm_config_yaml(model_string: str) -> str:
         "\n"
         "litellm_settings:\n"
         "  drop_params: true\n"
+        "  callbacks: graph.litellm_callbacks.proxy_handler_instance\n"
     )
 
 
 @contextlib.contextmanager
-def goose_session():
+def goose_session(workflow_id: Optional[str] = None, stage: Optional[str] = None):
     """Start an ephemeral litellm proxy and yield a Goose env dict.
 
     Reads GOOSE_MODEL from the environment as a litellm model string
@@ -126,7 +135,12 @@ def goose_session():
     port = _free_port()
     config_yaml = _litellm_config_yaml(model)
 
-    config_fd, config_path = tempfile.mkstemp(suffix="_litellm.yaml", prefix="goose_proxy_")
+    # Write the config into the repo root so that litellm can resolve the
+    # callback module path "graph/litellm_callbacks.py" relative to it.
+    repo_root = Path(__file__).resolve().parents[1]
+    config_fd, config_path = tempfile.mkstemp(
+        suffix="_litellm.yaml", prefix="goose_proxy_", dir=str(repo_root)
+    )
     os.close(config_fd)
     try:
         with open(config_path, "w") as f:
@@ -135,14 +149,34 @@ def goose_session():
         # Resolve the litellm binary relative to the running Python interpreter
         # so it works regardless of whether the venv is activated in the shell.
         litellm_bin = Path(sys.executable).parent / "litellm"
+        proxy_env = os.environ.copy()
+        existing_pythonpath = proxy_env.get("PYTHONPATH", "")
+        proxy_env["PYTHONPATH"] = (
+            f"{repo_root}{os.pathsep}{existing_pythonpath}"
+            if existing_pythonpath
+            else str(repo_root)
+        )
+        if workflow_id:
+            proxy_env["NGB_WORKFLOW_ID"] = workflow_id
+        if stage:
+            proxy_env["NGB_WORKFLOW_STAGE"] = stage
+
+        proxy_log = log_path(workflow_id or "proxy", "litellm_proxy")
+        proxy_log_fh = open(proxy_log, "w")
         proc = subprocess.Popen(
             [str(litellm_bin), "--config", config_path, "--port", str(port)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=proxy_log_fh,
+            stderr=subprocess.STDOUT,
+            env=proxy_env,
         )
         try:
-            _wait_for_proxy(port)
-            yield os.environ.copy()
+            _wait_for_proxy(port, proc=proc)
+            env = os.environ.copy()
+            env["GOOSE_PROVIDER"] = "openai"
+            env["GOOSE_MODEL"] = model
+            env["OPENAI_BASE_URL"] = f"http://127.0.0.1:{port}"
+            env["OPENAI_API_KEY"] = "sk-local"
+            yield env
         finally:
             proc.terminate()
             try:
@@ -151,6 +185,7 @@ def goose_session():
                 proc.kill()
                 proc.wait()
     finally:
+        proxy_log_fh.close()
         try:
             os.unlink(config_path)
         except FileNotFoundError:

@@ -113,8 +113,14 @@ prompt: |
   - Update tasks to reflect clarified requirements
   - Remove questions that have been answered from `questions_for_reviewer`
   - Only add NEW questions if the answers reveal additional ambiguity
-  - Update `status` to "pass" if all concerns have been addressed
-  - Keep `risks` that are still relevant; remove those addressed by answers
+  - If the reviewer explicitly accepts/acknowledges a risk (e.g., "I accept this risk",
+    "proceed anyway", "that's fine", "acknowledged"), treat that risk as **acknowledged**.
+    Acknowledged risks may remain in the `risks` array for documentation purposes,
+    but they do NOT force the status away from "pass".
+  - Update `status` to "pass" if all questions have been answered AND all remaining
+    risks are either removed or acknowledged by the reviewer
+  - Remove risks that are no longer relevant based on the answers
+  - Keep risks that are still relevant (even if acknowledged) for documentation
   {% endif %}
 
   ## Step 2: Fetch JIRA Ticket Data
@@ -198,7 +204,10 @@ prompt: |
 
   ### Status Invariants (MUST follow):
   - If `questions_for_reviewer` is non-empty, status MUST be `"concerns"` or `"blocked"` (never `"pass"`).
-  - If `risks` is non-empty and there are no critical blockers, status MUST be `"concerns"` (never `"pass"`).
+  - If `risks` is non-empty AND those risks have NOT been acknowledged by the reviewer
+    in a previous clarification round, status MUST be `"concerns"` (never `"pass"`).
+  - If `risks` is non-empty BUT all risks have been explicitly acknowledged/accepted
+    by the reviewer in clarifications, status CAN be `"pass"`.
   - Use `"blocked"` only when implementation cannot proceed without additional reviewer input.
 
   ### Critical Schema Rules:

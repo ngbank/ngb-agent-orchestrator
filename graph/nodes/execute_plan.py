@@ -108,7 +108,10 @@ def execute_plan(state: OrchestratorState) -> dict:
     try:
         click.echo(f"🪵 Running execute recipe for {ticket_key}...")
         mcp_python = os.environ.get("GOOSE_MCP_PYTHON", "python")
-        with open(lp, "a") as log_file, goose_session() as goose_env:
+        with (
+            open(lp, "a") as log_file,
+            goose_session(workflow_id=workflow_id, stage="execute") as goose_env,
+        ):
             log_file.write("\n=== goose run execute recipe ===\n")
             result = run_and_tee(
                 [
