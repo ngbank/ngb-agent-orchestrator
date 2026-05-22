@@ -14,6 +14,7 @@ import pytest
 from jira.exceptions import JIRAError
 
 from dispatcher.jira_client import (
+    JiraAPIError,
     JiraAuthenticationError,
     JiraClient,
     JiraCommentError,
@@ -110,6 +111,17 @@ class TestJiraClient:
         assert "JIRA_URL" in error_msg
         assert "JIRA_EMAIL" in error_msg
         assert "JIRA_API_TOKEN" in error_msg
+
+    @patch("dispatcher.jira_client.JIRA")
+    def test_init_api_error_500(self, mock_jira_class, mock_env_vars):
+        """Test that JiraAPIError is raised on non-auth init failures."""
+        jira_error = JIRAError(status_code=500, text="Internal Server Error")
+        mock_jira_class.side_effect = jira_error
+
+        with pytest.raises(JiraAPIError) as exc_info:
+            JiraClient()
+
+        assert "Failed to connect to JIRA" in str(exc_info.value)
 
     @patch("dispatcher.jira_client.JIRA")
     def test_init_authentication_failure_401(self, mock_jira_class, mock_env_vars):
@@ -236,7 +248,7 @@ class TestJiraClient:
 
     @patch("dispatcher.jira_client.JIRA")
     def test_get_ticket_other_error(self, mock_jira_class, mock_env_vars):
-        """Test that other JIRA errors are wrapped in JiraAuthenticationError."""
+        """Test that other JIRA errors are wrapped in JiraAPIError."""
         mock_jira_instance = Mock()
         jira_error = JIRAError(status_code=500, text="Internal Server Error")
         mock_jira_instance.issue.side_effect = jira_error
@@ -244,7 +256,7 @@ class TestJiraClient:
 
         client = JiraClient()
 
-        with pytest.raises(JiraAuthenticationError) as exc_info:
+        with pytest.raises(JiraAPIError) as exc_info:
             client.get_ticket("AOS-34")
 
         assert "Failed to fetch ticket" in str(exc_info.value)

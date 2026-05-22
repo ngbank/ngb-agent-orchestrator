@@ -142,12 +142,7 @@ def goose_session():
         )
         try:
             _wait_for_proxy(port)
-            env = os.environ.copy()
-            env["GOOSE_PROVIDER"] = "openai"
-            env["GOOSE_MODEL"] = model
-            env["OPENAI_BASE_URL"] = f"http://127.0.0.1:{port}"
-            env["OPENAI_API_KEY"] = "sk-local"
-            yield env
+            yield os.environ.copy()
         finally:
             proc.terminate()
             try:

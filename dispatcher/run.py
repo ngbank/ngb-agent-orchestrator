@@ -32,6 +32,7 @@ from langgraph.errors import GraphInterrupt  # noqa: E402
 from langgraph.types import Command  # noqa: E402
 
 from dispatcher.jira_client import (  # noqa: E402
+    JiraAPIError,
     JiraAuthenticationError,
     JiraClient,
     JiraCommentError,
@@ -316,6 +317,11 @@ def _handle_run(ticket: str, dry_run: bool) -> None:
     except JiraAuthenticationError as e:
         click.echo(f"❌ JIRA authentication error: {e}", err=True)
         click.echo("   Please verify your credentials are correct.", err=True)
+        sys.exit(1)
+
+    except JiraAPIError as e:
+        click.echo(f"❌ JIRA API error: {e}", err=True)
+        click.echo("   Please retry or check JIRA availability/connectivity.", err=True)
         sys.exit(1)
 
     except KeyboardInterrupt:

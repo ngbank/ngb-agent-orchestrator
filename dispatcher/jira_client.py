@@ -25,6 +25,12 @@ class JiraAuthenticationError(Exception):
     pass
 
 
+class JiraAPIError(Exception):
+    """Raised when non-authentication JIRA API operations fail."""
+
+    pass
+
+
 class JiraTicketNotFoundError(Exception):
     """Raised when a JIRA ticket is not found (404)."""
 
@@ -106,7 +112,7 @@ class JiraClient:
                     "https://id.atlassian.com/manage-profile/security/api-tokens"
                 ) from e
             else:
-                raise JiraAuthenticationError(f"Failed to connect to JIRA: {e}") from e
+                raise JiraAPIError(f"Failed to connect to JIRA: {e}") from e
 
     def get_ticket(self, ticket_key: str) -> JiraTicket:
         """
@@ -149,7 +155,7 @@ class JiraClient:
                     "and have access to this project."
                 ) from e
             else:
-                raise JiraAuthenticationError(f"Failed to fetch ticket '{ticket_key}': {e}") from e
+                raise JiraAPIError(f"Failed to fetch ticket '{ticket_key}': {e}") from e
 
     def post_comment(self, ticket_key: str, comment: str) -> bool:
         """
