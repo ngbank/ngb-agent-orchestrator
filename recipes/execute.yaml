@@ -121,8 +121,8 @@ prompt: |
   Extract: `ticket_key`, `summary`, `tasks`, `approach`.
 
   **Early write anchor — REQUIRED immediately after reading the WorkPlan:**
-  Write an initial reasoning diary entry to `{{ reasoning_path }}` using the `write_file`
-  tool (not a shell heredoc). This must be the very next tool call after reading the WorkPlan.
+  Write an initial reasoning diary entry to `{{ reasoning_path }}` using the developer
+  extension's file writing tool or `python3 -c`. This must be the very next tool call after reading the WorkPlan.
   Content should be your initial understanding: the ticket goal, list of tasks, and any
   questions or uncertainties. This anchors the session with a tool call and prevents a
   narration-only turn from triggering the Goose injection.
@@ -210,9 +210,10 @@ prompt: |
   - If unrelated local changes appear during execution, remove only those unrelated changes before commit
 
   **File editing rules — CRITICAL:**
-  - Always use the `write_file` or `str_replace` tools from the developer extension to create or modify files
+  - To create or modify files, use the developer extension's native file editing tools if available (e.g. `text_editor` with `create` or `str_replace` commands)
+  - If no native file editing tool is available, use a single Python invocation: `python3 -c "with open('path', 'w') as f: f.write('...')"` — never use shell heredocs
   - NEVER write file content via shell heredocs (`cat << 'EOF'`, etc.) — heredocs corrupt escape sequences (e.g. `\n`, `\t`), backslashes, and quotes, causing syntax errors
-  - If you need to replace a specific section of a file, read the file first then use `str_replace` with exact context lines
+  - If you need to replace a specific section of a file, read the file first then make a targeted replacement
 
   ## Step 5: Commit Loop
 
@@ -295,8 +296,8 @@ prompt: |
      - **Testing**: reflect actual build/test results from Step 5 (Commit Loop)
   3. If the template **does not exist**, use a minimal description with the same information.
 
-  Write the PR body to `/tmp/pr_body_{{ ticket_key }}.md` using the `write_file`
-  tool, then create the PR using `vcs.pr_command` from Step 2:
+  Write the PR body to `/tmp/pr_body_{{ ticket_key }}.md` using the developer
+  extension's file writing tool or `python3 -c`, then create the PR using `vcs.pr_command` from Step 2:
   ```
   {vcs.pr_command} \
     --title "[{{ ticket_key }}] {WorkPlan summary}" \
@@ -330,7 +331,7 @@ prompt: |
   ## Step 8: Write Summary File and Call final_output
 
   First, write the execution summary JSON to `{{ output_path }}` so the dispatcher
-  can read it (use `write_file` — do not use a shell heredoc):
+  can read it (use the developer extension's file writing tool or `python3 -c` — do not use a shell heredoc):
 
   On success the content should be:
   ```json
