@@ -108,22 +108,7 @@ prompt: |
   - **Execute all steps sequentially without stopping.** After each tool call completes, immediately make the next tool call — never emit a text-only response mid-session.
   - **The session is complete only when you have written the execution summary JSON to `{{ output_path }}` and verified it exists.**
   - Text responses without tool calls end the session — only produce one at the very end, after the summary file is verified.
-
-  ### Goose FINAL_OUTPUT_CONTINUATION_MESSAGE — DANGER
-
-  This recipe registers a `response:` JSON schema, which causes Goose to register a
-  mandatory `final_output` tool. In the Goose `reply_internal` loop, **any turn that
-  produces zero tool calls** while `final_output` is registered triggers a synthetic
-  user message: "You MUST call the `final_output` tool NOW...". The model typically
-  interprets this as an abort signal and immediately calls `final_output` with
-  `status: failed`, terminating the session regardless of how much work remains.
-
-  **This means:** narration turns, planning summaries, and progress updates that contain
-  no tool call are session-fatal. Every single turn — including the very first turn after
-  reading this prompt — MUST end with at least one tool call (read, write, shell, MCP).
-
-  - **Single-file reads only:** Never combine multiple file reads in one shell command.
-    Issue one `cat`, `rg`, or `read_file` per file per turn.
+  - **Single-file reads only:** Never combine multiple file reads in one shell command. Issue one `cat`, `rg`, or `read_file` per file per turn.
   - **No `cd && cmd` compound patterns** that chain across files or directories in one call.
   - **Do not narrate** before acting — go directly to the first tool call.
 
