@@ -38,6 +38,7 @@ def log_path(workflow_id: str, stage: str) -> Path:
 _AZURE_API_VERSIONS: dict[str, str] = {
     "gpt-4.1": "2024-12-01-preview",
     "gpt-5.3-codex": "2025-04-01-preview",
+    "gpt-5.4": "2025-04-01-preview",
 }
 
 

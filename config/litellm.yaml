@@ -25,6 +25,14 @@ model_list:
       api_base: os.environ/AZURE_API_BASE
       api_version: os.environ/AZURE_CODEX_API_VERSION
 
+  # Azure AI Foundry — gpt-5.4
+  - model_name: azure-gpt5-4
+    litellm_params:
+      model: os.environ/AZURE_GPT54_MODEL   # full string e.g. "azure/gpt-5.4"
+      api_key: os.environ/AZURE_API_KEY
+      api_base: os.environ/AZURE_API_BASE
+      api_version: os.environ/AZURE_GPT54_API_VERSION
+
   # Anthropic
   - model_name: claude
     litellm_params:
