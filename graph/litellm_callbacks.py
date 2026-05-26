@@ -118,3 +118,51 @@ class TokenUsageLogger(CustomLogger):
 
 
 proxy_handler_instance = TokenUsageLogger()
+
+
+def aggregate_token_usage(workflow_id: str, stage: str) -> dict:
+    """Read llm_token_usage.jsonl and aggregate stats for a specific workflow+stage.
+
+    Returns a dict with keys: stage, turns, prompt_tokens, completion_tokens,
+    total_tokens, stop_reasons.
+    """
+    default = Path(tempfile.gettempdir()) / "ngb-agent-orchestrator"
+    base = Path(os.getenv("LOGS_DIR", str(default)))
+    jsonl_path = base / workflow_id / "llm_token_usage.jsonl"
+
+    turns = 0
+    prompt_tokens = 0
+    completion_tokens = 0
+    total_tokens = 0
+    stop_reasons: list[str] = []
+
+    try:
+        with jsonl_path.open("r", encoding="utf-8") as fp:
+            for line in fp:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if entry.get("workflow_id") != workflow_id or entry.get("stage") != stage:
+                    continue
+                turns += 1
+                prompt_tokens += entry.get("prompt_tokens", 0) or 0
+                completion_tokens += entry.get("completion_tokens", 0) or 0
+                total_tokens += entry.get("total_tokens", 0) or 0
+                reason = entry.get("stop_reason")
+                if reason:
+                    stop_reasons.append(reason)
+    except FileNotFoundError:
+        pass
+
+    return {
+        "stage": stage,
+        "turns": turns,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "stop_reasons": stop_reasons,
+    }

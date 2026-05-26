@@ -6,8 +6,10 @@ import tempfile
 
 import click
 
+from graph.litellm_callbacks import aggregate_token_usage
 from graph.utils import goose_session, log_path, run_and_tee
 from graph.work_planner.state import WorkPlannerState
+from state.state_store import update_usage_summary
 
 
 def generate_plan(state: WorkPlannerState) -> dict:
@@ -70,6 +72,13 @@ def generate_plan(state: WorkPlannerState) -> dict:
         with open(lp, "w") as log_file:
             with goose_session(workflow_id=workflow_id, stage="plan") as goose_env:
                 result = run_and_tee(cmd, log_file, env=goose_env)
+
+        # Persist token usage to SQLite
+        try:
+            usage = aggregate_token_usage(workflow_id, "plan")
+            update_usage_summary(workflow_id, "plan", usage)
+        except Exception as exc:  # noqa: BLE001
+            click.echo(f"⚠️  Failed to store usage summary: {exc}", err=True)
 
         if result.returncode != 0:
             return {"error": f"Goose plan recipe exited with code {result.returncode}"}

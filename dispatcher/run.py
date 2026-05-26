@@ -19,6 +19,7 @@ Usage:
     python -m dispatcher.run --reject <workflow_id> --reason "scope too broad"
 """
 
+import json
 import sys
 import uuid
 from typing import Optional
@@ -571,6 +572,42 @@ def _handle_history(ticket_key: Optional[str], workflow_id: Optional[str]) -> No
             else:
                 outcome = "✅ done"
             click.echo(f"  {step:<6} {node_emoji} {node:<18} {outcome}")
+
+    # --- Token & turn usage ---
+    usage_raw = wf.get("usage_summary")
+    if usage_raw:
+        try:
+            usage: dict = json.loads(usage_raw) if isinstance(usage_raw, str) else usage_raw
+        except (json.JSONDecodeError, TypeError):
+            usage = {}
+        if usage:
+            click.echo()
+            click.echo("  Token & Turn Usage")
+            click.echo(
+                f"  {'Stage':<10} {'Turns':>6}  {'Prompt':>10}  "
+                f"{'Completion':>12}  {'Total':>10}  Stop Reasons"
+            )
+            click.echo(f"  {'-'*9} {'-'*6}  {'-'*10}  {'-'*12}  {'-'*10}  {'-'*20}")
+            total_turns = total_prompt = total_completion = total_tokens = 0
+            for stage, data in sorted(usage.items()):
+                turns = data.get("turns", 0)
+                prompt = data.get("prompt_tokens", 0)
+                completion = data.get("completion_tokens", 0)
+                tokens = data.get("total_tokens", 0)
+                reasons = ", ".join(sorted(set(data.get("stop_reasons") or [])))
+                click.echo(
+                    f"  {stage:<10} {turns:>6,}  {prompt:>10,}  "
+                    f"{completion:>12,}  {tokens:>10,}  {reasons}"
+                )
+                total_turns += turns
+                total_prompt += prompt
+                total_completion += completion
+                total_tokens += tokens
+            click.echo(f"  {'-'*9} {'-'*6}  {'-'*10}  {'-'*12}  {'-'*10}")
+            click.echo(
+                f"  {'TOTAL':<10} {total_turns:>6,}  {total_prompt:>10,}  "
+                f"{total_completion:>12,}  {total_tokens:>10,}"
+            )
 
 
 def _handle_cancel(
