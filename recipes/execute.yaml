@@ -187,13 +187,20 @@ prompt: |
 
   **Per-task loop (repeat for every task):**
 
-  1. **Read files for this task only** — read each file in `files_likely_affected` for
-     the current task, one file per tool call. Do NOT read files for future tasks upfront.
-     Do NOT issue compound reads (`cat file1 file2` or shell pipelines across multiple files).
-  2. **Implement** — make the described changes immediately after reading. Be precise and
+  For each file in the task's `files_likely_affected` list:
+  1. **Read** — read the file (one file per tool call, no compound reads).
+  2. **Edit** — implement the required change immediately after reading. Be precise and
      minimal; follow existing code style, indentation, and patterns.
-  3. **Advance** — append a brief diary note to `{{ reasoning_path }}` recording what you
-     changed and why, then move to the next task.
+  3. **Diary write** — immediately after every edit, append a one-line note using:
+     ```
+     python3 -c "open('{{ reasoning_path }}', 'a').write('Task <id> / <filename>: <what changed>\n')"
+     ```
+     This write is MANDATORY after every edit — it is the tool call that follows each
+     file change and prevents an accidental text-only turn from terminating the session.
+
+  After all files for the task are done:
+  4. **Confirm** — run `git diff --stat` to verify the edits exist, then proceed
+     immediately to the first file of the next task.
 
   **Implementation principles:**
   - Match the coding style, indentation, and patterns of existing files
