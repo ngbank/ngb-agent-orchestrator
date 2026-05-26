@@ -191,6 +191,7 @@ def goose_session(workflow_id: Optional[str] = None, stage: Optional[str] = None
             env["GOOSE_MODEL"] = model
             env["OPENAI_BASE_URL"] = f"http://127.0.0.1:{port}"
             env["OPENAI_API_KEY"] = "sk-local"
+            env["NGB_ORCHESTRATOR_ROOT"] = str(repo_root)
             yield env
         finally:
             proc.terminate()

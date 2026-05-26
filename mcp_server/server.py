@@ -13,15 +13,23 @@ Or register in your MCP client config (e.g. goose, claude desktop) pointing at t
 """
 
 import json
+
+# Anchor config lookups to the orchestrator installation, not __file__, because
+# the MCP server may be imported from a cloned working directory when Goose runs
+# the execute recipe (Python -m prepends cwd to sys.path, which may shadow the
+# installed module). NGB_ORCHESTRATOR_ROOT is set by graph/utils.py goose_session.
+import os as _os
 import re
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
-# Path to the mapping file, relative to this file's location (repo root/config/)
-_MAPPING_FILE = Path(__file__).parent.parent / "config" / "project-repo-mapping.md"
-_RULES_FILE = Path(__file__).parent.parent / "config" / "developer-rules.json"
-_SETUP_FILE = Path(__file__).parent.parent / "config" / "project-setup.json"
+_CONFIG_ROOT = (
+    Path(_os.environ.get("NGB_ORCHESTRATOR_ROOT", str(Path(__file__).parent.parent))) / "config"
+)
+_MAPPING_FILE = _CONFIG_ROOT / "project-repo-mapping.md"
+_RULES_FILE = _CONFIG_ROOT / "developer-rules.json"
+_SETUP_FILE = _CONFIG_ROOT / "project-setup.json"
 
 mcp = FastMCP(
     name="agent-harness",
