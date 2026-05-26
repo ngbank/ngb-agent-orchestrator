@@ -141,12 +141,14 @@ def get_project_setup(project_key: str) -> dict:
     Raises:
         ValueError: If no setup configuration is found for the project key.
     """
-    key = project_key.strip().upper()
+    # Accept either a project key ("AOS") or a full ticket key ("AOS-81").
+    raw = project_key.strip().upper()
+    key = raw.split("-")[0] if "-" in raw else raw
     config = json.loads(_SETUP_FILE.read_text())
     if key not in config:
         known = ", ".join(sorted(config.keys())) or "none configured"
         raise ValueError(
-            f"No setup configuration for project '{project_key}'. "
+            f"No setup configuration for project '{project_key}' (resolved key: '{key}'). "
             f"Known projects: {known}. "
             f"Add an entry to config/project-setup.json."
         )

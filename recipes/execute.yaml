@@ -217,10 +217,10 @@ prompt: |
   - If unrelated local changes appear during execution, remove only those unrelated changes before commit
 
   **File editing rules — CRITICAL:**
-  - To create or modify files, use the developer extension's native file editing tools if available (e.g. `text_editor` with `create` or `str_replace` commands)
-  - If no native file editing tool is available, use a single Python invocation: `python3 -c "with open('path', 'w') as f: f.write('...')"` — never use shell heredocs
+  - To create or modify files, use whatever file-writing tool is available in the current session (the developer extension exposes tools such as `write`, `edit`, or similar — use whichever is present)
+  - If no dedicated file-writing tool is available, use a Python invocation: `python3 -c "with open('path', 'w') as f: f.write('...')"` — never use shell heredocs
   - NEVER write file content via shell heredocs (`cat << 'EOF'`, etc.) — heredocs corrupt escape sequences (e.g. `\n`, `\t`), backslashes, and quotes, causing syntax errors
-  - If you need to replace a specific section of a file, read the file first then make a targeted replacement
+  - If you need to replace a specific section of a file, read the file first then make a targeted edit
 
   ## Step 5: Commit Loop
 
