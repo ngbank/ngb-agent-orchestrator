@@ -109,6 +109,24 @@ prompt: |
   - **The session is complete only when you have written the execution summary JSON to `{{ output_path }}` and verified it exists.**
   - Text responses without tool calls end the session — only produce one at the very end, after the summary file is verified.
 
+  ### Goose FINAL_OUTPUT_CONTINUATION_MESSAGE — DANGER
+
+  This recipe registers a `response:` JSON schema, which causes Goose to register a
+  mandatory `final_output` tool. In the Goose `reply_internal` loop, **any turn that
+  produces zero tool calls** while `final_output` is registered triggers a synthetic
+  user message: "You MUST call the `final_output` tool NOW...". The model typically
+  interprets this as an abort signal and immediately calls `final_output` with
+  `status: failed`, terminating the session regardless of how much work remains.
+
+  **This means:** narration turns, planning summaries, and progress updates that contain
+  no tool call are session-fatal. Every single turn — including the very first turn after
+  reading this prompt — MUST end with at least one tool call (read, write, shell, MCP).
+
+  - **Single-file reads only:** Never combine multiple file reads in one shell command.
+    Issue one `cat`, `rg`, or `read_file` per file per turn.
+  - **No `cd && cmd` compound patterns** that chain across files or directories in one call.
+  - **Do not narrate** before acting — go directly to the first tool call.
+
   ## Step 1: Load Developer Rules and Read WorkPlan
 
   Call `get_developer_rules`, then immediately read the WorkPlan:
@@ -116,6 +134,29 @@ prompt: |
   cat {{ work_plan_path }}
   ```
   Extract: `ticket_key`, `summary`, `tasks`, `approach`.
+
+  **Early write anchor — REQUIRED immediately after reading the WorkPlan:**
+  Write an initial reasoning diary entry to `{{ reasoning_path }}` using the `write_file`
+  tool (not a shell heredoc). This must be the very next tool call after reading the WorkPlan.
+  Content should be your initial understanding: the ticket goal, list of tasks, and any
+  questions or uncertainties. This anchors the session with a tool call and prevents a
+  narration-only turn from triggering the Goose injection.
+
+  Example content (adapt to the actual WorkPlan):
+  ```
+  === PRE-EXECUTION REASONING ===
+  Ticket: <ticket_key>
+  Goal: <summary>
+
+  Tasks:
+  1. <task id> — <description>
+  ...
+
+  Approach: <approach>
+
+  Open questions / risks:
+  - <any uncertainties>
+  ```
 
   ## Step 2: Confirm Working Directory and Set Up Environment
 
@@ -156,13 +197,18 @@ prompt: |
 
   ## Step 4: Implement Tasks
 
-  For each task in the WorkPlan `tasks` array (in order by `id`):
+  Work through each task in the WorkPlan `tasks` array **one at a time**, in order by `id`.
+  Complete the full read→implement→verify cycle for task N before starting task N+1.
 
-  1. Read the `description` carefully — it tells you exactly what to implement
-  2. Review the `files_likely_affected` list to understand scope
-  3. Read those files to understand existing patterns and conventions
-  4. Make the described code changes — be precise and minimal, follow existing code style
-  5. Do NOT commit after each task; accumulate all changes
+  **Per-task loop (repeat for every task):**
+
+  1. **Read files for this task only** — read each file in `files_likely_affected` for
+     the current task, one file per tool call. Do NOT read files for future tasks upfront.
+     Do NOT issue compound reads (`cat file1 file2` or shell pipelines across multiple files).
+  2. **Implement** — make the described changes immediately after reading. Be precise and
+     minimal; follow existing code style, indentation, and patterns.
+  3. **Advance** — append a brief diary note to `{{ reasoning_path }}` recording what you
+     changed and why, then move to the next task.
 
   **Implementation principles:**
   - Match the coding style, indentation, and patterns of existing files
