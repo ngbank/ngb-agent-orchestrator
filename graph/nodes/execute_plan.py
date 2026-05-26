@@ -7,10 +7,11 @@ import tempfile
 
 import click
 
+from graph.litellm_callbacks import aggregate_token_usage
 from graph.state import OrchestratorState
 from graph.utils import goose_session, log_path, run_and_tee
 from mcp_server.server import get_repo_for_project
-from state.state_store import update_execution_summary, update_status
+from state.state_store import update_execution_summary, update_status, update_usage_summary
 from state.workflow_status import WorkflowStatus
 
 
@@ -161,6 +162,14 @@ def execute_plan(state: OrchestratorState) -> dict:
             execution_summary = _failure_summary(
                 ticket_key, f"Execution summary not written by recipe: {exc}"
             )
+
+        # Persist token usage to SQLite
+        if workflow_id:
+            try:
+                usage = aggregate_token_usage(workflow_id, "execute")
+                update_usage_summary(workflow_id, "execute", usage)
+            except Exception as exc:  # noqa: BLE001
+                click.echo(f"⚠️  Failed to store usage summary: {exc}", err=True)
 
         # Persist to SQLite
         if workflow_id:

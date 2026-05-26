@@ -457,3 +457,139 @@ def test_update_status_rejected_creates_audit_log(test_db):
     ]
     assert len(rejection_entries) == 1
     assert rejection_entries[0]["actor"] == "developer"
+
+
+# ---------------------------------------------------------------------------
+# update_usage_summary tests
+# ---------------------------------------------------------------------------
+
+
+def test_update_usage_summary_stores_stage(test_db):
+    """Test that usage summary is persisted for a given stage."""
+    import json
+
+    workflow_id = state_store.create_workflow(ticket_key="AOS-85")
+    data = {
+        "stage": "plan",
+        "turns": 12,
+        "prompt_tokens": 3000,
+        "completion_tokens": 800,
+        "total_tokens": 3800,
+        "stop_reasons": ["stop", "stop"],
+    }
+
+    state_store.update_usage_summary(workflow_id, "plan", data)
+
+    workflow = state_store.get_workflow(workflow_id)
+    usage_summary = json.loads(workflow["usage_summary"])
+    assert "plan" in usage_summary
+    assert usage_summary["plan"]["turns"] == 12
+    assert usage_summary["plan"]["total_tokens"] == 3800
+    assert usage_summary["plan"]["stop_reasons"] == ["stop", "stop"]
+
+
+def test_update_usage_summary_merges_multiple_stages(test_db):
+    """Test that calling update_usage_summary for two stages keeps both."""
+    import json
+
+    workflow_id = state_store.create_workflow(ticket_key="AOS-85")
+    plan_data = {
+        "stage": "plan",
+        "turns": 10,
+        "prompt_tokens": 1000,
+        "completion_tokens": 400,
+        "total_tokens": 1400,
+        "stop_reasons": ["stop"],
+    }
+    execute_data = {
+        "stage": "execute",
+        "turns": 42,
+        "prompt_tokens": 18500,
+        "completion_tokens": 6200,
+        "total_tokens": 24700,
+        "stop_reasons": ["max_tokens"],
+    }
+
+    state_store.update_usage_summary(workflow_id, "plan", plan_data)
+    state_store.update_usage_summary(workflow_id, "execute", execute_data)
+
+    workflow = state_store.get_workflow(workflow_id)
+    usage_summary = json.loads(workflow["usage_summary"])
+    assert "plan" in usage_summary
+    assert "execute" in usage_summary
+    assert usage_summary["plan"]["turns"] == 10
+    assert usage_summary["execute"]["turns"] == 42
+
+
+def test_update_usage_summary_overwrites_same_stage(test_db):
+    """Test that re-calling for the same stage replaces the previous data."""
+    import json
+
+    workflow_id = state_store.create_workflow(ticket_key="AOS-85")
+    state_store.update_usage_summary(
+        workflow_id,
+        "plan",
+        {
+            "stage": "plan",
+            "turns": 5,
+            "prompt_tokens": 100,
+            "completion_tokens": 40,
+            "total_tokens": 140,
+            "stop_reasons": [],
+        },
+    )
+    state_store.update_usage_summary(
+        workflow_id,
+        "plan",
+        {
+            "stage": "plan",
+            "turns": 8,
+            "prompt_tokens": 200,
+            "completion_tokens": 80,
+            "total_tokens": 280,
+            "stop_reasons": ["stop"],
+        },
+    )
+
+    workflow = state_store.get_workflow(workflow_id)
+    usage_summary = json.loads(workflow["usage_summary"])
+    assert usage_summary["plan"]["turns"] == 8
+
+
+def test_update_usage_summary_noop_for_missing_workflow(test_db):
+    """Test that update_usage_summary is a no-op when workflow_id does not exist."""
+    # Should not raise
+    state_store.update_usage_summary(
+        "does-not-exist",
+        "plan",
+        {
+            "stage": "plan",
+            "turns": 1,
+            "prompt_tokens": 10,
+            "completion_tokens": 5,
+            "total_tokens": 15,
+            "stop_reasons": [],
+        },
+    )
+
+
+def test_update_usage_summary_creates_audit_log(test_db):
+    """Test that update_usage_summary creates an audit log entry."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-85")
+    state_store.update_usage_summary(
+        workflow_id,
+        "execute",
+        {
+            "stage": "execute",
+            "turns": 3,
+            "prompt_tokens": 50,
+            "completion_tokens": 20,
+            "total_tokens": 70,
+            "stop_reasons": [],
+        },
+    )
+
+    audit_log = state_store.get_audit_log(workflow_id)
+    usage_entries = [e for e in audit_log if e["action"] == "usage_summary_stored"]
+    assert len(usage_entries) == 1
+    assert "execute" in usage_entries[0]["reason"]

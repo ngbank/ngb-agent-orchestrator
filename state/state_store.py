@@ -259,6 +259,68 @@ def update_execution_summary(
         conn.close()
 
 
+def update_usage_summary(
+    workflow_id: str,
+    stage: str,
+    data: Dict,
+    actor: str = "system",
+) -> None:
+    """
+    Persist per-stage LLM token usage and turn count for a workflow.
+
+    Reads the existing usage_summary blob (if any), merges the new stage data
+    under the key ``stage``, and writes it back.  This is safe to call
+    independently for each stage (plan, execute, etc.).
+
+    Args:
+        workflow_id: UUID of the workflow
+        stage: Goose session stage label, e.g. 'plan' or 'execute'
+        data: Dict produced by aggregate_token_usage() for this stage
+        actor: Who/what performed the update
+    """
+    now = datetime.now(UTC).isoformat()
+
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT usage_summary FROM workflows WHERE id = ?",
+            (workflow_id,),
+        ).fetchone()
+        if row is None:
+            return
+
+        existing: Dict = {}
+        if row["usage_summary"]:
+            try:
+                existing = json.loads(row["usage_summary"])
+            except (json.JSONDecodeError, TypeError):
+                existing = {}
+
+        existing[stage] = data
+        summary_json = json.dumps(existing)
+
+        conn.execute(
+            """
+            UPDATE workflows
+            SET usage_summary = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (summary_json, now, workflow_id),
+        )
+        conn.commit()
+
+        _create_audit_log(
+            conn,
+            workflow_id=workflow_id,
+            actor=actor,
+            action="usage_summary_stored",
+            reason=f"Token usage summary saved for stage '{stage}'",
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def list_workflows(
     ticket_key: Optional[str] = None,
     status: Optional[str] = None,
