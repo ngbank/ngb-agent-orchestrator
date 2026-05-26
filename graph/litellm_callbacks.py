@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
@@ -15,7 +16,10 @@ _WRITE_LOCK = Lock()
 
 
 def _logs_dir() -> Path:
-    path = Path(os.getenv("LOGS_DIR", "logs"))
+    default = Path(tempfile.gettempdir()) / "ngb-agent-orchestrator"
+    base = Path(os.getenv("LOGS_DIR", str(default)))
+    workflow_id = os.getenv("NGB_WORKFLOW_ID", "unknown")
+    path = base / workflow_id
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -101,6 +105,9 @@ class TokenUsageLogger(CustomLogger):
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": total_tokens,
+            "stop_reason": response.get("choices", [{}])[0].get("finish_reason")
+            or response.get("stop_reason")
+            or response.get("finish_reason"),
             "usage": usage,
         }
 

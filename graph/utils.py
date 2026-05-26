@@ -22,14 +22,15 @@ def _get_actor() -> str:
 
 
 def _logs_dir() -> Path:
-    path = Path(os.getenv("LOGS_DIR", "logs"))
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    default = Path(tempfile.gettempdir()) / "ngb-agent-orchestrator"
+    return Path(os.getenv("LOGS_DIR", str(default)))
 
 
 def log_path(workflow_id: str, stage: str) -> Path:
     """Return the log file path for a given workflow and stage (e.g. 'plan', 'execute')."""
-    return _logs_dir() / f"{workflow_id}_{stage}.log"
+    workflow_dir = _logs_dir() / workflow_id
+    workflow_dir.mkdir(parents=True, exist_ok=True)
+    return workflow_dir / f"{workflow_id}_{stage}.log"
 
 
 # Azure deployment name → API version.
@@ -170,7 +171,20 @@ def goose_session(workflow_id: Optional[str] = None, stage: Optional[str] = None
             env=proxy_env,
         )
         try:
-            _wait_for_proxy(port, proc=proc)
+            try:
+                _wait_for_proxy(port, proc=proc)
+            except RuntimeError as exc:
+                proxy_log_fh.flush()
+                tail = ""
+                try:
+                    with open(proxy_log, "r") as _lf:
+                        lines = _lf.readlines()
+                        tail = "".join(lines[-80:])
+                except Exception:
+                    pass
+                raise RuntimeError(
+                    f"{exc}\n\nProxy log ({proxy_log}):\n{tail or '(empty)'}"
+                ) from exc
             env = os.environ.copy()
             env["GOOSE_PROVIDER"] = "openai"
             env["GOOSE_MODEL"] = model

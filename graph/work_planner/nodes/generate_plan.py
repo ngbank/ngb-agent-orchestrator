@@ -57,6 +57,8 @@ def generate_plan(state: WorkPlannerState) -> dict:
             "run",
             "--recipe",
             "recipes/plan.yaml",
+            "--max-turns",
+            os.environ.get("GOOSE_MAX_TURNS", "200"),
             "--params",
             f"ticket_key={ticket_key}",
             "--params",
