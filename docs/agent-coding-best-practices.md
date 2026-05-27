@@ -143,16 +143,33 @@ if no_tools_called {
 fatal. The model receives a message that it typically interprets as an abort signal and immediately
 calls `final_output` with `status: failed` — even if implementation is incomplete.
 
-**Mitigation strategies (in order of impact):**
+`response:` is designed for short, one-shot recipes (classifiers, structured Q&A) where the model
+should not ramble — the injection nudges it back to producing schema-conformant output. It is
+actively hostile to long-horizon coding work, where text-only "thinking" turns are normal and
+expected between tool calls (deciding the next file to edit, planning a refactor, reading then
+writing).
 
-1. **Per-task read→implement loop** — structurally prevents bulk upfront reads, guarantees every
-   read is followed by a write within the same task scope.
-2. **Early write anchor** — immediately after reading the WorkPlan, write a `reasoning_path` entry
-   using `write_file`. This anchors the first 2-3 turns with tool calls before any cognitive work.
-3. **Explicit injection warning in the recipe** — explain the mechanism in plain English in the
-   `CRITICAL EXECUTION RULES` section so the model is primed to avoid it.
-4. **Cap compound reads** — restrict to one file per shell command; never combine reads across
-   multiple files in a single shell invocation.
+**Adopted mitigation (AOS-87): do not use `response:` for autonomous coding recipes.**
+
+Both `recipes/execute.yaml` and `recipes/plan.yaml` were originally written with `response:`
+schemas, but the dispatcher reads structured results from a file (`output_path`), never from
+Goose's `final_output` payload. The `response:` block was therefore redundant — its only runtime
+effect was enabling the injection mechanism that killed every long execute run.
+
+Without `response:` registered, Goose treats text-only turns benignly: the assistant message is
+recorded and the loop continues to the next turn. The session ends when the model stops emitting
+tool calls (typically because the recipe instructs it to stop after writing the summary file).
+
+**Design rules for recipes that need to run autonomously:**
+
+1. **Do not declare a `response:` schema.** Have the recipe write results to a file and have the
+   caller read that file.
+2. **Make the session end condition explicit and tool-anchored.** End the recipe with: "write the
+   summary JSON to `{{ output_path }}`, verify it exists, then stop emitting tool calls."
+3. **Keep prose instructions clear and brief.** Without injection pressure, the model does not need
+   lockstep diary writes or text-only-turn bans — those existed solely to defeat `response:`.
+4. **`response:` is still appropriate for short structured-output recipes** (classifiers, extractors,
+   summarizers) where the model should produce one structured answer and exit.
 
 ---
 
@@ -163,12 +180,11 @@ calls `final_output` with `status: failed` — even if implementation is incompl
 | Bounded file reads (≤100 lines per turn) | SWE-agent paper | ❌ Not enforced |
 | Inline linting on every edit | SWE-agent paper | ✅ Via pre-commit hooks at commit time |
 | Explicit empty-output messages | SWE-agent paper | N/A (shell handles this) |
-| Every turn must produce a tool call | Anthropic | ❌ Not enforced; violating this caused AOS-81 |
-| Per-task read→implement loop | Anthropic + aider | ❌ Step 4 allows bulk upfront reads |
-| Minimal targeted context loading | aider | ❌ Session reads many files before first write |
-| Absolute paths over `cd &&` compounds | Anthropic ACI | ❌ Recipe uses compound `cd && cmd` patterns |
-| Explicit framework constraint warning | Goose source | ❌ Current rule is indirect ("no text-only response") |
-| Early write anchor turn | Goose source | ❌ Not present |
+| Per-task read→implement loop | Anthropic + aider | ✅ Step 4 enforces per-task ordering |
+| Minimal targeted context loading | aider | ✅ `files_likely_affected` is authoritative; broad searches banned |
+| Absolute paths over `cd &&` compounds | Anthropic ACI | ✅ Compound patterns banned |
+| Omit `response:` schema for autonomous recipes | Goose source | ✅ Removed in AOS-87 |
+| Tool-anchored session end ("write file, then stop") | Goose source | ✅ Both recipes end on file-verification |
 
 ---
 
