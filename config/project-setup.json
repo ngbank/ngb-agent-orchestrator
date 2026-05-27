@@ -2,7 +2,7 @@
   "AOS": {
     "platform": "python",
     "setup_commands": [
-      "python3 -m venv venv",
+      "(python3 -m venv venv || python -m venv venv) && test -f venv/bin/activate",
       ". venv/bin/activate && pip install -r requirements.txt -q",
       ". venv/bin/activate && pip install -r requirements-dev.txt -q",
       ". venv/bin/activate && pip install -e . -q",
