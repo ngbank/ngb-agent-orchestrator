@@ -192,19 +192,24 @@ prompt: |
 
   **Per-task loop (repeat for every task):**
 
-  For each file in the task's `files_likely_affected` list:
+  For each file in the task's `files_likely_affected` list, execute this exact four-step sequence:
   1. **Read** — read the file (one file per tool call, no compound reads, no multi-file searches).
-  2. **Edit** — implement the required change immediately after reading. Be precise and
-     minimal; follow existing code style, indentation, and patterns.
-  3. **Diary write** — immediately after every edit, append a one-line note to
-     `{{ reasoning_path }}` using the developer extension's file-writing tool.
-     Content: `Task <id> / <filename>: <what changed>`
-     This write is MANDATORY after every edit — it is the tool call that follows each
-     file change and prevents an accidental text-only turn from terminating the session.
+  2. **Plan note** — immediately after reading, append a one-line note to `{{ reasoning_path }}`
+     describing the specific change you are about to make.
+     Content: `Task <id> / <filename>: planning — <what you will change and why>`
+     This is MANDATORY after every read — it is the tool call between the read and the edit.
+  3. **Edit** — implement the change using the developer extension's file-writing tool.
+     Be precise and minimal; follow existing code style, indentation, and patterns.
+  4. **Done note** — immediately after every edit, append a second one-line note to `{{ reasoning_path }}`.
+     Content: `Task <id> / <filename>: done — <what changed>`
+     This is MANDATORY after every edit.
 
   After all files for the task are done:
-  4. **Confirm** — run `git diff --stat` to verify the edits exist, then proceed
+  5. **Confirm** — run `git diff --stat` to verify the edits exist, then proceed
      immediately to the first file of the next task.
+
+  **Every file follows the same four-step sequence: read → plan note → edit → done note.
+  No text-only response is permitted between any two of these steps.**
 
   **Implementation principles:**
   - Match the coding style, indentation, and patterns of existing files
