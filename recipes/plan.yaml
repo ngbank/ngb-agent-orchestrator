@@ -158,8 +158,10 @@ prompt: |
   1. List the top-level directory structure (e.g., `ls` or `tree . --depth 2`)
   2. Read key files to understand conventions: dispatcher/run.py
   3. List relevant directories: dispatcher/, schemas/, state/, tests/, recipes/
-  4. Based on the ticket description and existing patterns, identify files likely to be CREATED or MODIFIED
-  5. Note any related test files that would need to be added or updated
+  4. After the last read, **immediately** append a one-line note to `/tmp/plan_anchor_{{ ticket_key }}.txt`
+     using the developer extension's file-writing tool:
+     Content: `Analysis complete for {{ ticket_key }}: proceeding to write WorkPlan JSON`
+     This is MANDATORY — it is the tool call between the last analysis read and the first write in Step 4.
 
   **Do NOT**:
   - Use `analyze focus:` to search for the feature's keywords (e.g., push, PR, github, branch) — they won't be found
