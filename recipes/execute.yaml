@@ -108,6 +108,10 @@ prompt: |
   - **Execute all steps sequentially without stopping.** After each tool call completes, immediately make the next tool call — never emit a text-only response mid-session.
   - **The session is complete only when you have written the execution summary JSON to `{{ output_path }}` and verified it exists.**
   - Text responses without tool calls end the session — only produce one at the very end, after the summary file is verified.
+  - **Single-file reads only:** Never combine multiple file reads in one shell command. Issue one `cat` or `read_file` per file per turn.
+  - **No broad searches before editing:** Do NOT use `rg`, `grep`, `find`, or `tree` to survey the codebase before starting Task 1. The WorkPlan's `files_likely_affected` is the authoritative list. Go directly to reading and editing those files.
+  - **No `cd && cmd` compound patterns** that chain across files or directories in one call.
+  - **Do not narrate** before acting — go directly to the first tool call.
 
   ## Step 1: Load Developer Rules and Read WorkPlan
 
@@ -116,6 +120,28 @@ prompt: |
   cat {{ work_plan_path }}
   ```
   Extract: `ticket_key`, `summary`, `tasks`, `approach`.
+
+  **Early write anchor — REQUIRED immediately after reading the WorkPlan:**
+  Write an initial reasoning diary entry to `{{ reasoning_path }}` using the developer
+  extension's file writing tool. This must be the very next tool call after reading the WorkPlan.
+  Content should be your initial understanding: the ticket goal, list of tasks, and any
+  questions or uncertainties.
+
+  Example content (adapt to the actual WorkPlan):
+  ```
+  === PRE-EXECUTION REASONING ===
+  Ticket: <ticket_key>
+  Goal: <summary>
+
+  Tasks:
+  1. <task id> — <description>
+  ...
+
+  Approach: <approach>
+
+  Open questions / risks:
+  - <any uncertainties>
+  ```
 
   ## Step 2: Confirm Working Directory and Set Up Environment
 
@@ -156,13 +182,29 @@ prompt: |
 
   ## Step 4: Implement Tasks
 
-  For each task in the WorkPlan `tasks` array (in order by `id`):
+  Work through each task in the WorkPlan `tasks` array **one at a time**, in order by `id`.
+  Complete the full read→implement→verify cycle for task N before starting task N+1.
 
-  1. Read the `description` carefully — it tells you exactly what to implement
-  2. Review the `files_likely_affected` list to understand scope
-  3. Read those files to understand existing patterns and conventions
-  4. Make the described code changes — be precise and minimal, follow existing code style
-  5. Do NOT commit after each task; accumulate all changes
+  **START IMMEDIATELY — no upfront discovery phase.** The very first tool call in this
+  step must be a read of the first file listed in Task 1's `files_likely_affected`. Do
+  NOT run `rg`, `grep`, `tree`, or any broad search before beginning implementation.
+  If you need context about a file, read it directly by name — do not search for it.
+
+  **Per-task loop (repeat for every task):**
+
+  For each file in the task's `files_likely_affected` list:
+  1. **Read** — read the file (one file per tool call, no compound reads, no multi-file searches).
+  2. **Edit** — implement the required change immediately after reading. Be precise and
+     minimal; follow existing code style, indentation, and patterns.
+  3. **Diary write** — immediately after every edit, append a one-line note to
+     `{{ reasoning_path }}` using the developer extension's file-writing tool.
+     Content: `Task <id> / <filename>: <what changed>`
+     This write is MANDATORY after every edit — it is the tool call that follows each
+     file change and prevents an accidental text-only turn from terminating the session.
+
+  After all files for the task are done:
+  4. **Confirm** — run `git diff --stat` to verify the edits exist, then proceed
+     immediately to the first file of the next task.
 
   **Implementation principles:**
   - Match the coding style, indentation, and patterns of existing files
@@ -179,9 +221,9 @@ prompt: |
   - If unrelated local changes appear during execution, remove only those unrelated changes before commit
 
   **File editing rules — CRITICAL:**
-  - Always use the `write_file` or `str_replace` tools from the developer extension to create or modify files
+  - To create or modify files, use the developer extension's file-writing tool (`write`, `edit`, or similar)
   - NEVER write file content via shell heredocs (`cat << 'EOF'`, etc.) — heredocs corrupt escape sequences (e.g. `\n`, `\t`), backslashes, and quotes, causing syntax errors
-  - If you need to replace a specific section of a file, read the file first then use `str_replace` with exact context lines
+  - If you need to replace a specific section of a file, read the file first then make a targeted edit
 
   ## Step 5: Commit Loop
 
@@ -264,8 +306,8 @@ prompt: |
      - **Testing**: reflect actual build/test results from Step 5 (Commit Loop)
   3. If the template **does not exist**, use a minimal description with the same information.
 
-  Write the PR body to `/tmp/pr_body_{{ ticket_key }}.md` using the `write_file`
-  tool, then create the PR using `vcs.pr_command` from Step 2:
+  Write the PR body to `/tmp/pr_body_{{ ticket_key }}.md` using the developer
+  extension's file writing tool, then create the PR using `vcs.pr_command` from Step 2:
   ```
   {vcs.pr_command} \
     --title "[{{ ticket_key }}] {WorkPlan summary}" \
@@ -299,7 +341,7 @@ prompt: |
   ## Step 8: Write Summary File and Call final_output
 
   First, write the execution summary JSON to `{{ output_path }}` so the dispatcher
-  can read it (use `write_file` — do not use a shell heredoc):
+  can read it (use the developer extension's file writing tool — do not use a shell heredoc):
 
   On success the content should be:
   ```json

@@ -13,15 +13,23 @@ Or register in your MCP client config (e.g. goose, claude desktop) pointing at t
 """
 
 import json
+
+# Anchor config lookups to the orchestrator installation, not __file__, because
+# the MCP server may be imported from a cloned working directory when Goose runs
+# the execute recipe (Python -m prepends cwd to sys.path, which may shadow the
+# installed module). NGB_ORCHESTRATOR_ROOT is set by graph/utils.py goose_session.
+import os as _os
 import re
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
-# Path to the mapping file, relative to this file's location (repo root/config/)
-_MAPPING_FILE = Path(__file__).parent.parent / "config" / "project-repo-mapping.md"
-_RULES_FILE = Path(__file__).parent.parent / "config" / "developer-rules.json"
-_SETUP_FILE = Path(__file__).parent.parent / "config" / "project-setup.json"
+_CONFIG_ROOT = (
+    Path(_os.environ.get("NGB_ORCHESTRATOR_ROOT", str(Path(__file__).parent.parent))) / "config"
+)
+_MAPPING_FILE = _CONFIG_ROOT / "project-repo-mapping.md"
+_RULES_FILE = _CONFIG_ROOT / "developer-rules.json"
+_SETUP_FILE = _CONFIG_ROOT / "project-setup.json"
 
 mcp = FastMCP(
     name="agent-harness",
@@ -133,12 +141,14 @@ def get_project_setup(project_key: str) -> dict:
     Raises:
         ValueError: If no setup configuration is found for the project key.
     """
-    key = project_key.strip().upper()
+    # Accept either a project key ("AOS") or a full ticket key ("AOS-81").
+    raw = project_key.strip().upper()
+    key = raw.split("-")[0] if "-" in raw else raw
     config = json.loads(_SETUP_FILE.read_text())
     if key not in config:
         known = ", ".join(sorted(config.keys())) or "none configured"
         raise ValueError(
-            f"No setup configuration for project '{project_key}'. "
+            f"No setup configuration for project '{project_key}' (resolved key: '{key}'). "
             f"Known projects: {known}. "
             f"Add an entry to config/project-setup.json."
         )

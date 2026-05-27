@@ -93,6 +93,14 @@ prompt: |
   Generate a valid WorkPlan JSON for the JIRA ticket: {{ ticket_key }}
   Output file: {{ output_path }}
 
+  ## CRITICAL EXECUTION RULES
+
+  - **Execute all steps sequentially without stopping.** After each tool call completes, immediately make the next tool call — never emit a text-only response mid-session.
+  - **The session is complete only when you have called the `final_output` tool.**
+  - Text responses without tool calls end the session — only produce one at the very end, after `final_output` is called.
+  - **Single-file reads only:** Never combine multiple file reads in one shell command. Issue one `cat` or `read_file` per file per turn.
+  - **Do not narrate** before acting — go directly to the first tool call.
+
   ## Step 1: Check for Previous Clarifications
 
   {% if clarifications_path %}
@@ -174,7 +182,7 @@ prompt: |
 
   ## Step 4: Generate WorkPlan JSON
 
-  Based on the ticket and repository analysis, create a WorkPlan JSON document with these fields:
+  Based on the ticket and repository analysis, construct the WorkPlan JSON and write it **immediately** to `/tmp/workplan_temp.json` using the developer extension's file-writing tool. Do not narrate or display the JSON as text first — write directly to the file.
 
   ### Required Fields:
   ```json
@@ -264,7 +272,7 @@ prompt: |
 
   Once validation passes:
   1. Create parent directories if needed: `mkdir -p $(dirname {{ output_path }})`
-  2. Write the validated JSON to `{{ output_path }}` using the `write_file` tool — do NOT use a shell heredoc (`cat << 'EOF'`) as heredocs corrupt escape sequences (`\n`, `\t`), backslashes, and quotes, causing JSON parse errors
+  2. Copy the validated JSON from `/tmp/workplan_temp.json` to `{{ output_path }}` using the developer extension's file-writing tool — do NOT use a shell heredoc (`cat << 'EOF'`) as heredocs corrupt escape sequences (`\n`, `\t`), backslashes, and quotes, causing JSON parse errors
   3. Verify the file was written: `test -f {{ output_path }} && echo "✅ File written" || echo "❌ File missing"`
   4. Ensure no repository files were modified as part of planning; only `{{ output_path }}` and `/tmp/*` writes are permitted
   5. Call the `final_output` tool with the same WorkPlan data to end the session

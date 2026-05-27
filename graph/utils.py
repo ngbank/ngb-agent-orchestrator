@@ -54,7 +54,7 @@ def _wait_for_proxy(
 ) -> None:
     """Block until the litellm proxy on *port* responds to /health, or raise."""
     deadline = time.monotonic() + timeout
-    url = f"http://127.0.0.1:{port}/health"
+    url = f"http://127.0.0.1:{port}/health/liveliness"
     while time.monotonic() < deadline:
         # If the process died, fail fast with diagnostics.
         if proc is not None and proc.poll() is not None:
@@ -191,6 +191,7 @@ def goose_session(workflow_id: Optional[str] = None, stage: Optional[str] = None
             env["GOOSE_MODEL"] = model
             env["OPENAI_BASE_URL"] = f"http://127.0.0.1:{port}"
             env["OPENAI_API_KEY"] = "sk-local"
+            env["NGB_ORCHESTRATOR_ROOT"] = str(repo_root)
             yield env
         finally:
             proc.terminate()
