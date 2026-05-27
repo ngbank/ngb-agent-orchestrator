@@ -125,8 +125,7 @@ prompt: |
   Write an initial reasoning diary entry to `{{ reasoning_path }}` using the developer
   extension's file writing tool. This must be the very next tool call after reading the WorkPlan.
   Content should be your initial understanding: the ticket goal, list of tasks, and any
-  questions or uncertainties. This anchors the session with a tool call and prevents a
-  narration-only turn from triggering the Goose injection.
+  questions or uncertainties.
 
   Example content (adapt to the actual WorkPlan):
   ```
@@ -197,10 +196,9 @@ prompt: |
   1. **Read** — read the file (one file per tool call, no compound reads, no multi-file searches).
   2. **Edit** — implement the required change immediately after reading. Be precise and
      minimal; follow existing code style, indentation, and patterns.
-  3. **Diary write** — immediately after every edit, append a one-line note using:
-     ```
-     python3 -c "open('{{ reasoning_path }}', 'a').write('Task <id> / <filename>: <what changed>\n')"
-     ```
+  3. **Diary write** — immediately after every edit, append a one-line note to
+     `{{ reasoning_path }}` using the developer extension's file-writing tool.
+     Content: `Task <id> / <filename>: <what changed>`
      This write is MANDATORY after every edit — it is the tool call that follows each
      file change and prevents an accidental text-only turn from terminating the session.
 
