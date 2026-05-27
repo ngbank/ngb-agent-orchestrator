@@ -32,3 +32,11 @@ class WorkflowStatus(Enum):
             WorkflowStatus.REJECTED,
             WorkflowStatus.CANCELLED,
         )
+
+    def is_retryable(self) -> bool:
+        """Return True if a workflow in this status can be resumed via --retry.
+
+        FAILED is the canonical retryable terminal state: the graph stopped at
+        a node that raised or set an error, and a retry resumes from that node.
+        """
+        return self == WorkflowStatus.FAILED

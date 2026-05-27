@@ -81,18 +81,30 @@ def generate_plan(state: WorkPlannerState) -> dict:
             click.echo(f"⚠️  Failed to store usage summary: {exc}", err=True)
 
         if result.returncode != 0:
-            return {"error": f"Goose plan recipe exited with code {result.returncode}"}
+            return {
+                "error": f"Goose plan recipe exited with code {result.returncode}",
+                "failed_node": "generate_plan",
+            }
 
         try:
             with open(output_path, "r") as f:
                 work_plan_data = json.load(f)
         except FileNotFoundError:
-            return {"error": "Goose plan recipe did not write output file"}
+            return {
+                "error": "Goose plan recipe did not write output file",
+                "failed_node": "generate_plan",
+            }
         except json.JSONDecodeError as exc:
-            return {"error": f"Goose plan recipe wrote invalid JSON: {exc}"}
+            return {
+                "error": f"Goose plan recipe wrote invalid JSON: {exc}",
+                "failed_node": "generate_plan",
+            }
 
         if not work_plan_data:
-            return {"error": "Goose plan recipe wrote empty WorkPlan"}
+            return {
+                "error": "Goose plan recipe wrote empty WorkPlan",
+                "failed_node": "generate_plan",
+            }
 
         click.echo(f"✅ WorkPlan generated for {ticket_key}")
         return {"work_plan_data": work_plan_data}

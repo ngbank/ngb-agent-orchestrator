@@ -42,11 +42,14 @@ from dispatcher.jira_client import (  # noqa: E402
 )
 from dispatcher.work_plan_formatter import format_execution_summary_comment  # noqa: E402
 from graph.builder import build_orchestrator  # noqa: E402
+from graph.retry import prepare_retry  # noqa: E402
 from graph.utils import _get_actor, log_path  # noqa: E402
 from state.state_store import (  # noqa: E402
     clear_db,
+    get_latest_retryable_workflow_by_ticket,
     get_workflow,
     get_workflow_by_ticket,
+    increment_retry_count,
     list_workflows,
     update_status,
 )
@@ -87,6 +90,12 @@ from state.workflow_status import WorkflowStatus  # noqa: E402
     "do_clarify",
     is_flag=True,
     help="Answer WorkPlan clarification questions (use with --ticket or --workflow-id)",
+)
+@click.option(
+    "--retry",
+    "do_retry",
+    is_flag=True,
+    help="Resume a failed workflow from the node that failed (use with --ticket or --workflow-id)",
 )
 @click.option(
     "--list",
@@ -131,6 +140,7 @@ def run(
     do_reject: bool,
     do_cancel: bool,
     do_clarify: bool,
+    do_retry: bool,
     do_list: bool,
     do_history: bool,
     do_clear_db: bool,
@@ -172,6 +182,12 @@ def run(
 
         # Answer WorkPlan clarification questions by workflow ID
         dispatcher --clarify --workflow-id <uuid>
+
+        # Retry a failed workflow by ticket key
+        dispatcher --retry --ticket AOS-36
+
+        # Retry a failed workflow by workflow ID
+        dispatcher --retry --workflow-id <uuid>
 
         # List all workflows
         dispatcher --list
@@ -223,6 +239,13 @@ def run(
             click.echo("❌ --clarify requires --ticket or --workflow-id", err=True)
             sys.exit(1)
         _handle_clarify(ticket, workflow_id)
+        return
+
+    if do_retry:
+        if not ticket and not workflow_id:
+            click.echo("❌ --retry requires --ticket or --workflow-id", err=True)
+            sys.exit(1)
+        _handle_retry(ticket, workflow_id)
         return
 
     if do_approve:
@@ -408,6 +431,127 @@ def _handle_approve(ticket_key: str, workflow_id: Optional[str] = None) -> None:
 
     except Exception as e:
         click.echo(f"❌ Error resuming workflow: {e}", err=True)
+        sys.exit(1)
+
+
+def _handle_retry(ticket_key: Optional[str], workflow_id: Optional[str] = None) -> None:
+    """Resume a failed workflow from the node that failed.
+
+    Resolution rules:
+      - If ``workflow_id`` is given, use it directly.
+      - Else if ``ticket_key`` is given, pick the most recent retryable
+        (status=FAILED) workflow for that ticket.
+    """
+    if workflow_id:
+        resolved_id = workflow_id
+    else:
+        workflow = get_latest_retryable_workflow_by_ticket(ticket_key or "")
+        if workflow is None:
+            click.echo(
+                f"❌ No retryable (failed) workflow found for ticket: {ticket_key}",
+                err=True,
+            )
+            sys.exit(1)
+        resolved_id = workflow["id"]
+
+    workflow = get_workflow(resolved_id)
+    if workflow is None:
+        click.echo(f"❌ Workflow not found: {resolved_id}", err=True)
+        sys.exit(1)
+
+    if not workflow["status"].is_retryable():
+        status_val = workflow["status"].value
+        click.echo(
+            f"❌ Workflow {resolved_id} is not retryable (status: {status_val}). "
+            f"Only FAILED workflows can be retried.",
+            err=True,
+        )
+        sys.exit(1)
+
+    thread_config = {"configurable": {"thread_id": resolved_id}}
+    actor = _get_actor()
+
+    graph = build_orchestrator()
+    current_state = graph.get_state(thread_config)
+    failed_node = (current_state.values or {}).get("failed_node")
+
+    if not failed_node:
+        click.echo(
+            f"❌ Workflow {resolved_id} has no recorded failed_node; "
+            f"cannot determine where to resume.",
+            err=True,
+        )
+        sys.exit(1)
+
+    try:
+        prepare_retry(graph, thread_config, failed_node)
+    except ValueError as e:
+        click.echo(f"❌ {e}", err=True)
+        sys.exit(1)
+
+    new_count = increment_retry_count(resolved_id, actor=actor)
+    update_status(
+        resolved_id,
+        WorkflowStatus.IN_PROGRESS,
+        actor=actor,
+        reason=f"Retry attempt #{new_count} from failed_node '{failed_node}'",
+    )
+    click.echo(
+        f"🔁 Retrying workflow {resolved_id} (attempt #{new_count}) "
+        f"from node '{failed_node}'..."
+    )
+
+    try:
+        final_state = graph.invoke(None, config=thread_config)
+
+        ticket_key_final = final_state.get("ticket_key", workflow["ticket_key"])
+        execution_summary = final_state.get("execution_summary") or {}
+        exec_status = execution_summary.get("status", "")
+        new_failed_node = final_state.get("failed_node")
+        graph_error = final_state.get("error")
+
+        if execution_summary and exec_status in ("success", "partial"):
+            update_status(
+                resolved_id,
+                WorkflowStatus.COMPLETED,
+                actor=actor,
+                reason="All stages completed successfully after retry",
+            )
+            click.echo("🎉 Workflow completed successfully")
+            _post_execution_comment(ticket_key_final, execution_summary)
+        elif execution_summary or graph_error or new_failed_node:
+            update_status(
+                resolved_id,
+                WorkflowStatus.FAILED,
+                actor=actor,
+                reason=(
+                    f"Retry failed: "
+                    f"{execution_summary.get('error') or graph_error or new_failed_node or 'unknown'}"  # noqa: E501
+                ),
+            )
+            click.echo(
+                f"❌ Retry failed — failed_node: {new_failed_node or 'n/a'}",
+                err=True,
+            )
+            if execution_summary:
+                _post_execution_comment(ticket_key_final, execution_summary)
+            sys.exit(1)
+        else:
+            # No execution_summary and no error/failed_node — graph likely
+            # suspended at await_approval (replanned).  Nothing further to do.
+            click.echo("⏸️  Retry resumed graph; awaiting next action.")
+
+    except GraphInterrupt:
+        # Graph paused at an interrupt() (e.g., await_approval after replan).
+        click.echo("⏸️  Graph paused at approval gate after retry.")
+    except Exception as e:
+        update_status(
+            resolved_id,
+            WorkflowStatus.FAILED,
+            actor=actor,
+            reason=f"Retry crashed: {e}",
+        )
+        click.echo(f"❌ Error during retry: {e}", err=True)
         sys.exit(1)
 
 

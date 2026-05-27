@@ -63,7 +63,7 @@ def execute_plan(state: OrchestratorState) -> dict:
         if workflow_id:
             update_execution_summary(workflow_id, summary)
             update_status(workflow_id, WorkflowStatus.FAILED, actor="execute_plan")
-        return {"execution_summary": summary}
+        return {"execution_summary": summary, "failed_node": "execute_plan"}
 
     # --- Clone into a fresh temp directory ---
     working_dir = tempfile.mkdtemp(prefix=f"ngb-execute-{workflow_id}-")
@@ -84,7 +84,7 @@ def execute_plan(state: OrchestratorState) -> dict:
         if workflow_id:
             update_execution_summary(workflow_id, summary)
             update_status(workflow_id, WorkflowStatus.FAILED, actor="execute_plan")
-        return {"execution_summary": summary}
+        return {"execution_summary": summary, "failed_node": "execute_plan"}
 
     with tempfile.NamedTemporaryFile(
         mode="w",
@@ -190,7 +190,14 @@ def execute_plan(state: OrchestratorState) -> dict:
                 f"tests: {execution_summary.get('tests')}"
             )
 
-        return {"execution_summary": execution_summary}
+        return {
+            "execution_summary": execution_summary,
+            "failed_node": (
+                "execute_plan"
+                if execution_summary.get("status") not in ("success", "partial")
+                else None
+            ),
+        }
 
     finally:
         # Clean up temp files and the working clone

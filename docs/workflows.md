@@ -120,6 +120,43 @@ The CLI will prompt for an answer to each question interactively. After all answ
 
 
 
+## Retrying a Failed Workflow
+
+When a workflow ends in `failed` status — Goose crash, model error, transient JIRA outage,
+network blip — you can resume it from the node that failed without re-running successful
+upstream stages:
+
+```bash
+# Retry the most recent failed workflow for a ticket
+python -m dispatcher.run --retry --ticket AOS-41
+
+# Retry by explicit workflow ID
+python -m dispatcher.run --retry --workflow-id <uuid>
+```
+
+How resume works:
+- The graph's checkpoint history is walked to find the snapshot immediately before the
+  failed node was about to run.
+- That checkpoint is rewound (the previous `error` and `failed_node` fields are cleared).
+- `graph.invoke(None, ...)` resumes execution from that point.
+- The same `workflow_id` is reused; `retry_count` is incremented and an audit log entry
+  is recorded.
+
+Resume granularity:
+- A failure inside the `work_planner` subgraph (e.g. `generate_plan`, `validate_plan`,
+  `post_to_jira`) rewinds to before the entire `work_planner` subgraph — the subgraph
+  re-runs from `validate_input`. This is intentional: the subgraph runs without its
+  own checkpointer, so it is atomic from the parent graph's perspective.
+- A failure in `execute_plan` rewinds to before `execute_plan` only — the plan and
+  approval are preserved.
+
+Only `failed` workflows are retryable. Attempting `--retry` on any other status returns
+an error. Workflows that ended with `partial` execution status (build pass, tests fail)
+are marked `completed`, not `failed`, and are NOT considered retryable — they should be
+finished manually.
+
+---
+
 ## Workflow Lifecycle
 
 ```
@@ -127,7 +164,8 @@ pending
   │
   ▼
 in_progress  ──────────────────────────────────────────►  failed
-  │
+  │                                                       │
+  │                                            ◄──────────┘ (--retry)
   ▼ (plan status: concerns/blocked/questions?)
 pending_workplan_clarification  ──── (on clarify) ────►  in_progress (loop)
   │ (plan OK after clarification)
@@ -150,7 +188,7 @@ completed  (or failed if execute_plan errors)
 | `approved` | Developer approved; execute phase starting |
 | `rejected` | Developer rejected; no code changes made |
 | `completed` | All stages finished successfully |
-| `failed` | Unrecoverable error occurred |
+| `failed` | Unrecoverable error occurred (resumable via `--retry`) |
 
 Every status transition is recorded in the audit log with timestamp, actor, and reason.
 
