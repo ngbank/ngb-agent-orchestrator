@@ -112,6 +112,16 @@ dispatcher --clarify --ticket AOS-36
 dispatcher --clarify --workflow-id b04fd4e0-1edc-4f95-8489-da914470b58d
 ```
 
+### Viewing Clarification History
+
+When reviewing a workflow's history, you can optionally include the full clarification Q&A:
+
+```bash
+dispatcher --history --ticket AOS-36 --show-clarifications
+```
+
+This prints each clarification round (questions, risks, and answers) after the node traversal table. By default, clarification history is hidden to keep the history output concise.
+
 The CLI will prompt for an answer to each question interactively. After all answers are collected, the graph resumes and the plan recipe re-runs with the answers as context.
 
 - If the regenerated plan passes, the workflow proceeds to the approval gate as normal.

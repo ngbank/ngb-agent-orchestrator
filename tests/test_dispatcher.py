@@ -456,6 +456,50 @@ class TestHandleHistory:
         assert "Workflow history for TEST-123" in result.output
         assert resolved_id in result.output
 
+    def test_history_show_clarifications_flag(self, test_db, cli_runner):
+        """--history --show-clarifications should print clarification Q&A when present."""
+        workflow_id = state_store.create_workflow("TEST-123", status=WorkflowStatus.COMPLETED)
+        state_store.update_clarification_history(
+            workflow_id,
+            {
+                "round": 1,
+                "questions": ["What DB?"],
+                "risks": ["Risk A"],
+                "answers": [{"question": "What DB?", "answer": "SQLite"}],
+            },
+            actor="developer",
+        )
+
+        with patch("dispatcher.run.build_orchestrator") as mock_build:
+            mock_graph = Mock()
+            mock_graph.get_state_history.return_value = []
+            mock_build.return_value = mock_graph
+            result = cli_runner.invoke(
+                run, ["--history", "--workflow-id", workflow_id, "--show-clarifications"]
+            )
+
+        assert result.exit_code == 0
+        assert "Clarification Q&A History" in result.output
+        assert "Round 1" in result.output
+        assert "What DB?" in result.output
+        assert "SQLite" in result.output
+        assert "Risk A" in result.output
+
+    def test_history_show_clarifications_empty(self, test_db, cli_runner):
+        """--history --show-clarifications on a workflow with no history should say so."""
+        workflow_id = state_store.create_workflow("TEST-123", status=WorkflowStatus.COMPLETED)
+
+        with patch("dispatcher.run.build_orchestrator") as mock_build:
+            mock_graph = Mock()
+            mock_graph.get_state_history.return_value = []
+            mock_build.return_value = mock_graph
+            result = cli_runner.invoke(
+                run, ["--history", "--workflow-id", workflow_id, "--show-clarifications"]
+            )
+
+        assert result.exit_code == 0
+        assert "No clarification history found." in result.output
+
 
 def test_reject_handles_resume_error(test_db, cli_runner):
     """Test that reject path reports resume errors with existing message."""

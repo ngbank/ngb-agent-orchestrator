@@ -593,3 +593,110 @@ def test_update_usage_summary_creates_audit_log(test_db):
     usage_entries = [e for e in audit_log if e["action"] == "usage_summary_stored"]
     assert len(usage_entries) == 1
     assert "execute" in usage_entries[0]["reason"]
+
+
+# ---------------------------------------------------------------------------
+# update_clarification_history tests
+# ---------------------------------------------------------------------------
+
+
+def test_update_clarification_history_appends_round(test_db):
+    """Test that clarification history appends a round entry."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-85")
+    round_entry = {
+        "round": 1,
+        "questions": ["What DB?"],
+        "risks": ["Risk A"],
+        "answers": [{"question": "What DB?", "answer": "SQLite"}],
+    }
+
+    state_store.update_clarification_history(workflow_id, round_entry, actor="developer")
+
+    workflow = state_store.get_workflow(workflow_id)
+    history = workflow["clarification_history"]
+    assert isinstance(history, list)
+    assert len(history) == 1
+    assert history[0]["round"] == 1
+    assert history[0]["actor"] == "developer"
+    assert "timestamp" in history[0]
+
+
+def test_update_clarification_history_appends_multiple_rounds(test_db):
+    """Test that multiple calls append rounds in order."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-85")
+    state_store.update_clarification_history(
+        workflow_id,
+        {"round": 1, "questions": ["Q1"], "answers": [{"question": "Q1", "answer": "A1"}]},
+    )
+    state_store.update_clarification_history(
+        workflow_id,
+        {"round": 2, "questions": ["Q2"], "answers": [{"question": "Q2", "answer": "A2"}]},
+    )
+
+    workflow = state_store.get_workflow(workflow_id)
+    history = workflow["clarification_history"]
+    assert len(history) == 2
+    assert history[0]["round"] == 1
+    assert history[1]["round"] == 2
+
+
+def test_update_clarification_history_noop_for_missing_workflow(test_db):
+    """Test that update_clarification_history is a no-op when workflow_id does not exist."""
+    state_store.update_clarification_history(
+        "does-not-exist",
+        {"round": 1, "questions": [], "answers": []},
+    )
+
+
+def test_update_clarification_history_creates_audit_log(test_db):
+    """Test that update_clarification_history creates an audit log entry."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-85")
+    state_store.update_clarification_history(
+        workflow_id,
+        {"round": 1, "questions": ["Q?"], "answers": [{"question": "Q?", "answer": "A!"}]},
+        actor="dispatcher",
+    )
+
+    audit_log = state_store.get_audit_log(workflow_id)
+    entries = [e for e in audit_log if e["action"] == "clarification_history_updated"]
+    assert len(entries) == 1
+    assert "dispatcher" in entries[0]["actor"]
+
+
+def test_get_workflow_by_ticket_deserializes_clarification_history(test_db):
+    """Test that get_workflow_by_ticket deserializes clarification_history."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-85")
+    state_store.update_clarification_history(
+        workflow_id,
+        {"round": 1, "questions": ["Q?"], "answers": []},
+    )
+
+    workflows = state_store.get_workflow_by_ticket("AOS-85")
+    assert len(workflows) == 1
+    history = workflows[0]["clarification_history"]
+    assert isinstance(history, list)
+    assert history[0]["round"] == 1
+
+
+def test_list_workflows_deserializes_clarification_history(test_db):
+    """Test that list_workflows deserializes clarification_history."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-85")
+    state_store.update_clarification_history(
+        workflow_id,
+        {"round": 1, "questions": ["Q?"], "answers": []},
+    )
+
+    workflows = state_store.list_workflows(ticket_key="AOS-85")
+    assert len(workflows) == 1
+    history = workflows[0]["clarification_history"]
+    assert isinstance(history, list)
+    assert history[0]["round"] == 1
+
+
+def test_clarification_history_backward_compat(test_db):
+    """Test that workflows without clarification_history return None/empty list gracefully."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-85")
+    workflow = state_store.get_workflow(workflow_id)
+    assert (
+        workflow.get("clarification_history") is None or workflow.get("clarification_history") == []
+    )
