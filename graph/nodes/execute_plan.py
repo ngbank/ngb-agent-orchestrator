@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import tempfile
+from pathlib import Path
 
 import click
 
@@ -115,12 +116,13 @@ def execute_plan(state: OrchestratorState) -> dict:
             goose_session(workflow_id=workflow_id, stage="execute") as goose_env,
         ):
             log_file.write("\n=== goose run execute recipe ===\n")
+            recipe_path = Path(__file__).resolve().parents[2] / "recipes" / "execute.yaml"
             result = run_and_tee(
                 [
                     "goose",
                     "run",
                     "--recipe",
-                    "recipes/execute.yaml",
+                    str(recipe_path),
                     "--max-turns",
                     max_turns,
                     "--params",
