@@ -66,9 +66,17 @@ prompt: |
   - Write execution summary to: {{ output_path }}
   - Write reasoning diary to: {{ reasoning_path }}
 
+  ## Goal
+
+  Implement the approved WorkPlan and **open a pull request** against `main` containing
+  the changes. A successfully created PR is the primary deliverable — the execution
+  summary written at the end merely reports the outcome. A run that produces a passing
+  build and commits but no PR is incomplete.
+
   ## CRITICAL EXECUTION RULES
 
   - **The session ends when you have written the execution summary JSON to `{{ output_path }}` and verified it exists.** Stop emitting tool calls at that point.
+  - **The summary must reflect reality:** only report `status: "success"` if the PR was actually created and `pr_url` is a real URL. If the PR step failed, report `status: "partial"` or `"failed"` accordingly.
   - **Single-file reads only:** Never combine multiple file reads in one shell command. Issue one `cat` or `read_file` per file per turn.
   - **No broad searches before editing:** Do NOT use `rg`, `grep`, `find`, or `tree` to survey the codebase before starting Task 1. The WorkPlan's `files_likely_affected` is the authoritative list. Go directly to reading and editing those files.
   - **No `cd && cmd` compound patterns** that chain across files or directories in one call.
@@ -325,9 +333,9 @@ prompt: |
   ```
 
   Status rules:
-  - `"success"`: build=pass AND tests=pass
-  - `"partial"`: build=pass AND tests=fail
-  - `"failed"`: build=fail
+  - `"success"`: build=pass AND tests=pass AND `pr_url` is a real PR URL
+  - `"partial"`: code committed but PR creation failed, OR build=pass AND tests=fail
+  - `"failed"`: build=fail or no commit was produced
 
   Verify the file exists:
   ```
