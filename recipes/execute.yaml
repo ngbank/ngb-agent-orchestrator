@@ -75,7 +75,10 @@ prompt: |
 
   ## CRITICAL EXECUTION RULES
 
-  - **The session ends when you have written the execution summary JSON to `{{ output_path }}` and verified it exists.** Stop emitting tool calls at that point.
+  - **You are running fully autonomously. There is no user to respond to.** Never ask for permission, confirmation, or approval. Never announce what you are *about to* do — just do it by emitting the next tool call.
+  - **Never end your turn with a status update or summary of progress.** Status recaps like "I'm ready to proceed", "Next I'll...", or "So far completed: ..." without a tool call cause the session to terminate prematurely. If you have more work to do, your reply MUST end with a tool call, not prose.
+  - **The session ends ONLY when** the execution summary JSON has been written to `{{ output_path }}` AND you have verified it exists (e.g. via `ls {{ output_path }}` or `cat {{ output_path }}`). Stop emitting tool calls only at that point. Under no other circumstance should you stop.
+  - **If you find yourself wanting to narrate progress, instead emit the next tool call.** The reasoning diary at `{{ reasoning_path }}` is where progress notes go — not the chat response.
   - **The summary must reflect reality:** only report `status: "success"` if the PR was actually created and `pr_url` is a real URL. If the PR step failed, report `status: "partial"` or `"failed"` accordingly.
   - **Single-file reads only:** Never combine multiple file reads in one shell command. Issue one `cat` or `read_file` per file per turn.
   - **No broad searches before editing:** Do NOT use `rg`, `grep`, `find`, or `tree` to survey the codebase before starting Task 1. The WorkPlan's `files_likely_affected` is the authoritative list. Go directly to reading and editing those files.
