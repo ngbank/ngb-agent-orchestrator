@@ -26,7 +26,8 @@ No proxy server is required. Set `GOOSE_MODEL` to a LiteLLM model string — the
 | Model string prefix | Provider | Credentials used |
 |---|---|---|
 | `anthropic/…` | Anthropic | `ANTHROPIC_API_KEY` |
-| `azure/…` | Azure AI Foundry / Azure OpenAI | `AZURE_API_KEY`, `AZURE_API_BASE`, `AZURE_API_VERSION` |
+| `azure/…` | Azure OpenAI deployments | `AZURE_API_KEY`, `AZURE_API_BASE`, `AZURE_API_VERSION` |
+| `foundry/…` | Azure AI Foundry MaaS (non-OpenAI models such as Kimi, Qwen, Llama) | `AZURE_API_KEY`, `AZURE_FOUNDRY_API_BASE` |
 | `openai/…` or bare name | OpenAI | `OPENAI_API_KEY` |
 
 ### LLM Provider (one required)
@@ -38,6 +39,7 @@ No proxy server is required. Set `GOOSE_MODEL` to a LiteLLM model string — the
 | `AZURE_API_KEY` | Azure AI Foundry | — |
 | `AZURE_API_BASE` | Azure AI Foundry | `https://your-resource.cognitiveservices.azure.com` |
 | `AZURE_API_VERSION` | Azure AI Foundry | `2024-12-01-preview` |
+| `AZURE_FOUNDRY_API_BASE` | Azure AI Foundry MaaS (only for `foundry/…` models) | `https://your-resource.services.ai.azure.com/openai/v1` |
 
 ### Goose
 
@@ -81,7 +83,8 @@ Examples:
 | `GOOSE_MODEL` value | Connects to |
 |---|---|
 | `anthropic/claude-3-5-sonnet-20241022` | Anthropic API |
-| `azure/gpt-4.1` | Azure AI Foundry (using `AZURE_API_*` vars) |
+| `azure/gpt-4.1` | Azure OpenAI deployment (using `AZURE_API_*` vars) |
+| `foundry/Kimi-K2.6` | Azure AI Foundry MaaS deployment (using `AZURE_API_KEY` + `AZURE_FOUNDRY_API_BASE`) |
 | `openai/gpt-4o` or `gpt-4o` | OpenAI API |
 
 To switch providers, update `GOOSE_MODEL` in `.env` and ensure the matching API key is set.
