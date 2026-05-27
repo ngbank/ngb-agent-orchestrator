@@ -68,11 +68,12 @@ def mock_jira_client():
 
 
 def test_is_retryable_failed_only():
-    assert WorkflowStatus.FAILED.is_retryable() is True
+    retryable = {WorkflowStatus.FAILED, WorkflowStatus.IN_PROGRESS}
     for status in WorkflowStatus:
-        if status == WorkflowStatus.FAILED:
-            continue
-        assert status.is_retryable() is False, f"{status} should not be retryable"
+        if status in retryable:
+            assert status.is_retryable() is True, f"{status} should be retryable"
+        else:
+            assert status.is_retryable() is False, f"{status} should not be retryable"
 
 
 # ---------------------------------------------------------------------------
@@ -289,7 +290,8 @@ def test_retry_without_failed_node_errors(test_db, cli_runner):
 
     with patch("dispatcher.run.build_orchestrator") as mock_build:
         mock_graph = Mock()
-        mock_graph.get_state.return_value = Mock(values={})  # no failed_node
+        # No failed_node recorded AND no pending next node → cannot resume.
+        mock_graph.get_state.return_value = Mock(values={}, next=())
         mock_build.return_value = mock_graph
         result = cli_runner.invoke(run, ["--retry", "--workflow-id", wf_id])
 
@@ -423,3 +425,128 @@ def test_retry_integration_plan_failure_then_success(
     assert wf_after["status"] == WorkflowStatus.PENDING_APPROVAL
     # generate_plan ran twice: once failing, once succeeding.
     assert call_counter["count"] == 2
+
+
+# ---------------------------------------------------------------------------
+# AOS-89 — IN_PROGRESS retry + SIGINT recovery
+# ---------------------------------------------------------------------------
+
+
+def _in_progress_workflow(ticket_key: str) -> str:
+    """Create an IN_PROGRESS workflow row and return its id."""
+    return state_store.create_workflow(ticket_key, status=WorkflowStatus.IN_PROGRESS)
+
+
+def test_retry_accepts_in_progress_workflow(test_db, cli_runner):
+    """An IN_PROGRESS workflow with a recorded failed_node should be retryable."""
+    wf_id = _in_progress_workflow("TEST-1")
+    success_summary = {
+        "status": "success",
+        "branch": "feature/TEST-1+x",
+        "build": "pass",
+        "tests": "pass",
+        "pr_url": "https://pr",
+    }
+
+    with patch("dispatcher.run.build_orchestrator") as mock_build:
+        mock_build.return_value = _mock_graph_with_failed_node(
+            "execute_plan",
+            {"workflow_id": wf_id, "ticket_key": "TEST-1", "execution_summary": success_summary},
+        )
+        with patch("dispatcher.run._post_execution_comment"):
+            result = cli_runner.invoke(run, ["--retry", "--workflow-id", wf_id])
+
+    assert result.exit_code == 0, result.output
+    assert "IN_PROGRESS" in result.output
+    assert state_store.get_workflow(wf_id)["status"] == WorkflowStatus.COMPLETED
+
+
+def test_retry_derives_failed_node_from_next_when_missing(test_db, cli_runner):
+    """When failed_node is empty but snapshot.next has a value, use that as resume point."""
+    wf_id = _in_progress_workflow("TEST-1")
+    success_summary = {
+        "status": "success",
+        "branch": "feature/TEST-1+x",
+        "build": "pass",
+        "tests": "pass",
+        "pr_url": "https://pr",
+    }
+
+    with patch("dispatcher.run.build_orchestrator") as mock_build:
+        mock_graph = Mock()
+        # No failed_node in state, but snapshot.next reveals where it stopped.
+        mock_graph.get_state.return_value = Mock(values={}, next=("execute_plan",))
+        snap = Mock(config={"configurable": {"thread_id": "t", "checkpoint_id": "cp"}})
+        snap.next = ("execute_plan",)
+        mock_graph.get_state_history.return_value = iter([snap])
+        mock_graph.invoke.return_value = {
+            "workflow_id": wf_id,
+            "ticket_key": "TEST-1",
+            "execution_summary": success_summary,
+        }
+        mock_build.return_value = mock_graph
+        with patch("dispatcher.run._post_execution_comment"):
+            result = cli_runner.invoke(run, ["--retry", "--workflow-id", wf_id])
+
+    assert result.exit_code == 0, result.output
+    assert "next-up node 'execute_plan'" in result.output
+    assert state_store.get_workflow(wf_id)["status"] == WorkflowStatus.COMPLETED
+
+
+def test_retry_still_rejects_completed_workflow(test_db, cli_runner):
+    """Terminal non-failed statuses must remain non-retryable."""
+    wf_id = state_store.create_workflow("TEST-1", status=WorkflowStatus.COMPLETED)
+    result = cli_runner.invoke(run, ["--retry", "--workflow-id", wf_id])
+    assert result.exit_code != 0
+    assert "not retryable" in result.output
+
+
+def test_mark_workflow_interrupted_transitions_to_failed(test_db):
+    """SIGINT helper transitions an active workflow to FAILED with failed_node set."""
+    from dispatcher.run import _mark_workflow_interrupted
+
+    wf_id = _in_progress_workflow("TEST-1")
+    mock_graph = Mock()
+    mock_graph.get_state.return_value = Mock(values={}, next=("execute_plan",))
+
+    _mark_workflow_interrupted(wf_id, mock_graph, {"configurable": {"thread_id": wf_id}})
+
+    wf = state_store.get_workflow(wf_id)
+    assert wf["status"] == WorkflowStatus.FAILED
+    # The helper should have called update_state to record failed_node.
+    mock_graph.update_state.assert_called_once()
+    update_args = mock_graph.update_state.call_args
+    assert update_args.args[1]["failed_node"] == "execute_plan"
+    assert "Interrupted" in update_args.args[1]["error"]
+
+
+def test_mark_workflow_interrupted_no_op_on_terminal(test_db):
+    """Helper does nothing if the workflow is already terminal."""
+    from dispatcher.run import _mark_workflow_interrupted
+
+    wf_id = state_store.create_workflow("TEST-1", status=WorkflowStatus.COMPLETED)
+    mock_graph = Mock()
+
+    _mark_workflow_interrupted(wf_id, mock_graph, {"configurable": {"thread_id": wf_id}})
+
+    assert state_store.get_workflow(wf_id)["status"] == WorkflowStatus.COMPLETED
+    mock_graph.update_state.assert_not_called()
+
+
+def test_mark_workflow_interrupted_handles_missing_workflow(test_db):
+    """Helper does not crash when the workflow id is unknown."""
+    from dispatcher.run import _mark_workflow_interrupted
+
+    # Should not raise.
+    _mark_workflow_interrupted("does-not-exist", None, None)
+
+
+def test_mark_workflow_interrupted_db_only_when_no_graph(test_db):
+    """Helper still transitions DB even if graph/state update fails."""
+    from dispatcher.run import _mark_workflow_interrupted
+
+    wf_id = _in_progress_workflow("TEST-1")
+    _mark_workflow_interrupted(wf_id, None, None)
+
+    wf = state_store.get_workflow(wf_id)
+    assert wf["status"] == WorkflowStatus.FAILED
