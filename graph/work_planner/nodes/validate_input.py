@@ -10,5 +10,5 @@ def validate_input(state: WorkPlannerState) -> dict:
     if not ticket_key or "-" not in ticket_key:
         error = f"Invalid ticket format: '{ticket_key}'. Expected format: PROJECT-123"
         click.echo(f"❌ {error}", err=True)
-        return {"error": error}
+        return {"error": error, "failed_node": "validate_input"}
     return {}

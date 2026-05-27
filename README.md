@@ -133,6 +133,9 @@ dispatcher --ticket AOS-41
 dispatcher --approve --ticket AOS-41
 dispatcher --reject  --ticket AOS-41 --reason "scope too broad"
 
+# Resume a failed workflow from the node that failed
+dispatcher --retry --ticket AOS-41
+
 # List all workflows (optionally filter by ticket)
 dispatcher --list
 dispatcher --list --ticket AOS-41

@@ -17,7 +17,7 @@ def validate_plan(state: WorkPlannerState) -> dict:
     except WorkPlanValidationError as e:
         error = str(e)
         click.echo(f"❌ {error}", err=True)
-        return {"error": error}
+        return {"error": error, "failed_node": "validate_plan"}
 
     status = work_plan.status
     questions = work_plan_data.get("questions_for_reviewer", [])

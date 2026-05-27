@@ -428,6 +428,55 @@ def get_workflow_by_ticket(ticket_key: str) -> List[Dict]:
         conn.close()
 
 
+def get_latest_retryable_workflow_by_ticket(ticket_key: str) -> Optional[Dict]:
+    """Return the most recent workflow for ``ticket_key`` whose status is retryable.
+
+    Used by ``dispatcher --retry --ticket <key>`` to resolve the workflow to
+    resume.  Returns ``None`` if no retryable workflow exists.
+    """
+    workflows = get_workflow_by_ticket(ticket_key)
+    for wf in workflows:  # already ordered created_at DESC
+        if wf["status"].is_retryable():
+            return wf
+    return None
+
+
+def increment_retry_count(workflow_id: str, actor: str = "system") -> int:
+    """Increment the retry counter for ``workflow_id`` and return the new value.
+
+    Also writes an audit log entry.  Returns 0 if the workflow does not exist.
+    """
+    now = datetime.now(UTC).isoformat()
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT retry_count FROM workflows WHERE id = ?", (workflow_id,)
+        ).fetchone()
+        if row is None:
+            return 0
+        new_count = int(row["retry_count"] or 0) + 1
+        conn.execute(
+            """
+            UPDATE workflows
+            SET retry_count = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (new_count, now, workflow_id),
+        )
+        conn.commit()
+        _create_audit_log(
+            conn,
+            workflow_id=workflow_id,
+            actor=actor,
+            action="workflow_retried",
+            reason=f"Retry attempt #{new_count}",
+        )
+        conn.commit()
+        return new_count
+    finally:
+        conn.close()
+
+
 def get_audit_log(workflow_id: str) -> List[Dict]:
     """
     Retrieve audit log entries for a workflow.
