@@ -38,5 +38,11 @@ class WorkflowStatus(Enum):
 
         FAILED is the canonical retryable terminal state: the graph stopped at
         a node that raised or set an error, and a retry resumes from that node.
+
+        IN_PROGRESS is also retryable as a safety net for workflows that were
+        interrupted (Ctrl-C, SIGKILL, terminal close, OOM, etc.) and left
+        stuck. A dispatcher run has at most one workflow active at a time, so
+        any IN_PROGRESS workflow not currently executing is effectively dead
+        and should be resumable.
         """
-        return self == WorkflowStatus.FAILED
+        return self in (WorkflowStatus.FAILED, WorkflowStatus.IN_PROGRESS)
