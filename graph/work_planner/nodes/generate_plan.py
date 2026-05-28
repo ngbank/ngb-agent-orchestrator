@@ -44,7 +44,7 @@ def generate_plan(state: WorkPlannerState) -> dict:
             json.dump(clarifications, f, indent=2)
 
     try:
-        lp = log_path(workflow_id, "plan")
+        lp = log_path(workflow_id, "plan", ticket_key=ticket_key)
         round_num = len(clarifications)
         if round_num:
             click.echo(
@@ -70,7 +70,9 @@ def generate_plan(state: WorkPlannerState) -> dict:
             cmd.extend(["--params", f"clarifications_path={clarifications_path}"])
 
         with open(lp, "w") as log_file:
-            with goose_session(workflow_id=workflow_id, stage="plan") as goose_env:
+            with goose_session(
+                workflow_id=workflow_id, stage="plan", ticket_key=ticket_key
+            ) as goose_env:
                 result = run_and_tee(cmd, log_file, env=goose_env)
 
         # Persist token usage to SQLite

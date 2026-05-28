@@ -26,11 +26,12 @@ def _logs_dir() -> Path:
     return Path(os.getenv("LOGS_DIR", str(default)))
 
 
-def log_path(workflow_id: str, stage: str) -> Path:
+def log_path(workflow_id: str, stage: str, ticket_key: Optional[str] = None) -> Path:
     """Return the log file path for a given workflow and stage (e.g. 'plan', 'execute')."""
     workflow_dir = _logs_dir() / workflow_id
     workflow_dir.mkdir(parents=True, exist_ok=True)
-    return workflow_dir / f"{workflow_id}_{stage}.log"
+    prefix = f"{ticket_key}_" if ticket_key else ""
+    return workflow_dir / f"{prefix}{workflow_id}_{stage}.log"
 
 
 # Azure deployment name → API version.
@@ -123,7 +124,9 @@ def _litellm_config_yaml(model_string: str) -> str:
 
 
 @contextlib.contextmanager
-def goose_session(workflow_id: Optional[str] = None, stage: Optional[str] = None):
+def goose_session(
+    workflow_id: Optional[str] = None, stage: Optional[str] = None, ticket_key: Optional[str] = None
+):
     """Start an ephemeral litellm proxy and yield a Goose env dict.
 
     Reads GOOSE_MODEL from the environment as a litellm model string
@@ -173,7 +176,7 @@ def goose_session(workflow_id: Optional[str] = None, stage: Optional[str] = None
         if stage:
             proxy_env["NGB_WORKFLOW_STAGE"] = stage
 
-        proxy_log = log_path(workflow_id or "proxy", "litellm_proxy")
+        proxy_log = log_path(workflow_id or "proxy", "litellm_proxy", ticket_key=ticket_key)
         proxy_log_fh = open(proxy_log, "w")
         proc = subprocess.Popen(
             [str(litellm_bin), "--config", config_path, "--port", str(port)],
