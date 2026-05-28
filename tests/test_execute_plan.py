@@ -95,3 +95,19 @@ def test_failure_summary_helper_semantics():
         "status": "failed",
         "error": "boom",
     }
+
+
+def test_log_path_without_ticket_key():
+    """log_path omits prefix when ticket_key is not provided."""
+    from graph.utils import log_path
+
+    lp = log_path("wf-123", "execute")
+    assert lp.name == "wf-123_execute.log"
+
+
+def test_log_path_with_ticket_key_prefix():
+    """log_path prefixes filename with ticket_key when provided."""
+    from graph.utils import log_path
+
+    lp = log_path("wf-123", "execute", ticket_key="AOS-77")
+    assert lp.name == "AOS-77_wf-123_execute.log"

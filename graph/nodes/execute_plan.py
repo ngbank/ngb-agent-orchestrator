@@ -67,7 +67,7 @@ def execute_plan(state: OrchestratorState) -> dict:
 
     # --- Clone into a fresh temp directory ---
     working_dir = tempfile.mkdtemp(prefix=f"ngb-execute-{workflow_id}-")
-    lp = log_path(workflow_id or "unknown", "execute")
+    lp = log_path(workflow_id or "unknown", "execute", ticket_key=ticket_key)
     click.echo(f"📂 Cloning {repo_url} into {working_dir}... (log: {lp})")
     try:
         with open(lp, "w") as log_file:
@@ -113,7 +113,9 @@ def execute_plan(state: OrchestratorState) -> dict:
         max_turns = os.environ.get("GOOSE_MAX_TURNS", "200")
         with (
             open(lp, "a") as log_file,
-            goose_session(workflow_id=workflow_id, stage="execute") as goose_env,
+            goose_session(
+                workflow_id=workflow_id, stage="execute", ticket_key=ticket_key
+            ) as goose_env,
         ):
             log_file.write("\n=== goose run execute recipe ===\n")
             recipe_path = Path(__file__).resolve().parents[2] / "recipes" / "execute.yaml"

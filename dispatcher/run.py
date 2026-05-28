@@ -675,7 +675,7 @@ def _handle_logs(ticket_key: Optional[str], workflow_id: Optional[str]) -> None:
 
     found_any = False
     for stage in ("plan", "execute"):
-        lp = log_path(resolved_id, stage)
+        lp = log_path(resolved_id, stage, ticket_key=ticket_key)
         if lp.exists():
             found_any = True
             click.echo(f"\n{'='*60}")
