@@ -110,6 +110,12 @@ from state.workflow_status import WorkflowStatus  # noqa: E402
     help="Show node traversal history for a workflow (use with --ticket or --workflow-id)",
 )
 @click.option(
+    "--show-clarifications",
+    "do_show_clarifications",
+    is_flag=True,
+    help="Include clarification Q&A history in --history output (default off)",
+)
+@click.option(
     "--clear-db",
     "do_clear_db",
     is_flag=True,
@@ -143,6 +149,7 @@ def run(
     do_retry: bool,
     do_list: bool,
     do_history: bool,
+    do_show_clarifications: bool,
     do_clear_db: bool,
     do_logs: bool,
     reason: str,
@@ -220,7 +227,7 @@ def run(
         if not ticket and not workflow_id:
             click.echo("\u274c --history requires --ticket or --workflow-id", err=True)
             sys.exit(1)
-        _handle_history(ticket, workflow_id)
+        _handle_history(ticket, workflow_id, do_show_clarifications)
         return
 
     if do_list:
@@ -737,7 +744,11 @@ _NODE_EMOJI = {
 }
 
 
-def _handle_history(ticket_key: Optional[str], workflow_id: Optional[str]) -> None:
+def _handle_history(
+    ticket_key: Optional[str],
+    workflow_id: Optional[str],
+    show_clarifications: bool = False,
+) -> None:
     """Print the node traversal history for a workflow, oldest step first."""
     # Resolve workflow_id from ticket if not provided directly
     if workflow_id:
@@ -773,33 +784,32 @@ def _handle_history(ticket_key: Optional[str], workflow_id: Optional[str]) -> No
         click.echo(f"❌ Could not read workflow history: {e}", err=True)
         sys.exit(1)
 
-    if not history:
+    if history:
+        click.echo(f"  {'STEP':<6} {'NODE':<20} {'OUTCOME'}")
+        click.echo(f"  {'-'*5} {'-'*19} {'-'*30}")
+
+        for state in history:
+            step = state.metadata.get("step", "?")
+            if step == -1:
+                # input step — skip internal detail
+                continue
+            for task in state.tasks:
+                node = task.name
+                node_emoji = _NODE_EMOJI.get(node, "  ")
+                # Determine outcome
+                if task.error:
+                    outcome = f"❌ error: {task.error}"
+                elif task.interrupts:
+                    outcome = "⏸️  interrupted (awaiting approval)"
+                elif task.result:
+                    # Summarise key result fields
+                    result_keys = list(task.result.keys())
+                    outcome = f"✅ → {', '.join(result_keys)}"
+                else:
+                    outcome = "✅ done"
+                click.echo(f"  {step:<6} {node_emoji} {node:<18} {outcome}")
+    else:
         click.echo("No history found.")
-        return
-
-    click.echo(f"  {'STEP':<6} {'NODE':<20} {'OUTCOME'}")
-    click.echo(f"  {'-'*5} {'-'*19} {'-'*30}")
-
-    for state in history:
-        step = state.metadata.get("step", "?")
-        if step == -1:
-            # input step — skip internal detail
-            continue
-        for task in state.tasks:
-            node = task.name
-            node_emoji = _NODE_EMOJI.get(node, "  ")
-            # Determine outcome
-            if task.error:
-                outcome = f"❌ error: {task.error}"
-            elif task.interrupts:
-                outcome = "⏸️  interrupted (awaiting approval)"
-            elif task.result:
-                # Summarise key result fields
-                result_keys = list(task.result.keys())
-                outcome = f"✅ → {', '.join(result_keys)}"
-            else:
-                outcome = "✅ done"
-            click.echo(f"  {step:<6} {node_emoji} {node:<18} {outcome}")
 
     # --- Token & turn usage ---
     usage_raw = wf.get("usage_summary")
@@ -836,6 +846,42 @@ def _handle_history(ticket_key: Optional[str], workflow_id: Optional[str]) -> No
                 f"  {'TOTAL':<10} {total_turns:>6,}  {total_prompt:>10,}  "
                 f"{total_completion:>12,}  {total_tokens:>10,}"
             )
+
+    # --- Clarification Q&A history (opt-in) ---
+    if show_clarifications:
+        clarifications = wf.get("clarification_history") or []
+        if clarifications:
+            click.echo()
+            click.echo("  Clarification Q&A History")
+            click.echo(f"  {'-'*50}")
+            for entry in clarifications:
+                rnd = entry.get("round", "?")
+                actor = entry.get("actor", "unknown")
+                ts = entry.get("timestamp", "")
+                click.echo(f"  Round {rnd}  (actor: {actor},  timestamp: {ts})")
+                questions = entry.get("questions", [])
+                if questions:
+                    click.echo("    Questions:")
+                    for q in questions:
+                        click.echo(f"      • {q}")
+                risks = entry.get("risks", [])
+                if risks:
+                    click.echo("    Risks:")
+                    for r in risks:
+                        click.echo(f"      • {r}")
+                answers = entry.get("answers", [])
+                if answers:
+                    click.echo("    Answers:")
+                    for ans in answers:
+                        if isinstance(ans, dict):
+                            click.echo(f"      Q: {ans.get('question', '')}")
+                            click.echo(f"      A: {ans.get('answer', '')}")
+                        else:
+                            click.echo(f"      • {ans}")
+                click.echo()
+        else:
+            click.echo()
+            click.echo("  No clarification history found.")
 
 
 def _handle_cancel(

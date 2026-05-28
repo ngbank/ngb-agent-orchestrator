@@ -259,6 +259,72 @@ def update_execution_summary(
         conn.close()
 
 
+def update_clarification_history(
+    workflow_id: str,
+    round_entry: Dict,
+    actor: str = "system",
+) -> None:
+    """
+    Append a clarification round entry to the workflow's clarification_history.
+
+    Reads the existing clarification_history blob (if any), appends the new
+    round_entry, and writes it back.  Each round should contain at minimum
+    ``round``, ``questions``, ``answers``, ``actor``, and ``timestamp``.
+
+    Args:
+        workflow_id: UUID of the workflow
+        round_entry: Dict representing one clarification round
+        actor: Who/what performed the update
+    """
+    now = datetime.now(UTC).isoformat()
+
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT clarification_history FROM workflows WHERE id = ?",
+            (workflow_id,),
+        ).fetchone()
+        if row is None:
+            return
+
+        history: List[Dict] = []
+        if row["clarification_history"]:
+            try:
+                history = json.loads(row["clarification_history"])
+                if not isinstance(history, list):
+                    history = []
+            except (json.JSONDecodeError, TypeError):
+                history = []
+
+        # Enrich the round entry with actor and timestamp if not present
+        enriched = dict(round_entry)
+        enriched.setdefault("actor", actor)
+        enriched.setdefault("timestamp", now)
+        history.append(enriched)
+
+        history_json = json.dumps(history)
+        conn.execute(
+            """
+            UPDATE workflows
+            SET clarification_history = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (history_json, now, workflow_id),
+        )
+        conn.commit()
+
+        _create_audit_log(
+            conn,
+            workflow_id=workflow_id,
+            actor=actor,
+            action="clarification_history_updated",
+            reason=f"Clarification round {enriched.get('round', '?')} appended",
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def update_usage_summary(
     workflow_id: str,
     stage: str,
@@ -362,6 +428,11 @@ def list_workflows(
             wf = dict(row)
             if wf["work_plan"]:
                 wf["work_plan"] = json.loads(wf["work_plan"])
+            if wf.get("clarification_history"):
+                try:
+                    wf["clarification_history"] = json.loads(wf["clarification_history"])
+                except (json.JSONDecodeError, TypeError):
+                    wf["clarification_history"] = []
             wf["status"] = WorkflowStatus(wf["status"])
             result.append(wf)
         return result
@@ -387,10 +458,15 @@ def get_workflow(workflow_id: str) -> Optional[Dict]:
         if row is None:
             return None
 
-        # Convert to dict and deserialize work_plan and status
+        # Convert to dict and deserialize JSON blobs and status
         workflow = dict(row)
         if workflow["work_plan"]:
             workflow["work_plan"] = json.loads(workflow["work_plan"])
+        if workflow.get("clarification_history"):
+            try:
+                workflow["clarification_history"] = json.loads(workflow["clarification_history"])
+            except (json.JSONDecodeError, TypeError):
+                workflow["clarification_history"] = []
         workflow["status"] = WorkflowStatus(workflow["status"])
 
         return workflow
@@ -420,6 +496,13 @@ def get_workflow_by_ticket(ticket_key: str) -> List[Dict]:
             workflow = dict(row)
             if workflow["work_plan"]:
                 workflow["work_plan"] = json.loads(workflow["work_plan"])
+            if workflow.get("clarification_history"):
+                try:
+                    workflow["clarification_history"] = json.loads(
+                        workflow["clarification_history"]
+                    )
+                except (json.JSONDecodeError, TypeError):
+                    workflow["clarification_history"] = []
             workflow["status"] = WorkflowStatus(workflow["status"])
             workflows.append(workflow)
 

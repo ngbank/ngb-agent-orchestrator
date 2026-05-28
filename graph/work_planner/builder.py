@@ -38,12 +38,12 @@ from graph.work_planner.edges import (
     route_after_validate_plan,
     route_after_workplan_clarification,
 )
+from graph.work_planner.nodes.await_workplan_clarification import await_workplan_clarification
 from graph.work_planner.nodes.check_duplicate import check_duplicate
 from graph.work_planner.nodes.create_workflow_record import create_workflow_record
 from graph.work_planner.nodes.error_handler import error_handler
 from graph.work_planner.nodes.fetch_ticket import fetch_ticket
 from graph.work_planner.nodes.generate_plan import generate_plan
-from graph.work_planner.nodes.await_workplan_clarification import await_workplan_clarification
 from graph.work_planner.nodes.post_to_jira import post_to_jira
 from graph.work_planner.nodes.store_plan import store_plan
 from graph.work_planner.nodes.validate_input import validate_input

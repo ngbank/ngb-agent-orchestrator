@@ -1,18 +1,17 @@
 """Unit tests for graph/work_planner/nodes/await_workplan_clarification.py."""
 
-from unittest.mock import MagicMock, patch
-
-import pytest
-from langgraph.types import interrupt as langgraph_interrupt
+from unittest.mock import patch
 
 from graph.work_planner.nodes.await_workplan_clarification import (
     MAX_CLARIFICATION_ROUNDS,
     await_workplan_clarification,
 )
 
-
 _PATCH_INTERRUPT = "graph.work_planner.nodes.await_workplan_clarification.interrupt"
 _PATCH_UPDATE_STATUS = "graph.work_planner.nodes.await_workplan_clarification.update_status"
+_PATCH_UPDATE_CLARIFICATION_HISTORY = (
+    "graph.work_planner.nodes.await_workplan_clarification.update_clarification_history"
+)
 _PATCH_GET_ACTOR = "graph.work_planner.nodes.await_workplan_clarification._get_actor"
 
 
@@ -26,7 +25,8 @@ def _make_state(
     return {
         "workflow_id": workflow_id,
         "ticket_key": ticket_key,
-        "work_plan_data": work_plan_data or {
+        "work_plan_data": work_plan_data
+        or {
             "status": "concerns",
             "questions_for_reviewer": ["What DB?", "Which API?"],
             "risks": ["Risk A"],
@@ -65,12 +65,17 @@ def test_first_entry_calls_interrupt(monkeypatch):
 
     def fake_interrupt(payload):
         captured_payload.update(payload)
-        return {"answers": [{"question": "What DB?", "answer": "SQLite"}, {"question": "Which API?", "answer": "REST"}]}
+        return {
+            "answers": [
+                {"question": "What DB?", "answer": "SQLite"},
+                {"question": "Which API?", "answer": "REST"},
+            ]
+        }
 
     with patch(_PATCH_INTERRUPT, side_effect=fake_interrupt):
         with patch(_PATCH_UPDATE_STATUS):
             with patch(_PATCH_GET_ACTOR, return_value="test_user"):
-                result = await_workplan_clarification(state)
+                await_workplan_clarification(state)
 
     assert captured_payload["workflow_id"] == "wf-123"
     assert captured_payload["round"] == 1
@@ -127,7 +132,14 @@ def test_first_entry_clears_error(monkeypatch):
 def test_second_round_increments_round_number():
     """On second entry, interrupt payload round == 2."""
     state = _make_state(
-        clarifications=[{"round": 1, "questions": ["Q1"], "risks": [], "answers": [{"question": "Q1", "answer": "A1"}]}]
+        clarifications=[
+            {
+                "round": 1,
+                "questions": ["Q1"],
+                "risks": [],
+                "answers": [{"question": "Q1", "answer": "A1"}],
+            }
+        ]
     )
 
     captured_payload = {}
@@ -149,7 +161,9 @@ def test_second_round_accumulates_clarifications():
     existing = [{"round": 1, "questions": ["Q1"], "risks": [], "answers": []}]
     state = _make_state(clarifications=existing)
 
-    with patch(_PATCH_INTERRUPT, return_value={"answers": [{"question": "What DB?", "answer": "SQLite"}]}):
+    with patch(
+        _PATCH_INTERRUPT, return_value={"answers": [{"question": "What DB?", "answer": "SQLite"}]}
+    ):
         with patch(_PATCH_UPDATE_STATUS):
             with patch(_PATCH_GET_ACTOR, return_value="test_user"):
                 result = await_workplan_clarification(state)
@@ -200,3 +214,64 @@ def test_status_set_to_in_progress_after_interrupt():
                 await_workplan_clarification(state)
 
     assert WorkflowStatus.IN_PROGRESS in statuses_called
+
+
+# ---------------------------------------------------------------------------
+# Clarification history persistence
+# ---------------------------------------------------------------------------
+
+
+def test_clarification_history_persisted_on_resume():
+    """update_clarification_history is called with the round entry on resume."""
+    state = _make_state()
+    captured_entries = []
+
+    def fake_update_clarification_history(wf_id, entry, actor="system"):
+        captured_entries.append(entry)
+
+    with patch(
+        _PATCH_INTERRUPT, return_value={"answers": [{"question": "What DB?", "answer": "SQLite"}]}
+    ):
+        with patch(_PATCH_UPDATE_STATUS):
+            with patch(
+                _PATCH_UPDATE_CLARIFICATION_HISTORY, side_effect=fake_update_clarification_history
+            ):
+                with patch(_PATCH_GET_ACTOR, return_value="test_user"):
+                    result = await_workplan_clarification(state)
+
+    assert len(captured_entries) == 1
+    entry = captured_entries[0]
+    assert entry["round"] == 1
+    assert "What DB?" in entry["questions"]
+    assert "Risk A" in entry["risks"]
+    assert entry["answers"] == [{"question": "What DB?", "answer": "SQLite"}]
+    assert result["clarifications"][0] == entry
+
+
+def test_clarification_history_persisted_second_round():
+    """update_clarification_history appends round 2 on second entry."""
+    existing = [
+        {
+            "round": 1,
+            "questions": ["Q1"],
+            "risks": [],
+            "answers": [{"question": "Q1", "answer": "A1"}],
+        }
+    ]
+    state = _make_state(clarifications=existing)
+    captured_entries = []
+
+    def fake_update_clarification_history(wf_id, entry, actor="system"):
+        captured_entries.append(entry)
+
+    with patch(_PATCH_INTERRUPT, return_value={"answers": [{"question": "Q2", "answer": "A2"}]}):
+        with patch(_PATCH_UPDATE_STATUS):
+            with patch(
+                _PATCH_UPDATE_CLARIFICATION_HISTORY, side_effect=fake_update_clarification_history
+            ):
+                with patch(_PATCH_GET_ACTOR, return_value="test_user"):
+                    result = await_workplan_clarification(state)
+
+    assert len(captured_entries) == 1
+    assert captured_entries[0]["round"] == 2
+    assert len(result["clarifications"]) == 2

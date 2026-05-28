@@ -5,7 +5,7 @@ from langgraph.types import interrupt
 
 from graph.utils import _get_actor
 from graph.work_planner.state import WorkPlannerState
-from state.state_store import update_status, update_work_plan
+from state.state_store import update_clarification_history, update_status, update_work_plan
 from state.workflow_status import WorkflowStatus
 
 MAX_CLARIFICATION_ROUNDS = 3
@@ -108,15 +108,24 @@ def await_workplan_clarification(state: WorkPlannerState) -> dict:
             reason=f"Clarification received (round {current_round}), regenerating plan",
         )
 
-    # Append this round's Q&A to clarifications
-    clarifications.append(
-        {
-            "round": current_round,
-            "questions": questions,
-            "risks": risks,
-            "answers": answers,
-        }
-    )
+    # Build the round entry with full metadata
+    round_entry = {
+        "round": current_round,
+        "questions": questions,
+        "risks": risks,
+        "answers": answers,
+    }
+
+    # Persist to database
+    if workflow_id:
+        update_clarification_history(
+            workflow_id,
+            round_entry,
+            actor=actor,
+        )
+
+    # Append this round's Q&A to in-memory clarifications
+    clarifications.append(round_entry)
 
     click.echo(f"📝 Clarification received (round {current_round}) — regenerating plan...")
 

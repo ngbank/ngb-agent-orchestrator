@@ -122,6 +122,7 @@ CREATE TABLE workflows (
     status TEXT NOT NULL,          -- Current status
     work_plan TEXT,                -- JSON blob
     pr_url TEXT,                   -- Pull request URL
+    clarification_history TEXT,    -- JSON array of Q&A rounds
     created_at TEXT NOT NULL,      -- ISO 8601 timestamp
     updated_at TEXT NOT NULL       -- ISO 8601 timestamp
 );
