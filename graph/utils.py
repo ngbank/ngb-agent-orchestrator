@@ -38,7 +38,7 @@ def log_path(workflow_id: str, stage: str) -> Path:
 _AZURE_API_VERSIONS: dict[str, str] = {
     "gpt-4.1": "2024-12-01-preview",
     "gpt-5.3-codex": "2025-04-01-preview",
-    "gpt-5.4": "2025-04-01-preview",
+    "gpt-5.4": "preview",
 }
 
 
@@ -90,6 +90,16 @@ def _litellm_config_yaml(model_string: str) -> str:
             f"      api_key: os.environ/AZURE_API_KEY\n"
             f"      api_base: os.environ/AZURE_API_BASE\n"
             f'      api_version: "{api_version}"\n'
+        )
+    elif provider == "foundry":
+        # Azure AI Foundry models-as-a-service (non-OpenAI models like Kimi, Llama,
+        # Mistral) exposed via the OpenAI-compatible /openai/v1 endpoint on the
+        # Foundry resource. Routed through LiteLLM's openai provider with a custom
+        # api_base. Shares AZURE_API_KEY with Azure OpenAI deployments.
+        litellm_params = (
+            f"      model: openai/{model_name}\n"
+            f"      api_key: os.environ/AZURE_API_KEY\n"
+            f"      api_base: os.environ/AZURE_FOUNDRY_API_BASE\n"
         )
     elif provider == "anthropic":
         litellm_params = (

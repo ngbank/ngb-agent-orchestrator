@@ -285,6 +285,58 @@ def run(
 # ---------------------------------------------------------------------------
 
 
+def _mark_workflow_interrupted(
+    workflow_id: str,
+    graph=None,
+    thread_config: Optional[dict] = None,
+    actor: str = "dispatcher",
+) -> None:
+    """Mark a workflow as FAILED after a KeyboardInterrupt / Ctrl-C.
+
+    Best-effort: records the node that was about to run as ``failed_node`` in
+    the graph state (so ``--retry`` can resume from it) and transitions the DB
+    row to FAILED. Safe to call on a workflow that is already terminal.
+    """
+    workflow = get_workflow(workflow_id)
+    if workflow is None or workflow["status"].is_terminal():
+        return
+
+    failed_node: Optional[str] = None
+    if graph is not None and thread_config is not None:
+        try:
+            snapshot = graph.get_state(thread_config)
+            next_nodes = snapshot.next or ()
+            failed_node = next_nodes[0] if next_nodes else None
+            graph.update_state(
+                thread_config,
+                {
+                    "error": "Interrupted by user (Ctrl-C)",
+                    "failed_node": failed_node or "unknown",
+                },
+            )
+        except Exception:
+            # Best-effort — if the graph state can't be updated, we still
+            # transition the DB row so --retry has a chance to recover.
+            pass
+
+    update_status(
+        workflow_id,
+        WorkflowStatus.FAILED,
+        actor=actor,
+        reason=(
+            f"Interrupted by user (Ctrl-C) at node '{failed_node}'"
+            if failed_node
+            else "Interrupted by user (Ctrl-C)"
+        ),
+    )
+    click.echo(
+        f"⚠️  Marked workflow {workflow_id} as FAILED "
+        f"(failed_node: {failed_node or 'unknown'}). "
+        f"Resume with: dispatcher --retry --workflow-id {workflow_id}",
+        err=True,
+    )
+
+
 def _handle_run(ticket: str, dry_run: bool) -> None:
     click.echo(f"🚀 Starting workflow for ticket: {ticket}")
 
@@ -301,6 +353,7 @@ def _handle_run(ticket: str, dry_run: bool) -> None:
     # LangGraph thread_id, keeping the two systems in sync.
     workflow_id = str(uuid.uuid4())
     thread_config = {"configurable": {"thread_id": workflow_id}}
+    graph = None
 
     try:
         graph = build_orchestrator()
@@ -357,6 +410,7 @@ def _handle_run(ticket: str, dry_run: bool) -> None:
 
     except KeyboardInterrupt:
         click.echo("\n⚠️  Workflow interrupted by user", err=True)
+        _mark_workflow_interrupted(workflow_id, graph, thread_config)
         sys.exit(130)
 
     except Exception as e:
@@ -436,6 +490,10 @@ def _handle_approve(ticket_key: str, workflow_id: Optional[str] = None) -> None:
             )
         _post_execution_comment(ticket_key, execution_summary if execution_summary else None)
 
+    except KeyboardInterrupt:
+        click.echo("\n⚠️  Workflow interrupted by user", err=True)
+        _mark_workflow_interrupted(resolved_id, graph, thread_config, actor=actor)
+        sys.exit(130)
     except Exception as e:
         click.echo(f"❌ Error resuming workflow: {e}", err=True)
         sys.exit(1)
@@ -455,7 +513,8 @@ def _handle_retry(ticket_key: Optional[str], workflow_id: Optional[str] = None) 
         workflow = get_latest_retryable_workflow_by_ticket(ticket_key or "")
         if workflow is None:
             click.echo(
-                f"❌ No retryable (failed) workflow found for ticket: {ticket_key}",
+                f"❌ No retryable (failed / in_progress) workflow found for ticket: "
+                f"{ticket_key}",
                 err=True,
             )
             sys.exit(1)
@@ -470,10 +529,18 @@ def _handle_retry(ticket_key: Optional[str], workflow_id: Optional[str] = None) 
         status_val = workflow["status"].value
         click.echo(
             f"❌ Workflow {resolved_id} is not retryable (status: {status_val}). "
-            f"Only FAILED workflows can be retried.",
+            f"Only FAILED or IN_PROGRESS workflows can be retried.",
             err=True,
         )
         sys.exit(1)
+
+    if workflow["status"] == WorkflowStatus.IN_PROGRESS:
+        click.echo(
+            f"⚠️  Workflow {resolved_id} is IN_PROGRESS. "
+            "Assuming it was interrupted (Ctrl-C, crash, etc.) and resuming. "
+            "If another process is still running it, you may get duplicate work.",
+            err=True,
+        )
 
     thread_config = {"configurable": {"thread_id": resolved_id}}
     actor = _get_actor()
@@ -482,10 +549,23 @@ def _handle_retry(ticket_key: Optional[str], workflow_id: Optional[str] = None) 
     current_state = graph.get_state(thread_config)
     failed_node = (current_state.values or {}).get("failed_node")
 
+    # IN_PROGRESS workflows interrupted by SIGKILL / OOM / terminal close may
+    # not have had a chance to record failed_node. Derive from snapshot.next as
+    # a fallback so retry can still proceed.
+    if not failed_node:
+        next_nodes = current_state.next or ()
+        if next_nodes:
+            failed_node = next_nodes[0]
+            click.echo(
+                f"ℹ️  No recorded failed_node; using next-up node '{failed_node}' "
+                f"as the resume point.",
+                err=True,
+            )
+
     if not failed_node:
         click.echo(
-            f"❌ Workflow {resolved_id} has no recorded failed_node; "
-            f"cannot determine where to resume.",
+            f"❌ Workflow {resolved_id} has no recorded failed_node and no "
+            f"pending next node; cannot determine where to resume.",
             err=True,
         )
         sys.exit(1)
@@ -551,6 +631,10 @@ def _handle_retry(ticket_key: Optional[str], workflow_id: Optional[str] = None) 
     except GraphInterrupt:
         # Graph paused at an interrupt() (e.g., await_approval after replan).
         click.echo("⏸️  Graph paused at approval gate after retry.")
+    except KeyboardInterrupt:
+        click.echo("\n⚠️  Retry interrupted by user", err=True)
+        _mark_workflow_interrupted(resolved_id, graph, thread_config, actor=actor)
+        sys.exit(130)
     except Exception as e:
         update_status(
             resolved_id,
