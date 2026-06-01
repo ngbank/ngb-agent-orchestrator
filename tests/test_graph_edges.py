@@ -97,7 +97,7 @@ def test_route_validate_plan_status_concerns_routes_to_clarification():
     """'concerns' status must route to await_workplan_clarification."""
     state = {
         "ticket_key": "AOS-50",
-        "work_plan_data": {"status": "concerns", "questions_for_reviewer": []},
+        "work_plan_data": {"status": "concerns", "concerns": []},
     }
     assert route_after_validate_plan(state) == "await_workplan_clarification"
 
@@ -106,28 +106,28 @@ def test_route_validate_plan_status_blocked_routes_to_clarification():
     """'blocked' status must route to await_workplan_clarification."""
     state = {
         "ticket_key": "AOS-50",
-        "work_plan_data": {"status": "blocked", "questions_for_reviewer": []},
+        "work_plan_data": {"status": "blocked", "concerns": []},
     }
     assert route_after_validate_plan(state) == "await_workplan_clarification"
 
 
-def test_route_validate_plan_questions_present_routes_to_clarification():
-    """Non-empty questions_for_reviewer must route to await_workplan_clarification."""
+def test_route_validate_plan_concerns_present_routes_to_clarification():
+    """Non-empty concerns must route to await_workplan_clarification."""
     state = {
         "ticket_key": "AOS-50",
         "work_plan_data": {
             "status": "pass",
-            "questions_for_reviewer": ["What database should we use?"],
+            "concerns": ["What database should we use?"],
         },
     }
     assert route_after_validate_plan(state) == "await_workplan_clarification"
 
 
-def test_route_validate_plan_pass_with_no_questions_routes_to_store():
-    """'pass' status with empty questions must route to store_plan."""
+def test_route_validate_plan_pass_with_no_concerns_routes_to_store():
+    """'pass' status with empty concerns must route to store_plan."""
     state = {
         "ticket_key": "AOS-50",
-        "work_plan_data": {"status": "pass", "questions_for_reviewer": []},
+        "work_plan_data": {"status": "pass", "concerns": []},
     }
     assert route_after_validate_plan(state) == "store_plan"
 
@@ -137,7 +137,7 @@ def test_route_validate_plan_error_takes_priority_over_clarification():
     state = {
         "ticket_key": "AOS-50",
         "error": "Schema error",
-        "work_plan_data": {"status": "blocked", "questions_for_reviewer": ["Q?"]},
+        "work_plan_data": {"status": "blocked", "concerns": ["Q?"]},
     }
     assert route_after_validate_plan(state) == "error_handler"
 

@@ -1,0 +1,8 @@
+-- Migration 009: Migrate existing work_plan and clarification_history from
+-- separate risks/questions_for_reviewer fields to a single concerns array.
+--
+-- SQLite's JSON functions do not support the complex nested SELECT required
+-- for an in-place UPDATE of arbitrary JSON blobs.  Instead, the application
+-- layer (state_store.py) normalises old records on read by merging
+-- `risks` + `questions_for_reviewer` into `concerns` whenever the new
+-- field is absent.

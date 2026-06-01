@@ -1,4 +1,4 @@
-"""Node: await_workplan_clarification — pause for human clarification on WorkPlan questions."""
+"""Node: await_workplan_clarification — pause for human clarification on WorkPlan concerns."""
 
 import click
 from langgraph.types import interrupt
@@ -12,13 +12,13 @@ MAX_CLARIFICATION_ROUNDS = 3
 
 
 def await_workplan_clarification(state: WorkPlannerState) -> dict:
-    """Interrupt the graph until the developer answers WorkPlan questions.
+    """Interrupt the graph until the developer answers WorkPlan concerns.
 
     On first entry (or subsequent rounds):
       - Checks max clarification rounds
       - Marks workflow as PENDING_WORKPLAN_CLARIFICATION in the DB
-      - Prints questions/concerns to CLI
-      - Calls interrupt() with the questions payload
+      - Prints concerns to CLI
+      - Calls interrupt() with the concerns payload
       - Resumes when run.py calls graph.invoke(Command(resume=...))
 
     On resume:
@@ -40,8 +40,7 @@ def await_workplan_clarification(state: WorkPlannerState) -> dict:
             ),
         }
 
-    questions = work_plan_data.get("questions_for_reviewer", [])
-    risks = work_plan_data.get("risks", [])
+    concerns = work_plan_data.get("concerns", [])
     status = work_plan_data.get("status", "")
 
     # Mark as pending clarification before suspending.
@@ -52,7 +51,7 @@ def await_workplan_clarification(state: WorkPlannerState) -> dict:
             actor="dispatcher",
             reason=f"Awaiting workplan clarification (round {current_round})",
         )
-        # Persist the work_plan_data so _handle_clarify can read questions/risks
+        # Persist the work_plan_data so _handle_clarify can read concerns
         # from the state store (store_plan is skipped when we route here).
         if work_plan_data:
             update_work_plan(
@@ -70,17 +69,11 @@ def await_workplan_clarification(state: WorkPlannerState) -> dict:
     click.echo(f"   Status: {status}")
     click.echo(f"   Workflow ID: {workflow_id}")
 
-    if risks:
+    if concerns:
         click.echo("")
-        click.echo("   Risks identified:")
-        for i, risk in enumerate(risks, 1):
-            click.echo(f"     {i}. {risk}")
-
-    if questions:
-        click.echo("")
-        click.echo("   Questions for reviewer:")
-        for i, question in enumerate(questions, 1):
-            click.echo(f"     {i}. {question}")
+        click.echo("   Concerns identified:")
+        for i, concern in enumerate(concerns, 1):
+            click.echo(f"     {i}. {concern}")
 
     click.echo("")
     click.echo(f"   To clarify:  dispatcher --clarify --ticket {ticket_key}")
@@ -91,8 +84,7 @@ def await_workplan_clarification(state: WorkPlannerState) -> dict:
         {
             "workflow_id": workflow_id,
             "round": current_round,
-            "questions": questions,
-            "risks": risks,
+            "concerns": concerns,
             "status": status,
         }
     )
@@ -111,8 +103,7 @@ def await_workplan_clarification(state: WorkPlannerState) -> dict:
     # Build the round entry with full metadata
     round_entry = {
         "round": current_round,
-        "questions": questions,
-        "risks": risks,
+        "concerns": concerns,
         "answers": answers,
     }
 

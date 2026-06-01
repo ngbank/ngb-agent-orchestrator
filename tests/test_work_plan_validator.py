@@ -24,8 +24,7 @@ def _valid_work_plan(**overrides) -> dict:
                 "files_likely_affected": ["auth/handler.py"],
             }
         ],
-        "risks": ["Session token expiry edge cases"],
-        "questions_for_reviewer": ["Should we support refresh tokens?"],
+        "concerns": ["Session token expiry edge cases", "Should we support refresh tokens?"],
         "status": "pass",
     }
     base.update(overrides)
@@ -55,10 +54,9 @@ class TestValidWorkPlan:
         result = validate_work_plan(_valid_work_plan(status="blocked"))
         assert result.status == "blocked"
 
-    def test_empty_risks_and_questions_allowed(self):
-        result = validate_work_plan(_valid_work_plan(risks=[], questions_for_reviewer=[]))
-        assert result.risks == []
-        assert result.questions_for_reviewer == []
+    def test_empty_concerns_allowed(self):
+        result = validate_work_plan(_valid_work_plan(concerns=[]))
+        assert result.concerns == []
 
 
 class TestMissingRequiredFields:
@@ -70,8 +68,7 @@ class TestMissingRequiredFields:
             "summary",
             "approach",
             "tasks",
-            "risks",
-            "questions_for_reviewer",
+            "concerns",
             "status",
         ],
     )
@@ -138,4 +135,20 @@ class TestAdditionalProperties:
         data = _valid_work_plan()
         data["tasks"][0]["extra"] = "nope"
         with pytest.raises(WorkPlanValidationError):
+            validate_work_plan(data)
+
+
+class TestLegacyFieldsRejected:
+    def test_risks_field_rejected(self):
+        data = _valid_work_plan()
+        del data["concerns"]
+        data["risks"] = ["Old risk"]
+        with pytest.raises(WorkPlanValidationError, match="WorkPlan validation failed"):
+            validate_work_plan(data)
+
+    def test_questions_for_reviewer_field_rejected(self):
+        data = _valid_work_plan()
+        del data["concerns"]
+        data["questions_for_reviewer"] = ["Old question"]
+        with pytest.raises(WorkPlanValidationError, match="WorkPlan validation failed"):
             validate_work_plan(data)

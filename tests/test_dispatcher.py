@@ -82,8 +82,7 @@ def mock_generate_plan():
                 "summary": "Test plan",
                 "approach": "test approach",
                 "tasks": [{"id": 1, "description": "Do the thing", "files_likely_affected": []}],
-                "risks": [],
-                "questions_for_reviewer": [],
+                "concerns": [],
                 "status": "pass",
             }
         }
@@ -463,9 +462,8 @@ class TestHandleHistory:
             workflow_id,
             {
                 "round": 1,
-                "questions": ["What DB?"],
-                "risks": ["Risk A"],
-                "answers": [{"question": "What DB?", "answer": "SQLite"}],
+                "concerns": ["What DB?", "Risk A"],
+                "answers": [{"concern": "What DB?", "answer": "SQLite"}],
             },
             actor="developer",
         )
@@ -665,7 +663,7 @@ class TestHandleClarify:
     """Tests for the --clarify CLI handler."""
 
     def _make_pending_clarification_workflow(self, ticket_key: str) -> str:
-        """Create a workflow stuck at PENDING_WORKPLAN_CLARIFICATION with questions."""
+        """Create a workflow stuck at PENDING_WORKPLAN_CLARIFICATION with concerns."""
         workflow_id = state_store.create_workflow(
             ticket_key, status=WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION
         )
@@ -677,8 +675,7 @@ class TestHandleClarify:
                 "summary": "Test",
                 "approach": "test",
                 "tasks": [{"id": 1, "description": "Do it", "files_likely_affected": []}],
-                "risks": ["Risk A"],
-                "questions_for_reviewer": ["What DB?", "Which API?"],
+                "concerns": ["Risk A", "What DB?", "Which API?"],
                 "status": "concerns",
             },
         )
@@ -715,6 +712,15 @@ class TestHandleClarify:
         """--clarify feeds answers to the graph via Command(resume=...)."""
         workflow_id = self._make_pending_clarification_workflow("TEST-123")
 
+        def fake_editor(tmp_path):
+            # Simulate user editing the concerns file with answers
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                f.write(
+                    "- Risk A\nA: proceed with caution\n\n"
+                    "- What DB?\nA: SQLite\n\n"
+                    "- Which API?\nA: REST\n"
+                )
+
         with patch("dispatcher.run.build_orchestrator") as mock_build:
             mock_graph = Mock()
             mock_graph.invoke.return_value = {
@@ -723,12 +729,11 @@ class TestHandleClarify:
             }
             mock_build.return_value = mock_graph
 
-            # Simulate user typing answers for 2 questions
-            result = cli_runner.invoke(
-                run,
-                ["--clarify", "--workflow-id", workflow_id],
-                input="SQLite\nREST\n",
-            )
+            with patch("subprocess.run", side_effect=lambda cmd, **kwargs: fake_editor(cmd[1])):
+                result = cli_runner.invoke(
+                    run,
+                    ["--clarify", "--workflow-id", workflow_id],
+                )
 
         assert result.exit_code == 0
         # Verify graph was resumed with a Command containing answers
@@ -738,26 +743,32 @@ class TestHandleClarify:
         command = call_args[0][0]
         assert isinstance(command, Command)
         answers = command.resume["answers"]
-        assert len(answers) == 2
-        assert answers[0]["question"] == "What DB?"
-        assert answers[0]["answer"] == "SQLite"
-        assert answers[1]["question"] == "Which API?"
-        assert answers[1]["answer"] == "REST"
+        assert len(answers) == 3
+        assert answers[0]["concern"] == "Risk A"
+        assert answers[0]["answer"] == "proceed with caution"
+        assert answers[1]["concern"] == "What DB?"
+        assert answers[1]["answer"] == "SQLite"
+        assert answers[2]["concern"] == "Which API?"
+        assert answers[2]["answer"] == "REST"
 
     def test_clarify_by_ticket_key(self, test_db, cli_runner):
         """--clarify --ticket resolves the pending workflow automatically."""
         self._make_pending_clarification_workflow("TEST-123")
+
+        def fake_editor(tmp_path):
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                f.write("- Risk A\nA: ok\n")
 
         with patch("dispatcher.run.build_orchestrator") as mock_build:
             mock_graph = Mock()
             mock_graph.invoke.return_value = {"workflow_id": "any", "ticket_key": "TEST-123"}
             mock_build.return_value = mock_graph
 
-            result = cli_runner.invoke(
-                run,
-                ["--clarify", "--ticket", "TEST-123"],
-                input="SQLite\nREST\n",
-            )
+            with patch("subprocess.run", side_effect=lambda cmd, **kwargs: fake_editor(cmd[1])):
+                result = cli_runner.invoke(
+                    run,
+                    ["--clarify", "--ticket", "TEST-123"],
+                )
 
         assert result.exit_code == 0
         mock_graph.invoke.assert_called_once()
@@ -773,16 +784,20 @@ class TestHandleClarify:
             )
             return {"workflow_id": workflow_id, "ticket_key": "TEST-123"}
 
+        def fake_editor(tmp_path):
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                f.write("- Risk A\nA: ok\n")
+
         with patch("dispatcher.run.build_orchestrator") as mock_build:
             mock_graph = Mock()
             mock_graph.invoke.side_effect = _invoke_and_transition
             mock_build.return_value = mock_graph
 
-            result = cli_runner.invoke(
-                run,
-                ["--clarify", "--workflow-id", workflow_id],
-                input="SQLite\nREST\n",
-            )
+            with patch("subprocess.run", side_effect=lambda cmd, **kwargs: fake_editor(cmd[1])):
+                result = cli_runner.invoke(
+                    run,
+                    ["--clarify", "--workflow-id", workflow_id],
+                )
 
         assert result.exit_code == 0
         assert "--approve" in result.output
