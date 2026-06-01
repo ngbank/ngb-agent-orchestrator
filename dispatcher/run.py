@@ -859,22 +859,17 @@ def _handle_history(
                 actor = entry.get("actor", "unknown")
                 ts = entry.get("timestamp", "")
                 click.echo(f"  Round {rnd}  (actor: {actor},  timestamp: {ts})")
-                questions = entry.get("questions", [])
-                if questions:
-                    click.echo("    Questions:")
-                    for q in questions:
-                        click.echo(f"      • {q}")
-                risks = entry.get("risks", [])
-                if risks:
-                    click.echo("    Risks:")
-                    for r in risks:
-                        click.echo(f"      • {r}")
+                concerns = entry.get("concerns", [])
+                if concerns:
+                    click.echo("    Concerns:")
+                    for c in concerns:
+                        click.echo(f"      • {c}")
                 answers = entry.get("answers", [])
                 if answers:
                     click.echo("    Answers:")
                     for ans in answers:
                         if isinstance(ans, dict):
-                            click.echo(f"      Q: {ans.get('question', '')}")
+                            click.echo(f"      C: {ans.get('concern', '')}")
                             click.echo(f"      A: {ans.get('answer', '')}")
                         else:
                             click.echo(f"      • {ans}")
@@ -920,7 +915,11 @@ def _handle_cancel(
 
 
 def _handle_clarify(ticket_key: Optional[str], workflow_id: Optional[str] = None) -> None:
-    """Interactively collect clarification answers and resume a suspended WorkPlan workflow."""
+    """Collect clarification answers via file-based editing and resume a suspended WorkPlan."""
+    import os
+    import subprocess
+    import tempfile
+
     if workflow_id:
         resolved_id = workflow_id
         workflow = get_workflow(resolved_id)
@@ -954,13 +953,10 @@ def _handle_clarify(ticket_key: Optional[str], workflow_id: Optional[str] = None
         sys.exit(1)
 
     work_plan = workflow.get("work_plan") or {}
-    questions = work_plan.get("questions_for_reviewer", [])
-    risks = work_plan.get("risks", [])
+    concerns = work_plan.get("concerns", [])
 
-    if not questions and not risks:
-        click.echo(
-            "⚠️  No questions or risks found in the stored WorkPlan for this workflow.", err=True
-        )
+    if not concerns:
+        click.echo("⚠️  No concerns found in the stored WorkPlan for this workflow.", err=True)
         click.echo(
             "   The workflow may have been interrupted before the plan was stored.", err=True
         )
@@ -971,23 +967,57 @@ def _handle_clarify(ticket_key: Optional[str], workflow_id: Optional[str] = None
     click.echo(f"   Ticket: {workflow.get('ticket_key', ticket_key)}")
     click.echo("")
 
-    if risks:
-        click.echo("   Risks identified:")
-        for i, risk in enumerate(risks, 1):
-            click.echo(f"     {i}. {risk}")
-        click.echo("")
+    # Build the concerns file content
+    lines = [
+        "# WorkPlan Concerns — Add your answers below each concern.",
+        "# Lines starting with '#' are ignored.",
+        "# Prefix your answer with 'A: ' on the line immediately following each concern.",
+        "",
+    ]
+    for concern in concerns:
+        lines.append(f"- {concern}")
+        lines.append("A: ")
+        lines.append("")
 
+    editor = os.environ.get("EDITOR", "nano")
+
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".txt", delete=False) as tmp:
+        tmp.write("\n".join(lines))
+        tmp_path = tmp.name
+
+    try:
+        click.echo(f"📝 Launching editor ({editor}) to collect answers...")
+        subprocess.run([editor, tmp_path], check=True)
+    except FileNotFoundError:
+        click.echo(
+            f"❌ Editor '{editor}' not found. Set the EDITOR environment variable.", err=True
+        )
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        click.echo(f"❌ Editor exited with error code {e.returncode}", err=True)
+        sys.exit(1)
+    finally:
+        # Read the file contents regardless of how editor exited
+        pass
+
+    with open(tmp_path, "r", encoding="utf-8") as f:
+        edited_lines = f.read().splitlines()
+
+    os.unlink(tmp_path)
+
+    # Parse answers from the edited file
     answers = []
-    if questions:
-        click.echo("   Please answer the following questions:")
-        click.echo("")
-        for question in questions:
-            answer = click.prompt(f"   Q: {question}\n   A")
-            answers.append({"question": question, "answer": answer})
-    else:
-        # Only risks present — ask for a general response
-        answer = click.prompt("   How should the planner proceed given the risks above?\n   A")
-        answers.append({"question": "How should the planner proceed?", "answer": answer})
+    current_concern = None
+    for line in edited_lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("- "):
+            current_concern = stripped[2:]
+        elif stripped.startswith("A: ") and current_concern is not None:
+            answer = stripped[3:]
+            answers.append({"concern": current_concern, "answer": answer})
+            current_concern = None
 
     thread_config = {"configurable": {"thread_id": resolved_id}}
 

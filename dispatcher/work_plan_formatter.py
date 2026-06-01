@@ -22,8 +22,7 @@ def _format_work_plan(work_plan: Dict, ticket_id: str) -> str:
     Required sections in output:
     - Plan Summary (approach and status)
     - Task List
-    - Risks
-    - Questions for Reviewer
+    - Concerns
     - Approval Instructions
     """
     sections = []
@@ -66,25 +65,14 @@ def _format_work_plan(work_plan: Dict, ticket_id: str) -> str:
         sections.append("")
 
     sections.append("---")
-    sections.append("Risks")
+    sections.append("Concerns")
     sections.append("---")
-    risks = work_plan.get("risks", [])
-    if risks:
-        for risk in risks:
-            sections.append(f"- {risk}")
+    concerns = work_plan.get("concerns", [])
+    if concerns:
+        for concern in concerns:
+            sections.append(f"- {concern}")
     else:
-        sections.append("_No risks identified_")
-    sections.append("")
-
-    sections.append("---")
-    sections.append("Questions for Reviewer")
-    sections.append("---")
-    questions = work_plan.get("questions_for_reviewer", [])
-    if questions:
-        for question in questions:
-            sections.append(f"- {question}")
-    else:
-        sections.append("_No questions_")
+        sections.append("_No concerns identified_")
     sections.append("")
 
     sections.append("---")
@@ -177,8 +165,7 @@ def format_work_plan_comment(work_plan: Dict, ticket_id: str) -> str:
         ...             'files_likely_affected': ['formatter.py']
         ...         }
         ...     ],
-        ...     'risks': ['ACLI might not be installed'],
-        ...     'questions_for_reviewer': ['Should we handle large comments?'],
+        ...     'concerns': ['ACLI might not be installed'],
         ...     'status': 'pass'
         ... }
         >>> comment = format_work_plan_comment(work_plan, 'AOS-39')

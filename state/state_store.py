@@ -16,6 +16,37 @@ from typing import Dict, List, Optional
 from .workflow_status import WorkflowStatus
 
 
+def _normalize_work_plan(work_plan: Optional[Dict]) -> Optional[Dict]:
+    """Migrate legacy risks/questions_for_reviewer fields to concerns on read."""
+    if work_plan is None:
+        return None
+    has_legacy = "risks" in work_plan or "questions_for_reviewer" in work_plan
+    if has_legacy:
+        concerns = []
+        concerns.extend(work_plan.get("risks", []))
+        concerns.extend(work_plan.get("questions_for_reviewer", []))
+        work_plan["concerns"] = concerns
+    # Clean up legacy fields if present
+    work_plan.pop("risks", None)
+    work_plan.pop("questions_for_reviewer", None)
+    return work_plan
+
+
+def _normalize_clarification_history(history: Optional[List[Dict]]) -> Optional[List[Dict]]:
+    """Migrate legacy questions/risks fields to concerns in clarification history on read."""
+    if not history:
+        return history
+    for entry in history:
+        if "concerns" not in entry:
+            concerns = []
+            concerns.extend(entry.get("questions", []))
+            concerns.extend(entry.get("risks", []))
+            entry["concerns"] = concerns
+        entry.pop("questions", None)
+        entry.pop("risks", None)
+    return history
+
+
 def get_db_path() -> str:
     """Get the database path from environment or use default."""
     db_path = os.getenv("DB_PATH", "state/local.db")
@@ -427,10 +458,12 @@ def list_workflows(
         for row in rows:
             wf = dict(row)
             if wf["work_plan"]:
-                wf["work_plan"] = json.loads(wf["work_plan"])
+                wf["work_plan"] = _normalize_work_plan(json.loads(wf["work_plan"]))
             if wf.get("clarification_history"):
                 try:
-                    wf["clarification_history"] = json.loads(wf["clarification_history"])
+                    wf["clarification_history"] = _normalize_clarification_history(
+                        json.loads(wf["clarification_history"])
+                    )
                 except (json.JSONDecodeError, TypeError):
                     wf["clarification_history"] = []
             wf["status"] = WorkflowStatus(wf["status"])
@@ -461,10 +494,12 @@ def get_workflow(workflow_id: str) -> Optional[Dict]:
         # Convert to dict and deserialize JSON blobs and status
         workflow = dict(row)
         if workflow["work_plan"]:
-            workflow["work_plan"] = json.loads(workflow["work_plan"])
+            workflow["work_plan"] = _normalize_work_plan(json.loads(workflow["work_plan"]))
         if workflow.get("clarification_history"):
             try:
-                workflow["clarification_history"] = json.loads(workflow["clarification_history"])
+                workflow["clarification_history"] = _normalize_clarification_history(
+                    json.loads(workflow["clarification_history"])
+                )
             except (json.JSONDecodeError, TypeError):
                 workflow["clarification_history"] = []
         workflow["status"] = WorkflowStatus(workflow["status"])
@@ -495,11 +530,11 @@ def get_workflow_by_ticket(ticket_key: str) -> List[Dict]:
         for row in rows:
             workflow = dict(row)
             if workflow["work_plan"]:
-                workflow["work_plan"] = json.loads(workflow["work_plan"])
+                workflow["work_plan"] = _normalize_work_plan(json.loads(workflow["work_plan"]))
             if workflow.get("clarification_history"):
                 try:
-                    workflow["clarification_history"] = json.loads(
-                        workflow["clarification_history"]
+                    workflow["clarification_history"] = _normalize_clarification_history(
+                        json.loads(workflow["clarification_history"])
                     )
                 except (json.JSONDecodeError, TypeError):
                     workflow["clarification_history"] = []

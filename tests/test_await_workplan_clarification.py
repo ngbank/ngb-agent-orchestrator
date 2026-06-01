@@ -28,8 +28,7 @@ def _make_state(
         "work_plan_data": work_plan_data
         or {
             "status": "concerns",
-            "questions_for_reviewer": ["What DB?", "Which API?"],
-            "risks": ["Risk A"],
+            "concerns": ["What DB?", "Which API?", "Risk A"],
         },
         "clarifications": clarifications or [],
     }
@@ -58,7 +57,7 @@ def test_max_rounds_exceeded_returns_error():
 
 
 def test_first_entry_calls_interrupt(monkeypatch):
-    """Node calls interrupt() with workflow_id, questions, risks on first entry."""
+    """Node calls interrupt() with workflow_id, concerns on first entry."""
     state = _make_state()
 
     captured_payload = {}
@@ -67,8 +66,8 @@ def test_first_entry_calls_interrupt(monkeypatch):
         captured_payload.update(payload)
         return {
             "answers": [
-                {"question": "What DB?", "answer": "SQLite"},
-                {"question": "Which API?", "answer": "REST"},
+                {"concern": "What DB?", "answer": "SQLite"},
+                {"concern": "Which API?", "answer": "REST"},
             ]
         }
 
@@ -79,14 +78,14 @@ def test_first_entry_calls_interrupt(monkeypatch):
 
     assert captured_payload["workflow_id"] == "wf-123"
     assert captured_payload["round"] == 1
-    assert "What DB?" in captured_payload["questions"]
-    assert "Risk A" in captured_payload["risks"]
+    assert "What DB?" in captured_payload["concerns"]
+    assert "Risk A" in captured_payload["concerns"]
 
 
 def test_first_entry_appends_clarification_round(monkeypatch):
     """After interrupt resumes, clarifications list grows by one."""
     state = _make_state()
-    answers = [{"question": "What DB?", "answer": "SQLite"}]
+    answers = [{"concern": "What DB?", "answer": "SQLite"}]
 
     with patch(_PATCH_INTERRUPT, return_value={"answers": answers}):
         with patch(_PATCH_UPDATE_STATUS):
@@ -135,9 +134,8 @@ def test_second_round_increments_round_number():
         clarifications=[
             {
                 "round": 1,
-                "questions": ["Q1"],
-                "risks": [],
-                "answers": [{"question": "Q1", "answer": "A1"}],
+                "concerns": ["Q1"],
+                "answers": [{"concern": "Q1", "answer": "A1"}],
             }
         ]
     )
@@ -158,11 +156,11 @@ def test_second_round_increments_round_number():
 
 def test_second_round_accumulates_clarifications():
     """After second round, clarifications list has 2 entries."""
-    existing = [{"round": 1, "questions": ["Q1"], "risks": [], "answers": []}]
+    existing = [{"round": 1, "concerns": ["Q1"], "answers": []}]
     state = _make_state(clarifications=existing)
 
     with patch(
-        _PATCH_INTERRUPT, return_value={"answers": [{"question": "What DB?", "answer": "SQLite"}]}
+        _PATCH_INTERRUPT, return_value={"answers": [{"concern": "What DB?", "answer": "SQLite"}]}
     ):
         with patch(_PATCH_UPDATE_STATUS):
             with patch(_PATCH_GET_ACTOR, return_value="test_user"):
@@ -230,7 +228,7 @@ def test_clarification_history_persisted_on_resume():
         captured_entries.append(entry)
 
     with patch(
-        _PATCH_INTERRUPT, return_value={"answers": [{"question": "What DB?", "answer": "SQLite"}]}
+        _PATCH_INTERRUPT, return_value={"answers": [{"concern": "What DB?", "answer": "SQLite"}]}
     ):
         with patch(_PATCH_UPDATE_STATUS):
             with patch(
@@ -242,9 +240,8 @@ def test_clarification_history_persisted_on_resume():
     assert len(captured_entries) == 1
     entry = captured_entries[0]
     assert entry["round"] == 1
-    assert "What DB?" in entry["questions"]
-    assert "Risk A" in entry["risks"]
-    assert entry["answers"] == [{"question": "What DB?", "answer": "SQLite"}]
+    assert "What DB?" in entry["concerns"]
+    assert entry["answers"] == [{"concern": "What DB?", "answer": "SQLite"}]
     assert result["clarifications"][0] == entry
 
 
@@ -253,9 +250,8 @@ def test_clarification_history_persisted_second_round():
     existing = [
         {
             "round": 1,
-            "questions": ["Q1"],
-            "risks": [],
-            "answers": [{"question": "Q1", "answer": "A1"}],
+            "concerns": ["Q1"],
+            "answers": [{"concern": "Q1", "answer": "A1"}],
         }
     ]
     state = _make_state(clarifications=existing)
@@ -264,7 +260,7 @@ def test_clarification_history_persisted_second_round():
     def fake_update_clarification_history(wf_id, entry, actor="system"):
         captured_entries.append(entry)
 
-    with patch(_PATCH_INTERRUPT, return_value={"answers": [{"question": "Q2", "answer": "A2"}]}):
+    with patch(_PATCH_INTERRUPT, return_value={"answers": [{"concern": "Q2", "answer": "A2"}]}):
         with patch(_PATCH_UPDATE_STATUS):
             with patch(
                 _PATCH_UPDATE_CLARIFICATION_HISTORY, side_effect=fake_update_clarification_history

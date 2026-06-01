@@ -10,8 +10,7 @@
     "summary",
     "approach",
     "tasks",
-    "risks",
-    "questions_for_reviewer",
+    "concerns",
     "status"
   ],
   "additionalProperties": false,
@@ -65,16 +64,9 @@
         }
       }
     },
-    "risks": {
+    "concerns": {
       "type": "array",
-      "description": "List of identified risks or concerns.",
-      "items": {
-        "type": "string"
-      }
-    },
-    "questions_for_reviewer": {
-      "type": "array",
-      "description": "Open questions the planner has for a human reviewer.",
+      "description": "List of identified concerns, risks, or open questions for a human reviewer.",
       "items": {
         "type": "string"
       }

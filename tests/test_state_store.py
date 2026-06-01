@@ -364,10 +364,9 @@ def test_update_work_plan(test_db):
         reason="WorkPlan generated",
     )
 
-    # Verify work_plan was stored
+    # Verify work_plan was stored (normalised on read)
     workflow_after = state_store.get_workflow(workflow_id)
     assert workflow_after["work_plan"] is not None
-    assert workflow_after["work_plan"] == work_plan
     assert workflow_after["work_plan"]["summary"] == "Test plan"
     assert workflow_after["work_plan"]["status"] == "pass"
 
@@ -395,7 +394,6 @@ def test_update_work_plan_replaces_existing(test_db):
 
     # Verify work_plan was replaced
     workflow = state_store.get_workflow(workflow_id)
-    assert workflow["work_plan"] == updated_plan
     assert workflow["work_plan"]["summary"] == "Updated plan"
     assert workflow["work_plan"]["status"] == "pass"
 
@@ -421,8 +419,7 @@ def test_update_work_plan_complex_structure(test_db):
                 "files_likely_affected": ["file3.py", "file4.py", "file5.py"],
             },
         ],
-        "risks": ["Risk 1", "Risk 2", "Risk 3"],
-        "questions_for_reviewer": ["Question 1", "Question 2"],
+        "concerns": ["Risk 1", "Risk 2", "Risk 3", "Question 1", "Question 2"],
         "status": "concerns",
     }
 
@@ -433,8 +430,7 @@ def test_update_work_plan_complex_structure(test_db):
     assert len(workflow["work_plan"]["tasks"]) == 2
     assert len(workflow["work_plan"]["tasks"][0]["files_likely_affected"]) == 2
     assert len(workflow["work_plan"]["tasks"][1]["files_likely_affected"]) == 3
-    assert len(workflow["work_plan"]["risks"]) == 3
-    assert len(workflow["work_plan"]["questions_for_reviewer"]) == 2
+    assert len(workflow["work_plan"]["concerns"]) == 5
     assert workflow["work_plan"]["status"] == "concerns"
 
 

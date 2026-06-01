@@ -34,8 +34,7 @@ class WorkPlan:
     summary: str
     approach: str
     tasks: list[WorkPlanTask]
-    risks: list[str]
-    questions_for_reviewer: list[str]
+    concerns: list[str]
     status: str
 
 
@@ -85,7 +84,6 @@ def validate_work_plan(data: dict[str, Any]) -> WorkPlan:
             )
             for t in data["tasks"]
         ],
-        risks=data["risks"],
-        questions_for_reviewer=data["questions_for_reviewer"],
+        concerns=data["concerns"],
         status=data["status"],
     )

@@ -366,8 +366,7 @@ _VALID_WORK_PLAN = {
     "summary": "Do the thing",
     "approach": "Test approach",
     "tasks": [{"id": 1, "description": "Do it", "files_likely_affected": []}],
-    "risks": [],
-    "questions_for_reviewer": [],
+    "concerns": [],
     "status": "pass",
 }
 

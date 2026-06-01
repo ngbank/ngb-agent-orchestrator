@@ -41,11 +41,9 @@ def complete_work_plan():
                 "files_likely_affected": ["dispatcher/run.py", "state/state_store.py"],
             },
         ],
-        "risks": [
+        "concerns": [
             "ACLI might not be authenticated",
             "Jira comment size limits could be exceeded for large plans",
-        ],
-        "questions_for_reviewer": [
             "Should we support updating existing comments?",
             "Do we need to notify reviewers via @mention?",
         ],
@@ -62,8 +60,7 @@ def minimal_work_plan():
         "summary": "Simple task",
         "approach": "Direct implementation",
         "tasks": [{"id": 1, "description": "Do the thing", "files_likely_affected": []}],
-        "risks": [],
-        "questions_for_reviewer": [],
+        "concerns": [],
         "status": "concerns",
     }
 
@@ -77,8 +74,7 @@ def blocked_work_plan():
         "summary": "Cannot proceed",
         "approach": "This is blocked",
         "tasks": [{"id": 1, "description": "Cannot do this", "files_likely_affected": []}],
-        "risks": ["Critical blocker found"],
-        "questions_for_reviewer": ["How should we proceed?"],
+        "concerns": ["Critical blocker found", "How should we proceed?"],
         "status": "blocked",
     }
 
@@ -91,8 +87,7 @@ def test_format_complete_plan(complete_work_plan):
     assert "**Status:** PASS — *Post WorkPlan to Jira as formatted comment*" in comment
     assert "Approach" in comment
     assert "Tasks" in comment
-    assert "Risks" in comment
-    assert "Questions for Reviewer" in comment
+    assert "Concerns" in comment
     assert "Approval" in comment
 
     assert "Implement ACLI integration" in comment
@@ -116,13 +111,11 @@ def test_format_minimal_plan(minimal_work_plan):
     assert "# Agent WorkPlan for AOS-40" in comment
     assert "Approach" in comment
     assert "Tasks" in comment
-    assert "Risks" in comment
-    assert "Questions for Reviewer" in comment
+    assert "Concerns" in comment
     assert "Approval" in comment
 
     # Verify empty section handling
-    assert "_No risks identified_" in comment
-    assert "_No questions_" in comment
+    assert "_No concerns identified_" in comment
 
     # Verify status indicator for concerns
     assert "CONCERNS" in comment
@@ -178,8 +171,7 @@ def test_missing_optional_fields():
         "summary": "Test",
         "approach": "Test approach",
         "tasks": [],
-        "risks": [],
-        "questions_for_reviewer": [],
+        "concerns": [],
         "status": "pass",
     }
 
@@ -188,8 +180,7 @@ def test_missing_optional_fields():
     # Should not crash and should have placeholders
     assert "AOS-42" in comment
     assert "_No tasks defined_" in comment
-    assert "_No risks identified_" in comment
-    assert "_No questions_" in comment
+    assert "_No concerns identified_" in comment
 
 
 def test_special_characters_in_content():
@@ -206,8 +197,7 @@ def test_special_characters_in_content():
                 "files_likely_affected": ["file_with-dashes.py", "path/to/file.py"],
             }
         ],
-        "risks": ["Risk with |pipe| characters"],
-        "questions_for_reviewer": ["Question with ? and !"],
+        "concerns": ["Risk with |pipe| characters", "Question with ? and !"],
         "status": "pass",
     }
 
@@ -229,8 +219,7 @@ def test_no_tasks_handling():
         "summary": "No tasks plan",
         "approach": "No work needed",
         "tasks": [],
-        "risks": [],
-        "questions_for_reviewer": [],
+        "concerns": [],
         "status": "pass",
     }
 
@@ -248,8 +237,7 @@ def test_unknown_status_handling():
         "summary": "Unknown status",
         "approach": "Test unknown",
         "tasks": [],
-        "risks": [],
-        "questions_for_reviewer": [],
+        "concerns": [],
         "status": "in_progress",
     }
 
