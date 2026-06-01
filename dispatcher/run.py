@@ -128,9 +128,33 @@ from state.workflow_status import WorkflowStatus  # noqa: E402
     help="Print captured Goose output logs for a workflow (use with --ticket or --workflow-id)",
 )
 @click.option(
+    "--comment-pr",
+    "do_comment_pr",
+    is_flag=True,
+    help=(
+        "Comment on a pending PR to trigger incremental re-execution "
+        "(use with --ticket or --workflow-id)"
+    ),
+)
+@click.option(
+    "--approve-pr",
+    "do_approve_pr",
+    is_flag=True,
+    help=(
+        "Approve a pending PR and mark the workflow as completed "
+        "(use with --ticket or --workflow-id)"
+    ),
+)
+@click.option(
+    "--reject-pr",
+    "do_reject_pr",
+    is_flag=True,
+    help="Reject a pending PR (use with --ticket or --workflow-id)",
+)
+@click.option(
     "--reason",
     default=None,
-    help="Reason for rejection (used with --reject)",
+    help="Reason for rejection (used with --reject or --reject-pr)",
 )
 @click.option(
     "--workflow-id",
@@ -152,6 +176,9 @@ def run(
     do_show_clarifications: bool,
     do_clear_db: bool,
     do_logs: bool,
+    do_comment_pr: bool,
+    do_approve_pr: bool,
+    do_reject_pr: bool,
     reason: str,
     workflow_id: str,
 ) -> None:
@@ -267,6 +294,27 @@ def run(
             click.echo("❌ --reject requires --ticket or --workflow-id", err=True)
             sys.exit(1)
         _handle_reject(ticket, reason, workflow_id)
+        return
+
+    if do_approve_pr:
+        if not ticket and not workflow_id:
+            click.echo("❌ --approve-pr requires --ticket or --workflow-id", err=True)
+            sys.exit(1)
+        _handle_approve_pr(ticket, workflow_id)
+        return
+
+    if do_comment_pr:
+        if not ticket and not workflow_id:
+            click.echo("❌ --comment-pr requires --ticket or --workflow-id", err=True)
+            sys.exit(1)
+        _handle_comment_pr(ticket, workflow_id)
+        return
+
+    if do_reject_pr:
+        if not ticket and not workflow_id:
+            click.echo("❌ --reject-pr requires --ticket or --workflow-id", err=True)
+            sys.exit(1)
+        _handle_reject_pr(ticket, reason, workflow_id)
         return
 
     if not ticket:
@@ -467,11 +515,11 @@ def _handle_approve(ticket_key: str, workflow_id: Optional[str] = None) -> None:
         if exec_status in ("success", "partial"):
             update_status(
                 wf_id,
-                WorkflowStatus.COMPLETED,
+                WorkflowStatus.PENDING_PR_APPROVAL,
                 actor=actor,
-                reason="All stages completed successfully after approval",
+                reason="Execution completed — awaiting PR approval",
             )
-            click.echo("🎉 Workflow completed successfully")
+            click.echo("✅ Execution completed — awaiting PR approval")
         else:
             update_status(
                 wf_id,
@@ -489,6 +537,10 @@ def _handle_approve(ticket_key: str, workflow_id: Optional[str] = None) -> None:
                 err=True,
             )
         _post_execution_comment(ticket_key, execution_summary if execution_summary else None)
+
+    except GraphInterrupt:
+        # Graph paused at await_pr_approval after execute_plan.
+        click.echo("⏸️  Graph paused at PR approval gate.")
 
     except KeyboardInterrupt:
         click.echo("\n⚠️  Workflow interrupted by user", err=True)
@@ -705,6 +757,8 @@ _STATUS_DISPLAY = {
     "in_progress": ("⚙️ ", "in_progress"),
     "pending_workplan_clarification": ("💬", "pending_workplan_clarification"),
     "pending_approval": ("⏸️ ", "pending_approval"),
+    "pending_pr_approval": ("🔍", "pending_pr_approval"),
+    "pr_commented": ("💬", "pr_commented"),
     "approved": ("✅", "approved"),
     "rejected": ("🚫", "rejected"),
     "completed": ("🎉", "completed"),
@@ -1064,6 +1118,241 @@ def _handle_clarify(ticket_key: Optional[str], workflow_id: Optional[str] = None
             )
         else:
             click.echo("⏸️  Workflow suspended — check status with:  dispatcher --list")
+
+    except Exception as e:
+        click.echo(f"❌ Error resuming workflow: {e}", err=True)
+        sys.exit(1)
+
+
+def _handle_approve_pr(ticket_key: Optional[str], workflow_id: Optional[str] = None) -> None:
+    if workflow_id:
+        resolved_id = workflow_id
+    else:
+        if ticket_key is None:
+            click.echo("❌ --approve-pr requires --ticket or --workflow-id", err=True)
+            sys.exit(1)
+        pending = [
+            w
+            for w in get_workflow_by_ticket(ticket_key)
+            if w["status"] == WorkflowStatus.PENDING_PR_APPROVAL
+        ]
+        if not pending:
+            click.echo(
+                f"❌ No pending PR approval workflow found for ticket: {ticket_key}", err=True
+            )
+            sys.exit(1)
+        resolved_id = pending[0]["id"]
+
+    workflow = get_workflow(resolved_id)
+    if workflow is None:
+        click.echo(f"❌ Workflow not found: {resolved_id}", err=True)
+        sys.exit(1)
+
+    if workflow["status"] != WorkflowStatus.PENDING_PR_APPROVAL:
+        status_val = workflow["status"].value
+        click.echo(
+            f"❌ Workflow {resolved_id} is not pending PR approval (status: {status_val})",
+            err=True,
+        )
+        sys.exit(1)
+
+    thread_config = {"configurable": {"thread_id": resolved_id}}
+    actor = _get_actor()
+
+    try:
+        graph = build_orchestrator()
+        final_state = graph.invoke(
+            Command(resume={"decision": "approved"}),
+            config=thread_config,
+        )
+
+        wf_id = final_state.get("workflow_id", resolved_id)
+        update_status(
+            wf_id,
+            WorkflowStatus.COMPLETED,
+            actor=actor,
+            reason="PR approved by reviewer",
+        )
+        click.echo("🎉 Workflow completed successfully — PR approved")
+
+    except Exception as e:
+        click.echo(f"❌ Error resuming workflow: {e}", err=True)
+        sys.exit(1)
+
+
+def _handle_comment_pr(ticket_key: Optional[str], workflow_id: Optional[str] = None) -> None:
+    """Collect PR review comments via file-based editing and resume for incremental fixes."""
+    import os
+    import subprocess
+    import tempfile
+
+    if workflow_id:
+        resolved_id = workflow_id
+        workflow = get_workflow(resolved_id)
+        if workflow is None:
+            click.echo(f"❌ Workflow not found: {resolved_id}", err=True)
+            sys.exit(1)
+    else:
+        if ticket_key is None:
+            click.echo("❌ Ticket key is required when workflow id is not provided", err=True)
+            sys.exit(1)
+
+        pending = [
+            w
+            for w in get_workflow_by_ticket(ticket_key)
+            if w["status"] == WorkflowStatus.PENDING_PR_APPROVAL
+        ]
+        if not pending:
+            click.echo(
+                f"❌ No pending PR approval workflow found for ticket: {ticket_key}", err=True
+            )
+            sys.exit(1)
+        workflow = pending[0]
+        resolved_id = workflow["id"]
+
+    if workflow["status"] != WorkflowStatus.PENDING_PR_APPROVAL:
+        status_val = workflow["status"].value
+        click.echo(
+            f"❌ Workflow {resolved_id} is not pending PR approval (status: {status_val})",
+            err=True,
+        )
+        sys.exit(1)
+
+    click.echo("")
+    click.echo(f"💬 PR review comments for workflow: {resolved_id}")
+    click.echo(f"   Ticket: {workflow.get('ticket_key', ticket_key)}")
+    click.echo("")
+
+    editor = os.environ.get("EDITOR", "nano")
+
+    lines = [
+        "# PR Review Comments — Add your review comments below.",
+        "# Lines starting with '#' are ignored.",
+        "# Each comment should be on its own line.",
+        "",
+    ]
+
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".txt", delete=False) as tmp:
+        tmp.write("\n".join(lines))
+        tmp_path = tmp.name
+
+    try:
+        click.echo(f"📝 Launching editor ({editor}) to collect comments...")
+        subprocess.run([editor, tmp_path], check=True)
+    except FileNotFoundError:
+        click.echo(
+            f"❌ Editor '{editor}' not found. Set the EDITOR environment variable.", err=True
+        )
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        click.echo(f"❌ Editor exited with error code {e.returncode}", err=True)
+        sys.exit(1)
+
+    with open(tmp_path, "r", encoding="utf-8") as f:
+        edited_lines = f.read().splitlines()
+
+    os.unlink(tmp_path)
+
+    comments_lines = [
+        line for line in edited_lines if line.strip() and not line.strip().startswith("#")
+    ]
+    comments_text = "\n".join(comments_lines)
+
+    if not comments_text.strip():
+        click.echo("⚠️  No comments provided. Aborting.", err=True)
+        sys.exit(1)
+
+    thread_config = {"configurable": {"thread_id": resolved_id}}
+
+    try:
+        graph = build_orchestrator()
+        final_state = graph.invoke(
+            Command(resume={"decision": "commented", "comments": comments_text}),
+            config=thread_config,
+        )
+
+        if final_state.get("error"):
+            click.echo(f"❌ Workflow error: {final_state['error']}", err=True)
+            sys.exit(1)
+
+        wf_id = final_state.get("workflow_id", resolved_id)
+        refreshed = get_workflow(wf_id)
+        if refreshed and refreshed["status"] == WorkflowStatus.PENDING_PR_APPROVAL:
+            click.echo("")
+            click.echo("⏸️  PR still pending approval after re-execution.")
+            tk = workflow.get("ticket_key", ticket_key)
+            click.echo(f"   Run:  dispatcher --comment-pr --ticket {tk}")
+            return
+
+        if refreshed and refreshed["status"] == WorkflowStatus.COMPLETED:
+            click.echo("")
+            click.echo("✅ PR approved and workflow completed.")
+
+    except GraphInterrupt:
+        refreshed = get_workflow(resolved_id)
+        if refreshed and refreshed["status"] == WorkflowStatus.PENDING_PR_APPROVAL:
+            click.echo("")
+            click.echo("⏸️  PR still pending approval after re-execution.")
+            tk = workflow.get("ticket_key", ticket_key)
+            click.echo(f"   Run:  dispatcher --comment-pr --ticket {tk}")
+        else:
+            click.echo("⏸️  Workflow suspended — check status with:  dispatcher --list")
+
+    except Exception as e:
+        click.echo(f"❌ Error resuming workflow: {e}", err=True)
+        sys.exit(1)
+
+
+def _handle_reject_pr(
+    ticket_key: Optional[str], reason: Optional[str], workflow_id: Optional[str] = None
+) -> None:
+    if workflow_id:
+        resolved_id = workflow_id
+    else:
+        if ticket_key is None:
+            click.echo("❌ --reject-pr requires --ticket or --workflow-id", err=True)
+            sys.exit(1)
+        pending = [
+            w
+            for w in get_workflow_by_ticket(ticket_key)
+            if w["status"] == WorkflowStatus.PENDING_PR_APPROVAL
+        ]
+        if not pending:
+            click.echo(
+                f"❌ No pending PR approval workflow found for ticket: {ticket_key}", err=True
+            )
+            sys.exit(1)
+        resolved_id = pending[0]["id"]
+
+    workflow = get_workflow(resolved_id)
+    if workflow is None:
+        click.echo(f"❌ Workflow not found: {resolved_id}", err=True)
+        sys.exit(1)
+
+    if workflow["status"] != WorkflowStatus.PENDING_PR_APPROVAL:
+        status_val = workflow["status"].value
+        click.echo(
+            f"❌ Workflow {resolved_id} is not pending PR approval (status: {status_val})",
+            err=True,
+        )
+        sys.exit(1)
+
+    thread_config = {"configurable": {"thread_id": resolved_id}}
+    actor = _get_actor()
+
+    try:
+        graph = build_orchestrator()
+        graph.invoke(
+            Command(resume={"decision": "rejected", "reason": reason}),
+            config=thread_config,
+        )
+        update_status(
+            resolved_id,
+            WorkflowStatus.REJECTED,
+            actor=actor,
+            reason=reason or "PR rejected by reviewer",
+        )
+        click.echo(f"🚫 PR rejected for workflow {resolved_id}" + (f": {reason}" if reason else ""))
 
     except Exception as e:
         click.echo(f"❌ Error resuming workflow: {e}", err=True)

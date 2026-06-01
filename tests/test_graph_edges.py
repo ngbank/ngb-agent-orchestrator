@@ -4,6 +4,7 @@ All routing functions are pure: they inspect state and return a string
 destination — no I/O, no side-effects.
 """
 
+from graph.builder import _route_after_pr_approval
 from graph.work_planner.edges import (
     route_after_check_duplicate,
     route_after_fetch_ticket,
@@ -202,3 +203,32 @@ def test_route_generate_plan_with_error():
         "error": "Plan generation not yet implemented (AOS-51).",
     }
     assert route_after_generate_plan(state) == "error_handler"
+
+
+# ---------------------------------------------------------------------------
+# _route_after_pr_approval (top-level orchestrator)
+# ---------------------------------------------------------------------------
+
+
+def test_route_after_pr_approval_commented():
+    """PR_COMMENTED decision must route back to execute_plan for incremental fixes."""
+    state = {"ticket_key": "AOS-50", "pr_approval_decision": "commented"}
+    assert _route_after_pr_approval(state) == "execute_plan"
+
+
+def test_route_after_pr_approval_approved():
+    """Approved decision must route to END."""
+    state = {"ticket_key": "AOS-50", "pr_approval_decision": "approved"}
+    assert _route_after_pr_approval(state) == "__end__"
+
+
+def test_route_after_pr_approval_rejected():
+    """Rejected decision must route to END."""
+    state = {"ticket_key": "AOS-50", "pr_approval_decision": "rejected"}
+    assert _route_after_pr_approval(state) == "__end__"
+
+
+def test_route_after_pr_approval_missing():
+    """Missing pr_approval_decision must route to END."""
+    state = {"ticket_key": "AOS-50"}
+    assert _route_after_pr_approval(state) == "__end__"

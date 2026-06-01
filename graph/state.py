@@ -28,5 +28,10 @@ class OrchestratorState(TypedDict, total=False):
     approval_decision: Optional[str]  # "approved" | "rejected"
     rejection_reason: Optional[str]  # only set when rejected
 
+    # --- populated by PR approval loop ---
+    pr_url: Optional[str]
+    pr_comments: Optional[str]
+    pr_approval_decision: Optional[str]  # "approved" | "rejected" | "commented"
+
     # --- populated by execute_plan node ---
     execution_summary: Optional[dict]  # summary written by execute recipe

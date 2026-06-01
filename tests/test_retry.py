@@ -67,8 +67,8 @@ def mock_jira_client():
 # ---------------------------------------------------------------------------
 
 
-def test_is_retryable_failed_only():
-    retryable = {WorkflowStatus.FAILED, WorkflowStatus.IN_PROGRESS}
+def test_is_retryable_failed_and_pr_commented():
+    retryable = {WorkflowStatus.FAILED, WorkflowStatus.IN_PROGRESS, WorkflowStatus.PR_COMMENTED}
     for status in WorkflowStatus:
         if status in retryable:
             assert status.is_retryable() is True, f"{status} should be retryable"

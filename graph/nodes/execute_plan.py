@@ -65,6 +65,11 @@ def execute_plan(state: OrchestratorState) -> dict:
             update_status(workflow_id, WorkflowStatus.FAILED, actor="execute_plan")
         return {"execution_summary": summary, "failed_node": "execute_plan"}
 
+    # --- Check for existing branch (PR re-execution) ---
+    exec_summary = state.get("execution_summary") or {}
+    existing_branch = exec_summary.get("branch", "")
+    pr_comments = state.get("pr_comments", "")
+
     # --- Clone into a fresh temp directory ---
     working_dir = tempfile.mkdtemp(prefix=f"ngb-execute-{workflow_id}-")
     lp = log_path(workflow_id or "unknown", "execute", ticket_key=ticket_key)
@@ -139,6 +144,10 @@ def execute_plan(state: OrchestratorState) -> dict:
                     f"reasoning_path={reasoning_path}",
                     "--params",
                     f"GOOSE_MCP_PYTHON={mcp_python}",
+                    "--params",
+                    f"existing_branch={existing_branch}",
+                    "--params",
+                    f"pr_comments={pr_comments}",
                 ],
                 log_file,
                 cwd=working_dir,
@@ -179,7 +188,7 @@ def execute_plan(state: OrchestratorState) -> dict:
         if workflow_id:
             update_execution_summary(workflow_id, execution_summary)
             new_status = (
-                WorkflowStatus.COMPLETED
+                WorkflowStatus.PENDING_PR_APPROVAL
                 if execution_summary.get("status") in ("success", "partial")
                 else WorkflowStatus.FAILED
             )
@@ -194,6 +203,7 @@ def execute_plan(state: OrchestratorState) -> dict:
 
         return {
             "execution_summary": execution_summary,
+            "pr_url": execution_summary.get("pr_url", ""),
             "failed_node": (
                 "execute_plan"
                 if execution_summary.get("status") not in ("success", "partial")
