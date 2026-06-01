@@ -17,7 +17,7 @@ parameters:
     input_type: string
     requirement: optional
     default: ""
-    description: "Path to a JSON file containing previous clarification rounds from the reviewer. Each round has questions, risks, and the reviewer's answers."
+    description: "Path to a JSON file containing previous clarification rounds from the reviewer. Each round has concerns and the reviewer's answers."
 
 extensions:
   - type: builtin
@@ -55,23 +55,21 @@ prompt: |
 
   The file contains a JSON array of clarification rounds. Each round has:
   - `round`: The round number
-  - `questions`: Questions that were asked in the previous plan
-  - `risks`: Risks identified in the previous plan
-  - `answers`: The reviewer's answers (array of `{question, answer}` objects)
+  - `concerns`: The list of concern strings from the previous plan (risks and questions combined)
+  - `answers`: The reviewer's answers (array of `{concern, answer}` objects)
 
   You MUST incorporate the reviewer's answers into your new plan:
   - Adjust the approach based on the answers
   - Update tasks to reflect clarified requirements
-  - Remove questions that have been answered from `questions_for_reviewer`
-  - Only add NEW questions if the answers reveal additional ambiguity
-  - If the reviewer explicitly accepts/acknowledges a risk (e.g., "I accept this risk",
-    "proceed anyway", "that's fine", "acknowledged"), treat that risk as **acknowledged**.
-    Acknowledged risks may remain in the `risks` array for documentation purposes,
+  - Remove concerns that have been fully addressed from `concerns`
+  - Only add NEW concerns if the answers reveal additional ambiguity or new risks
+  - If the reviewer explicitly accepts/acknowledges a concern (e.g., "I accept this",
+    "proceed anyway", "that's fine", "acknowledged"), treat that concern as **acknowledged**.
+    Acknowledged concerns may remain in `concerns` for documentation purposes,
     but they do NOT force the status away from "pass".
-  - Update `status` to "pass" if all questions have been answered AND all remaining
-    risks are either removed or acknowledged by the reviewer
-  - Remove risks that are no longer relevant based on the answers
-  - Keep risks that are still relevant (even if acknowledged) for documentation
+  - Update `status` to "pass" if all concerns have been answered or acknowledged
+  - Remove concerns that are no longer relevant based on the answers
+  - Keep concerns that are still relevant (even if acknowledged) for documentation
   {% endif %}
 
   ## Step 2: Fetch JIRA Ticket Data
@@ -118,7 +116,7 @@ prompt: |
   - temporary validation files under `/tmp/` only
 
   If you identify unrelated issues while analyzing the repository:
-  - Record them as `risks` or `questions_for_reviewer` in the WorkPlan
+  - Record them as entries in the `concerns` array in the WorkPlan
   - Do not change any repository file to address them
 
   ## Step 4: Generate WorkPlan JSON
@@ -139,23 +137,21 @@ prompt: |
         "files_likely_affected": ["<file1>", "<file2>"]
       }
     ],
-    "risks": ["<risk1>", "<risk2>"] or [],
-    "questions_for_reviewer": ["<question1>"] or [],
+    "concerns": ["<risk or open question 1>", "<risk or open question 2>"] or [],
     "status": "pass" | "concerns" | "blocked"
   }
   ```
 
   ### Status Classification:
   - **"pass"**: Ticket is clear, scope is well-defined, files are identifiable, no major blockers
-  - **"concerns"**: Implementable but has risks (external dependencies, architectural decisions, complexity)
+  - **"concerns"**: Implementable but has risks or open questions (external dependencies, architectural decisions, complexity)
   - **"blocked"**: Ticket is ambiguous, missing critical information, or has unclear requirements
-    → When blocked, add specific clarifying questions to `questions_for_reviewer`
+    → When blocked, add specific clarifying questions to `concerns`
 
   ### Status Invariants (MUST follow):
-  - If `questions_for_reviewer` is non-empty, status MUST be `"concerns"` or `"blocked"` (never `"pass"`).
-  - If `risks` is non-empty AND those risks have NOT been acknowledged by the reviewer
-    in a previous clarification round, status MUST be `"concerns"` (never `"pass"`).
-  - If `risks` is non-empty BUT all risks have been explicitly acknowledged/accepted
+  - If `concerns` is non-empty AND those concerns have NOT been acknowledged by the reviewer
+    in a previous clarification round, status MUST be `"concerns"` or `"blocked"` (never `"pass"`).
+  - If `concerns` is non-empty BUT all concerns have been explicitly acknowledged/accepted
     by the reviewer in clarifications, status CAN be `"pass"`.
   - Use `"blocked"` only when implementation cannot proceed without additional reviewer input.
 
@@ -163,10 +159,10 @@ prompt: |
   - `schema_version` MUST be exactly "1.0" (string, not number)
   - `ticket_key` MUST match pattern [A-Z][A-Z0-9]+-[0-9]+ (e.g., "AOS-38")
   - `tasks` array MUST have at least 1 task
-  - `risks` and `questions_for_reviewer` CAN be empty arrays []
+  - `concerns` CAN be an empty array []
   - `status` MUST be one of: "pass", "concerns", "blocked"
-  - `status` MUST NOT be `"pass"` when `risks` or `questions_for_reviewer` are non-empty
-  - Do NOT add any additional fields not in the schema
+  - `status` MUST NOT be `"pass"` when `concerns` is non-empty (unless all concerns are acknowledged)
+  - Do NOT add any additional fields not in the schema (no `risks`, no `questions_for_reviewer`)
   - All string fields must not be empty (minLength: 1)
   - Each task MUST have id (integer >= 1), description (string), and files_likely_affected (array)
 
@@ -203,7 +199,9 @@ prompt: |
   4. **Validate again**
 
   Common validation errors and fixes:
-  - "Missing required field 'risks'" → Add `"risks": []`
+  - "Missing required field 'concerns'" → Add `"concerns": []`
+  - "Additional property 'risks'" → Rename to `"concerns"`
+  - "Additional property 'questions_for_reviewer'" → Merge into `"concerns"` and remove the old field
   - "Invalid status value 'ready'" → Change to "pass", "concerns", or "blocked"
   - "'ticket_key' does not match pattern" → Ensure format like "AOS-38"
   - "Additional property 'extra_field'" → Remove the extra field
@@ -249,11 +247,10 @@ prompt: |
         "files_likely_affected": ["docs/api.md", "README.md"]
       }
     ],
-    "risks": [
-      "Integration with existing JWT service may require changes to token format",
-      "Performance impact of middleware on all dashboard requests needs monitoring"
+    "concerns": [
+      "Integration with existing JWT service may require changes to token format — confirm expected token format with the team before starting",
+      "Performance impact of middleware on all dashboard requests needs monitoring — consider adding a benchmark test"
     ],
-    "questions_for_reviewer": [],
     "status": "concerns"
   }
   ```
