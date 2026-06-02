@@ -13,7 +13,6 @@ from .repository import (
     update_work_plan,
 )
 from .state_store import (
-    _create_audit_log,
     get_connection,
     run_migrations,
 )
@@ -31,7 +30,6 @@ __all__ = [
     "get_audit_log",
     "run_migrations",
     "get_connection",
-    "_create_audit_log",
     "update_work_plan",
     "update_execution_summary",
 ]
