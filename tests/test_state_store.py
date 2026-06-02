@@ -234,7 +234,7 @@ def test_audit_log_append_only(test_db):
     # Verify no delete methods exist on SQLiteWorkflowRepository
     import inspect
 
-    from state.repository import SQLiteWorkflowRepository
+    from state.sqlite_repository import SQLiteWorkflowRepository
 
     methods = [
         name

@@ -1,16 +1,18 @@
 """Workflow state tracking module."""
 
 from .repository import (
-    SQLiteWorkflowRepository,
     WorkflowRepository,
     create_workflow,
     get_audit_log,
-    get_repository,
     get_workflow,
     get_workflow_by_ticket,
     update_execution_summary,
     update_status,
     update_work_plan,
+)
+from .sqlite_repository import (
+    SQLiteWorkflowRepository,
+    get_repository,
 )
 from .state_store import (
     get_connection,
