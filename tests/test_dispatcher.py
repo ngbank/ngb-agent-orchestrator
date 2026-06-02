@@ -93,7 +93,7 @@ def test_run_creates_workflow(
     test_db, mock_jira_client, mock_generate_plan, cli_runner, memory_checkpointer
 ):
     """Test that running the dispatcher creates a workflow record and pauses for approval."""
-    with patch("dispatcher.run.build_orchestrator") as mock_build:
+    with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
         from graph.builder import build_orchestrator
 
         mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
@@ -119,7 +119,7 @@ def test_run_rejects_duplicate(test_db, mock_jira_client, cli_runner, memory_che
     # Create an in-progress workflow
     workflow_id = state_store.create_workflow("TEST-123", status=WorkflowStatus.IN_PROGRESS)
 
-    with patch("dispatcher.run.build_orchestrator") as mock_build:
+    with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
         from graph.builder import build_orchestrator
 
         mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
@@ -139,7 +139,7 @@ def test_run_allows_rerun_after_completion(
     # Create a completed workflow
     state_store.create_workflow("TEST-123", status=WorkflowStatus.COMPLETED)
 
-    with patch("dispatcher.run.build_orchestrator") as mock_build:
+    with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
         from graph.builder import build_orchestrator
 
         mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
@@ -163,7 +163,7 @@ def test_run_handles_ticket_not_found(test_db, cli_runner, memory_checkpointer):
         mock_instance.get_ticket.side_effect = JiraTicketNotFoundError("Ticket not found")
         mock.return_value = mock_instance
 
-        with patch("dispatcher.run.build_orchestrator") as mock_build:
+        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             from graph.builder import build_orchestrator
 
             mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
@@ -198,7 +198,7 @@ def test_run_logs_transitions(
     test_db, mock_jira_client, mock_generate_plan, cli_runner, memory_checkpointer
 ):
     """Test that all stage transitions are logged to audit log."""
-    with patch("dispatcher.run.build_orchestrator") as mock_build:
+    with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
         from graph.builder import build_orchestrator
 
         mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
@@ -256,7 +256,7 @@ def test_run_handles_jira_config_error(test_db, cli_runner, memory_checkpointer)
     with patch("graph.work_planner.nodes.fetch_ticket.JiraClient") as mock:
         mock.side_effect = JiraConfigurationError("Missing JIRA_URL")
 
-        with patch("dispatcher.run.build_orchestrator") as mock_build:
+        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             from graph.builder import build_orchestrator
 
             mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
@@ -318,7 +318,7 @@ def test_run_keyboard_interrupt(test_db, cli_runner, memory_checkpointer):
         mock_instance.get_ticket.side_effect = KeyboardInterrupt()
         mock.return_value = mock_instance
 
-        with patch("dispatcher.run.build_orchestrator") as mock_build:
+        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             from graph.builder import build_orchestrator
 
             mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
@@ -334,7 +334,7 @@ class TestPostExecutionComment:
 
     def test_posts_comment_with_pr_url(self, test_db):
         """Test that pr_url from the execution summary is posted to JIRA and echoed."""
-        from dispatcher.run import _post_execution_comment
+        from dispatcher.commands.common import _post_execution_comment
 
         execution_summary = {
             "ticket_key": "AOS-42",
@@ -347,7 +347,7 @@ class TestPostExecutionComment:
             "status": "success",
         }
 
-        with patch("dispatcher.run.JiraClient") as mock_jira_class:
+        with patch("dispatcher.commands.common.JiraClient") as mock_jira_class:
             mock_jira = mock_jira_class.return_value
             _post_execution_comment("AOS-42", execution_summary)
             mock_jira.post_comment.assert_called_once()
@@ -357,26 +357,26 @@ class TestPostExecutionComment:
 
     def test_skips_when_no_ticket(self):
         """Test that no JIRA call is made when ticket_key is absent."""
-        from dispatcher.run import _post_execution_comment
+        from dispatcher.commands.common import _post_execution_comment
 
-        with patch("dispatcher.run.JiraClient") as mock_jira_class:
+        with patch("dispatcher.commands.common.JiraClient") as mock_jira_class:
             _post_execution_comment(None, {"status": "success", "pr_url": "http://x"})
             mock_jira_class.assert_not_called()
 
     def test_skips_when_no_summary(self):
         """Test that no JIRA call is made when execution_summary is None."""
-        from dispatcher.run import _post_execution_comment
+        from dispatcher.commands.common import _post_execution_comment
 
-        with patch("dispatcher.run.JiraClient") as mock_jira_class:
+        with patch("dispatcher.commands.common.JiraClient") as mock_jira_class:
             _post_execution_comment("AOS-42", None)
             mock_jira_class.assert_not_called()
 
     def test_tolerates_jira_comment_error(self):
         """Test that a JiraCommentError is caught and does not raise."""
+        from dispatcher.commands.common import _post_execution_comment
         from dispatcher.jira_client import JiraCommentError
-        from dispatcher.run import _post_execution_comment
 
-        with patch("dispatcher.run.JiraClient") as mock_jira_class:
+        with patch("dispatcher.commands.common.JiraClient") as mock_jira_class:
             mock_jira = mock_jira_class.return_value
             mock_jira.post_comment.side_effect = JiraCommentError("network error")
             # Should not raise
@@ -413,7 +413,7 @@ class TestHandleHistory:
         from graph.builder import build_orchestrator
 
         checkpointer = memory_checkpointer
-        with patch("dispatcher.run.build_orchestrator") as mock_build:
+        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_build.side_effect = lambda: build_orchestrator(checkpointer=checkpointer)
 
             # Start workflow — pauses at await_approval
@@ -423,7 +423,7 @@ class TestHandleHistory:
         assert workflows, "expected at least one workflow"
         resolved_id = workflows[0]["id"]
 
-        with patch("dispatcher.run.build_orchestrator") as mock_build:
+        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_build.side_effect = lambda: build_orchestrator(checkpointer=checkpointer)
             result = cli_runner.invoke(run, ["--history", "--ticket", "TEST-123"])
 
@@ -440,14 +440,14 @@ class TestHandleHistory:
         from graph.builder import build_orchestrator
 
         checkpointer = memory_checkpointer
-        with patch("dispatcher.run.build_orchestrator") as mock_build:
+        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_build.side_effect = lambda: build_orchestrator(checkpointer=checkpointer)
             cli_runner.invoke(run, ["--ticket", "TEST-123"])
 
         workflows = state_store.get_workflow_by_ticket("TEST-123")
         resolved_id = workflows[0]["id"]
 
-        with patch("dispatcher.run.build_orchestrator") as mock_build:
+        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_build.side_effect = lambda: build_orchestrator(checkpointer=checkpointer)
             result = cli_runner.invoke(run, ["--history", "--workflow-id", resolved_id])
 
@@ -468,7 +468,7 @@ class TestHandleHistory:
             actor="developer",
         )
 
-        with patch("dispatcher.run.build_orchestrator") as mock_build:
+        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
             mock_graph.get_state_history.return_value = []
             mock_build.return_value = mock_graph
@@ -487,7 +487,7 @@ class TestHandleHistory:
         """--history --show-clarifications on a workflow with no history should say so."""
         workflow_id = state_store.create_workflow("TEST-123", status=WorkflowStatus.COMPLETED)
 
-        with patch("dispatcher.run.build_orchestrator") as mock_build:
+        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
             mock_graph.get_state_history.return_value = []
             mock_build.return_value = mock_graph
@@ -503,7 +503,7 @@ def test_reject_handles_resume_error(test_db, cli_runner):
     """Test that reject path reports resume errors with existing message."""
     workflow_id = state_store.create_workflow("TEST-123", status=WorkflowStatus.PENDING_APPROVAL)
 
-    with patch("dispatcher.run.build_orchestrator") as mock_build:
+    with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
         mock_graph = Mock()
         mock_graph.invoke.side_effect = Exception("boom")
         mock_build.return_value = mock_graph
@@ -516,7 +516,7 @@ def test_reject_handles_resume_error(test_db, cli_runner):
 
 def test_get_actor_imported_from_graph_utils():
     """Dispatcher should consume shared _get_actor from graph.utils."""
-    import dispatcher.run as run_module
+    import dispatcher.commands.common as run_module
     from graph.utils import _get_actor as shared_get_actor
 
     assert run_module._get_actor is shared_get_actor
@@ -550,7 +550,7 @@ class TestHandleApproveFailedExecution:
             "error": "Execution summary not written by recipe",
         }
 
-        with patch("dispatcher.run.build_orchestrator") as mock_build:
+        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
             mock_graph.invoke.return_value = {
                 "workflow_id": workflow_id,
@@ -559,7 +559,7 @@ class TestHandleApproveFailedExecution:
             }
             mock_build.return_value = mock_graph
 
-            with patch("dispatcher.run._post_execution_comment"):
+            with patch("dispatcher.commands.common._post_execution_comment"):
                 result = cli_runner.invoke(run, ["--approve", "--workflow-id", workflow_id])
 
         assert result.exit_code == 0
@@ -585,7 +585,7 @@ class TestHandleApproveFailedExecution:
             "status": "success",
         }
 
-        with patch("dispatcher.run.build_orchestrator") as mock_build:
+        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
             mock_graph.invoke.return_value = {
                 "workflow_id": workflow_id,
@@ -594,7 +594,7 @@ class TestHandleApproveFailedExecution:
             }
             mock_build.return_value = mock_graph
 
-            with patch("dispatcher.run._post_execution_comment"):
+            with patch("dispatcher.commands.common._post_execution_comment"):
                 result = cli_runner.invoke(run, ["--approve", "--workflow-id", workflow_id])
 
         assert result.exit_code == 0
@@ -606,7 +606,7 @@ class TestHandleApproveFailedExecution:
         """When execution_summary is missing entirely, status must be FAILED."""
         workflow_id = self._make_pending_workflow("TEST-123")
 
-        with patch("dispatcher.run.build_orchestrator") as mock_build:
+        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
             mock_graph.invoke.return_value = {
                 "workflow_id": workflow_id,
@@ -615,7 +615,7 @@ class TestHandleApproveFailedExecution:
             }
             mock_build.return_value = mock_graph
 
-            with patch("dispatcher.run._post_execution_comment"):
+            with patch("dispatcher.commands.common._post_execution_comment"):
                 result = cli_runner.invoke(run, ["--approve", "--workflow-id", workflow_id])
 
         assert result.exit_code == 0
@@ -637,7 +637,7 @@ class TestHandleApproveFailedExecution:
             "status": "partial",
         }
 
-        with patch("dispatcher.run.build_orchestrator") as mock_build:
+        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
             mock_graph.invoke.return_value = {
                 "workflow_id": workflow_id,
@@ -646,7 +646,7 @@ class TestHandleApproveFailedExecution:
             }
             mock_build.return_value = mock_graph
 
-            with patch("dispatcher.run._post_execution_comment"):
+            with patch("dispatcher.commands.common._post_execution_comment"):
                 result = cli_runner.invoke(run, ["--approve", "--workflow-id", workflow_id])
 
         assert result.exit_code == 0
@@ -721,7 +721,7 @@ class TestHandleClarify:
                     "- Which API?\nA: REST\n"
                 )
 
-        with patch("dispatcher.run.build_orchestrator") as mock_build:
+        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
             mock_graph.invoke.return_value = {
                 "workflow_id": workflow_id,
@@ -759,7 +759,7 @@ class TestHandleClarify:
             with open(tmp_path, "w", encoding="utf-8") as f:
                 f.write("- Risk A\nA: ok\n")
 
-        with patch("dispatcher.run.build_orchestrator") as mock_build:
+        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
             mock_graph.invoke.return_value = {"workflow_id": "any", "ticket_key": "TEST-123"}
             mock_build.return_value = mock_graph
@@ -788,7 +788,7 @@ class TestHandleClarify:
             with open(tmp_path, "w", encoding="utf-8") as f:
                 f.write("- Risk A\nA: ok\n")
 
-        with patch("dispatcher.run.build_orchestrator") as mock_build:
+        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
             mock_graph.invoke.side_effect = _invoke_and_transition
             mock_build.return_value = mock_graph
@@ -835,7 +835,7 @@ class TestHandleApprovePr:
     def test_approve_pr_completes_workflow(self, test_db, cli_runner):
         workflow_id = self._make_pending_pr_approval_workflow("TEST-123")
 
-        with patch("dispatcher.run.build_orchestrator") as mock_build:
+        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
             mock_graph.invoke.return_value = {
                 "workflow_id": workflow_id,
@@ -882,7 +882,7 @@ class TestHandleCommentPr:
             with open(tmp_path, "w", encoding="utf-8") as f:
                 f.write("Fix the typo in line 42\nAdd more tests\n")
 
-        with patch("dispatcher.run.build_orchestrator") as mock_build:
+        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
             mock_graph.invoke.return_value = {
                 "workflow_id": workflow_id,
@@ -925,7 +925,7 @@ class TestHandleRejectPr:
     def test_reject_pr_rejects_workflow(self, test_db, cli_runner):
         workflow_id = self._make_pending_pr_approval_workflow("TEST-123")
 
-        with patch("dispatcher.run.build_orchestrator") as mock_build:
+        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
             mock_graph.invoke.return_value = {
                 "workflow_id": workflow_id,
