@@ -5,7 +5,7 @@ from langgraph.types import interrupt
 
 from graph.state import OrchestratorState
 from graph.utils import _get_actor
-from state.state_store import get_workflow, update_status
+from state.state_store import get_workflow, update_pr_comments, update_status
 from state.workflow_status import WorkflowStatus
 
 
@@ -83,6 +83,8 @@ def await_pr_approval(state: OrchestratorState) -> dict:
             actor=actor,
             reason="PR commented on by reviewer",
         )
+        if comments:
+            update_pr_comments(workflow_id, comments, actor=actor)
         click.echo(f"💬 PR commented on by {actor}")
         return {"pr_approval_decision": "commented", "pr_comments": comments}
 

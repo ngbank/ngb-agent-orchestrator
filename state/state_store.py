@@ -356,6 +356,58 @@ def update_clarification_history(
         conn.close()
 
 
+def update_pr_comments(
+    workflow_id: str,
+    comments: str,
+    actor: str = "system",
+) -> None:
+    """Append PR review comments to the workflow's pr_comments column.
+
+    Existing comments are preserved; new comments are appended with a
+    timestamped separator so multiple review rounds are kept in full.
+
+    Args:
+        workflow_id: UUID of the workflow
+        comments: Raw comment text from the reviewer
+        actor: Who/what performed the update
+    """
+    now = datetime.now(UTC).isoformat()
+
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT pr_comments FROM workflows WHERE id = ?",
+            (workflow_id,),
+        ).fetchone()
+        if row is None:
+            return
+
+        existing = row["pr_comments"] or ""
+        separator = f"\n\n--- Review round {now} ---\n"
+        updated = (existing + separator + comments).strip()
+
+        conn.execute(
+            """
+            UPDATE workflows
+            SET pr_comments = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (updated, now, workflow_id),
+        )
+        conn.commit()
+
+        _create_audit_log(
+            conn,
+            workflow_id=workflow_id,
+            actor=actor,
+            action="pr_comments_updated",
+            reason="PR review comments appended",
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def update_usage_summary(
     workflow_id: str,
     stage: str,
