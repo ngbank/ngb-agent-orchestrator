@@ -12,7 +12,7 @@ from graph.litellm_callbacks import aggregate_token_usage
 from graph.state import OrchestratorState
 from graph.utils import goose_session, log_path, run_and_tee
 from mcp_server.server import get_repo_for_project
-from state.state_store import update_execution_summary, update_status, update_usage_summary
+from state.repository import update_execution_summary, update_status, update_usage_summary
 from state.workflow_status import WorkflowStatus
 
 
