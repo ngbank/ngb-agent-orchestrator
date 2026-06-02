@@ -34,6 +34,18 @@ parameters:
     description: "Python interpreter used to launch the MCP server (defaults to 'python')"
     default: "python"
 
+  - key: existing_branch
+    input_type: string
+    requirement: optional
+    description: "Existing feature branch to checkout for incremental changes (re-execution after PR comments)"
+    default: ""
+
+  - key: pr_comments
+    input_type: string
+    requirement: optional
+    description: "Review comments from the PR to address in this re-execution"
+    default: ""
+
 extensions:
   - type: builtin
     name: developer
@@ -65,6 +77,25 @@ prompt: |
   - Working directory (cloned repo): {{ working_dir }}
   - Write execution summary to: {{ output_path }}
   - Write reasoning diary to: {{ reasoning_path }}
+
+  {% if pr_comments %}
+  ## ⚠️ PR REVIEW MODE — Address Comments Before Anything Else
+
+  This is a re-execution triggered by PR review comments. The following feedback was
+  provided by a reviewer and **must be fully addressed** in this run:
+
+  ```
+  {{ pr_comments }}
+  ```
+
+  **Mandatory requirements for this run:**
+  - Read and fully understand every comment above before touching any file
+  - Treat each comment as a required change — do not skip or partially address any of them
+  - After implementing all tasks (Step 4), explicitly verify each comment has been addressed
+  - You will be pushing to the **existing branch** `{{ existing_branch }}` — do NOT create a new branch
+  - You will be **updating the existing PR** — do NOT create a new PR (see Step 6)
+
+  {% endif %}
 
   ## Goal
 
@@ -138,18 +169,22 @@ prompt: |
 
   Run each command in `setup_commands` in order, exactly as returned.
 
-  ## Step 3: Create Feature Branch
+  ## Step 3: Create or Checkout Feature Branch
 
   Construct the branch name using `vcs.branch_pattern` from Step 2:
   - Replace `{ticket_key}` with `{{ ticket_key }}`
   - Replace `{slug}` with the WorkPlan `summary`: lowercase, hyphens only, max 40 chars, no trailing hyphens
 
-  Run:
-  ```
-  git checkout -b {branch}
-  ```
+  If `{{ existing_branch }}` is provided:
+  - Checkout the existing branch: `git checkout {{ existing_branch }}`
+  - This is a re-execution after PR comments; apply incremental changes to address the comments
 
-  If the branch already exists, append `-2` (and increment until unique).
+  Otherwise:
+  - Create a new branch: `git checkout -b {branch}`
+  - If the branch already exists, append `-2` (and increment until unique)
+
+  If `{{ pr_comments }}` is provided, those are mandatory review comments from the existing
+  PR that must be fully addressed — they are listed prominently at the top of these instructions.
 
   ## Step 4: Implement Tasks
 
@@ -269,15 +304,28 @@ prompt: |
   3. If the template **does not exist**, use a minimal description with the same information.
 
   Write the PR body to `/tmp/pr_body_{{ ticket_key }}.md` using the developer
-  extension's file writing tool, then create the PR using `vcs.pr_command` from Step 2:
-  ```
-  {vcs.pr_command} \
-    --title "[{{ ticket_key }}] {WorkPlan summary}" \
-    --body-file /tmp/pr_body_{{ ticket_key }}.md
-  ```
+  extension's file writing tool.
 
-  Capture the PR URL from the command output. If the PR tool is not available or
-  the push fails, record `pr_url` as `""` in the summary and continue.
+  **Check for an existing PR before creating a new one:**
+  ```
+  gh pr view --json url -q .url 2>/dev/null || echo ""
+  ```
+  - If the command returns a URL: an open PR already exists for this branch. Do **not** run
+    `gh pr create`. The push above already updated the PR. Capture the returned URL as
+    `pr_url`. Optionally add a comment to the PR summarising the changes made:
+    ```
+    gh pr comment {pr_url} --body "Addressed review comments: {one-line summary of changes}"
+    ```
+  - If the command returns empty or an error: no PR exists yet. Create one using `vcs.pr_command` from Step 2:
+    ```
+    {vcs.pr_command} \
+      --title "[{{ ticket_key }}] {WorkPlan summary}" \
+      --body-file /tmp/pr_body_{{ ticket_key }}.md
+    ```
+    Capture the PR URL from the command output.
+
+  If the PR tool is not available or the push fails, record `pr_url` as `""` in the
+  summary and continue.
 
   ## Step 7: Write Execution Diary
 

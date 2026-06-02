@@ -6,6 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from state.workflow_status import WorkflowStatus
+
 _PATCH_SESSION = "graph.nodes.execute_plan.goose_session"
 
 
@@ -111,3 +113,116 @@ def test_log_path_with_ticket_key_prefix():
 
     lp = log_path("wf-123", "execute", ticket_key="AOS-77")
     assert lp.name == "AOS-77_wf-123_execute.log"
+
+
+def test_execute_plan_passes_existing_branch_and_comments():
+    """execute_plan passes existing_branch and pr_comments to the recipe on re-execution."""
+    import io
+    import json
+
+    from graph.nodes.execute_plan import execute_plan
+
+    state = {
+        "workflow_id": "wf-123",
+        "ticket_key": "AOS-92",
+        "work_plan_data": {"tasks": []},
+        "execution_summary": {"branch": "feature/AOS-92+test"},
+        "pr_comments": "Fix typo in line 42",
+    }
+
+    summary_json = json.dumps(
+        {
+            "ticket_key": "AOS-92",
+            "branch": "feature/AOS-92+test",
+            "build": "pass",
+            "tests": "pass",
+            "files_changed": [],
+            "commit_sha": "abc123",
+            "pr_url": "https://github.com/org/repo/pull/1",
+            "status": "success",
+        }
+    )
+
+    def mock_open(path, mode="r", **kwargs):
+        if str(path).endswith("_exec_summary.json"):
+            return io.StringIO(summary_json)
+        return io.StringIO("")
+
+    with (
+        patch(
+            "graph.nodes.execute_plan.get_repo_for_project",
+            return_value="https://github.com/org/repo.git",
+        ),
+        patch("graph.nodes.execute_plan.tempfile.mkdtemp", return_value="/tmp/test-dir"),
+        patch("graph.nodes.execute_plan.run_and_tee") as mock_run,
+        patch("graph.nodes.execute_plan.log_path", return_value="/tmp/test.log"),
+        patch("builtins.open", side_effect=mock_open),
+        patch("graph.nodes.execute_plan.update_status"),
+        patch("graph.nodes.execute_plan.update_execution_summary"),
+        patch("shutil.rmtree"),
+        patch("os.path.isdir", return_value=False),
+    ):
+        mock_run.return_value = MagicMock(returncode=0)
+        execute_plan(state)
+
+        # Find the goose run call and check params
+        calls = mock_run.call_args_list
+        goose_calls = [c for c in calls if c[0][0][0] == "goose"]
+        assert len(goose_calls) == 1
+        cmd = goose_calls[0][0][0]
+        assert "existing_branch=feature/AOS-92+test" in cmd
+        assert "pr_comments=Fix typo in line 42" in cmd
+
+
+def test_execute_plan_transitions_to_pending_pr_approval_on_success():
+    """execute_plan transitions workflow to PENDING_PR_APPROVAL on success."""
+    import io
+    import json
+
+    from graph.nodes.execute_plan import execute_plan
+
+    state = {
+        "workflow_id": "wf-123",
+        "ticket_key": "AOS-92",
+        "work_plan_data": {"tasks": []},
+    }
+
+    summary_json = json.dumps(
+        {
+            "ticket_key": "AOS-92",
+            "branch": "feature/AOS-92+test",
+            "build": "pass",
+            "tests": "pass",
+            "files_changed": [],
+            "commit_sha": "abc123",
+            "pr_url": "https://github.com/org/repo/pull/1",
+            "status": "success",
+        }
+    )
+
+    def mock_open(path, mode="r", **kwargs):
+        if str(path).endswith("_exec_summary.json"):
+            return io.StringIO(summary_json)
+        return io.StringIO("")
+
+    with (
+        patch(
+            "graph.nodes.execute_plan.get_repo_for_project",
+            return_value="https://github.com/org/repo.git",
+        ),
+        patch("graph.nodes.execute_plan.tempfile.mkdtemp", return_value="/tmp/test-dir"),
+        patch("graph.nodes.execute_plan.run_and_tee") as mock_run,
+        patch("graph.nodes.execute_plan.log_path", return_value="/tmp/test.log"),
+        patch("builtins.open", side_effect=mock_open),
+        patch("graph.nodes.execute_plan.update_status") as mock_update_status,
+        patch("graph.nodes.execute_plan.update_execution_summary"),
+        patch("shutil.rmtree"),
+        patch("os.path.isdir", return_value=False),
+    ):
+        mock_run.return_value = MagicMock(returncode=0)
+        execute_plan(state)
+
+        # Check that update_status was called with PENDING_PR_APPROVAL
+        status_calls = [c for c in mock_update_status.call_args_list]
+        assert len(status_calls) >= 1
+        assert status_calls[-1][0][1] == WorkflowStatus.PENDING_PR_APPROVAL

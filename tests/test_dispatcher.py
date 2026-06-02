@@ -570,8 +570,8 @@ class TestHandleApproveFailedExecution:
         )
         assert "❌ Workflow failed" in result.output
 
-    def test_approve_marks_completed_when_execution_succeeds(self, test_db, cli_runner):
-        """When execute_plan returns a success summary, status must be COMPLETED."""
+    def test_approve_marks_pending_pr_approval_when_execution_succeeds(self, test_db, cli_runner):
+        """When execute_plan returns a success summary, status must be PENDING_PR_APPROVAL."""
         workflow_id = self._make_pending_workflow("TEST-123")
 
         success_summary = {
@@ -599,8 +599,8 @@ class TestHandleApproveFailedExecution:
 
         assert result.exit_code == 0
         workflow = state_store.get_workflow(workflow_id)
-        assert workflow["status"] == WorkflowStatus.COMPLETED
-        assert "🎉 Workflow completed successfully" in result.output
+        assert workflow["status"] == WorkflowStatus.PENDING_PR_APPROVAL
+        assert "awaiting PR approval" in result.output
 
     def test_approve_marks_failed_when_summary_absent(self, test_db, cli_runner):
         """When execution_summary is missing entirely, status must be FAILED."""
@@ -622,8 +622,8 @@ class TestHandleApproveFailedExecution:
         workflow = state_store.get_workflow(workflow_id)
         assert workflow["status"] == WorkflowStatus.FAILED
 
-    def test_approve_marks_completed_for_partial_status(self, test_db, cli_runner):
-        """A 'partial' execution (build pass, tests fail) should be COMPLETED."""
+    def test_approve_marks_pending_pr_approval_for_partial_status(self, test_db, cli_runner):
+        """A 'partial' execution (build pass, tests fail) should be PENDING_PR_APPROVAL."""
         workflow_id = self._make_pending_workflow("TEST-123")
 
         partial_summary = {
@@ -651,7 +651,7 @@ class TestHandleApproveFailedExecution:
 
         assert result.exit_code == 0
         workflow = state_store.get_workflow(workflow_id)
-        assert workflow["status"] == WorkflowStatus.COMPLETED
+        assert workflow["status"] == WorkflowStatus.PENDING_PR_APPROVAL
 
 
 # ---------------------------------------------------------------------------
@@ -801,3 +801,143 @@ class TestHandleClarify:
 
         assert result.exit_code == 0
         assert "--approve" in result.output
+
+
+# ---------------------------------------------------------------------------
+# --approve-pr / --comment-pr / --reject-pr tests
+# ---------------------------------------------------------------------------
+
+
+class TestHandleApprovePr:
+    """Tests for the --approve-pr CLI handler."""
+
+    def _make_pending_pr_approval_workflow(self, ticket_key: str) -> str:
+        return state_store.create_workflow(ticket_key, status=WorkflowStatus.PENDING_PR_APPROVAL)
+
+    def test_approve_pr_requires_ticket_or_workflow_id(self, test_db, cli_runner):
+        result = cli_runner.invoke(run, ["--approve-pr"])
+        assert result.exit_code == 1
+        assert "--approve-pr requires --ticket or --workflow-id" in result.output
+
+    def test_approve_pr_no_pending_workflow(self, test_db, cli_runner):
+        result = cli_runner.invoke(run, ["--approve-pr", "--ticket", "TEST-123"])
+        assert result.exit_code == 1
+        assert "No pending PR approval workflow found" in result.output
+
+    def test_approve_pr_wrong_status_fails(self, test_db, cli_runner):
+        workflow_id = state_store.create_workflow(
+            "TEST-123", status=WorkflowStatus.PENDING_APPROVAL
+        )
+        result = cli_runner.invoke(run, ["--approve-pr", "--workflow-id", workflow_id])
+        assert result.exit_code == 1
+        assert "not pending PR approval" in result.output
+
+    def test_approve_pr_completes_workflow(self, test_db, cli_runner):
+        workflow_id = self._make_pending_pr_approval_workflow("TEST-123")
+
+        with patch("dispatcher.run.build_orchestrator") as mock_build:
+            mock_graph = Mock()
+            mock_graph.invoke.return_value = {
+                "workflow_id": workflow_id,
+                "ticket_key": "TEST-123",
+            }
+            mock_build.return_value = mock_graph
+
+            result = cli_runner.invoke(run, ["--approve-pr", "--workflow-id", workflow_id])
+
+        assert result.exit_code == 0
+        workflow = state_store.get_workflow(workflow_id)
+        assert workflow["status"] == WorkflowStatus.COMPLETED
+        assert "PR approved" in result.output
+
+
+class TestHandleCommentPr:
+    """Tests for the --comment-pr CLI handler."""
+
+    def _make_pending_pr_approval_workflow(self, ticket_key: str) -> str:
+        return state_store.create_workflow(ticket_key, status=WorkflowStatus.PENDING_PR_APPROVAL)
+
+    def test_comment_pr_requires_ticket_or_workflow_id(self, test_db, cli_runner):
+        result = cli_runner.invoke(run, ["--comment-pr"])
+        assert result.exit_code == 1
+        assert "--comment-pr requires --ticket or --workflow-id" in result.output
+
+    def test_comment_pr_no_pending_workflow(self, test_db, cli_runner):
+        result = cli_runner.invoke(run, ["--comment-pr", "--ticket", "TEST-123"])
+        assert result.exit_code == 1
+        assert "No pending PR approval workflow found" in result.output
+
+    def test_comment_pr_wrong_status_fails(self, test_db, cli_runner):
+        workflow_id = state_store.create_workflow(
+            "TEST-123", status=WorkflowStatus.PENDING_APPROVAL
+        )
+        result = cli_runner.invoke(run, ["--comment-pr", "--workflow-id", workflow_id])
+        assert result.exit_code == 1
+        assert "not pending PR approval" in result.output
+
+    def test_comment_pr_resumes_with_comments(self, test_db, cli_runner):
+        workflow_id = self._make_pending_pr_approval_workflow("TEST-123")
+
+        def fake_editor(tmp_path):
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                f.write("Fix the typo in line 42\nAdd more tests\n")
+
+        with patch("dispatcher.run.build_orchestrator") as mock_build:
+            mock_graph = Mock()
+            mock_graph.invoke.return_value = {
+                "workflow_id": workflow_id,
+                "ticket_key": "TEST-123",
+            }
+            mock_build.return_value = mock_graph
+
+            with patch("subprocess.run", side_effect=lambda cmd, **kwargs: fake_editor(cmd[1])):
+                result = cli_runner.invoke(
+                    run,
+                    ["--comment-pr", "--workflow-id", workflow_id],
+                )
+
+        assert result.exit_code == 0
+        from langgraph.types import Command
+
+        call_args = mock_graph.invoke.call_args
+        command = call_args[0][0]
+        assert isinstance(command, Command)
+        assert command.resume["decision"] == "commented"
+        assert "Fix the typo" in command.resume["comments"]
+
+
+class TestHandleRejectPr:
+    """Tests for the --reject-pr CLI handler."""
+
+    def _make_pending_pr_approval_workflow(self, ticket_key: str) -> str:
+        return state_store.create_workflow(ticket_key, status=WorkflowStatus.PENDING_PR_APPROVAL)
+
+    def test_reject_pr_requires_ticket_or_workflow_id(self, test_db, cli_runner):
+        result = cli_runner.invoke(run, ["--reject-pr"])
+        assert result.exit_code == 1
+        assert "--reject-pr requires --ticket or --workflow-id" in result.output
+
+    def test_reject_pr_no_pending_workflow(self, test_db, cli_runner):
+        result = cli_runner.invoke(run, ["--reject-pr", "--ticket", "TEST-123"])
+        assert result.exit_code == 1
+        assert "No pending PR approval workflow found" in result.output
+
+    def test_reject_pr_rejects_workflow(self, test_db, cli_runner):
+        workflow_id = self._make_pending_pr_approval_workflow("TEST-123")
+
+        with patch("dispatcher.run.build_orchestrator") as mock_build:
+            mock_graph = Mock()
+            mock_graph.invoke.return_value = {
+                "workflow_id": workflow_id,
+                "ticket_key": "TEST-123",
+            }
+            mock_build.return_value = mock_graph
+
+            result = cli_runner.invoke(
+                run, ["--reject-pr", "--workflow-id", workflow_id, "--reason", "scope too broad"]
+            )
+
+        assert result.exit_code == 0
+        workflow = state_store.get_workflow(workflow_id)
+        assert workflow["status"] == WorkflowStatus.REJECTED
+        assert "PR rejected" in result.output

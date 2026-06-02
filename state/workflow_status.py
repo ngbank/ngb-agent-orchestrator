@@ -8,6 +8,8 @@ class WorkflowStatus(Enum):
     IN_PROGRESS = "in_progress"
     PENDING_WORKPLAN_CLARIFICATION = "pending_workplan_clarification"
     PENDING_APPROVAL = "pending_approval"
+    PENDING_PR_APPROVAL = "pending_pr_approval"
+    PR_COMMENTED = "pr_commented"
     APPROVED = "approved"
     REJECTED = "rejected"
     COMPLETED = "completed"
@@ -21,6 +23,8 @@ class WorkflowStatus(Enum):
             WorkflowStatus.IN_PROGRESS,
             WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION,
             WorkflowStatus.PENDING_APPROVAL,
+            WorkflowStatus.PENDING_PR_APPROVAL,
+            WorkflowStatus.PR_COMMENTED,
             WorkflowStatus.APPROVED,
         )
 
@@ -45,4 +49,8 @@ class WorkflowStatus(Enum):
         any IN_PROGRESS workflow not currently executing is effectively dead
         and should be resumable.
         """
-        return self in (WorkflowStatus.FAILED, WorkflowStatus.IN_PROGRESS)
+        return self in (
+            WorkflowStatus.FAILED,
+            WorkflowStatus.IN_PROGRESS,
+            WorkflowStatus.PR_COMMENTED,
+        )

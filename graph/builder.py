@@ -3,15 +3,16 @@ Top-level orchestrator graph builder.
 
 Creates a pipeline with a human-in-the-loop approval gate:
 
-    START → work_planner (subgraph) → await_approval → execute_plan → END
-                                            ↓ rejected
-                                           END
+    START → work_planner (subgraph) → await_approval → execute_plan → await_pr_approval → END
+                                            ↓ rejected                        ↓ comment
+                                           END                          execute_plan (loop)
 
 The ``work_planner`` subgraph handles all planning stages (fetch, generate,
 validate, store, post to Jira).  ``await_approval`` calls interrupt() so the
 graph suspends until the developer explicitly approves or rejects via CLI.
 The ``execute_plan`` node invokes the Goose execute recipe to implement the
-approved WorkPlan (AOS-41).
+approved WorkPlan (AOS-41).  ``await_pr_approval`` calls interrupt() so the
+graph suspends until the PR is approved, commented on, or rejected via CLI.
 """
 
 import sqlite3
@@ -21,6 +22,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, StateGraph
 
 from graph.nodes.await_approval import await_approval
+from graph.nodes.await_pr_approval import await_pr_approval
 from graph.nodes.execute_plan import execute_plan
 from graph.state import OrchestratorState
 from graph.work_planner.builder import build_work_planner
@@ -40,6 +42,14 @@ def _route_after_approval(
     state: OrchestratorState,
 ) -> Literal["execute_plan", "__end__"]:
     if state.get("approval_decision") == "approved":
+        return "execute_plan"
+    return "__end__"
+
+
+def _route_after_pr_approval(
+    state: OrchestratorState,
+) -> Literal["execute_plan", "__end__"]:
+    if state.get("pr_approval_decision") == "commented":
         return "execute_plan"
     return "__end__"
 
@@ -65,6 +75,7 @@ def build_orchestrator(checkpointer=None):
     builder.add_node("work_planner", work_planner)
     builder.add_node("await_approval", await_approval)
     builder.add_node("execute_plan", execute_plan)
+    builder.add_node("await_pr_approval", await_pr_approval)
 
     builder.set_entry_point("work_planner")
     builder.add_conditional_edges(
@@ -77,6 +88,11 @@ def build_orchestrator(checkpointer=None):
         _route_after_approval,
         {"execute_plan": "execute_plan", "__end__": END},
     )
-    builder.add_edge("execute_plan", END)
+    builder.add_edge("execute_plan", "await_pr_approval")
+    builder.add_conditional_edges(
+        "await_pr_approval",
+        _route_after_pr_approval,
+        {"execute_plan": "execute_plan", "__end__": END},
+    )
 
     return builder.compile(checkpointer=checkpointer)
