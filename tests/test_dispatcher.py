@@ -10,7 +10,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from dispatcher.jira_client import JiraConfigurationError, JiraTicket, JiraTicketNotFoundError
 from dispatcher.run import run
-from state import state_store
+from state import workflow_repository as state_store
 from state.workflow_status import WorkflowStatus
 
 

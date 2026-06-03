@@ -11,7 +11,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from dispatcher.jira_client import JiraTicket
 from dispatcher.run import run
 from graph.retry import find_rewind_config, resolve_parent_node
-from state import state_store
+from state import workflow_repository as state_store
 from state.workflow_status import WorkflowStatus
 
 

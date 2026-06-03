@@ -11,7 +11,7 @@ from langgraph.errors import GraphInterrupt
 from langgraph.types import Command
 
 import dispatcher.commands.common as common
-from state.state_store import get_workflow, get_workflow_by_ticket
+from state.workflow_repository import get_workflow, get_workflow_by_ticket
 from state.workflow_status import WorkflowStatus
 
 

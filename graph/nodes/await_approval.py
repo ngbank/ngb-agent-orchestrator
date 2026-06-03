@@ -5,7 +5,7 @@ from langgraph.types import interrupt
 
 from graph.state import OrchestratorState
 from graph.utils import _get_actor
-from state.state_store import get_workflow, update_status
+from state.workflow_repository import get_workflow, update_status
 from state.workflow_status import WorkflowStatus
 
 

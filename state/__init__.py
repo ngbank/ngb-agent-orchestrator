@@ -1,13 +1,19 @@
 """Workflow state tracking module."""
 
-from .state_store import (
-    _create_audit_log,
+from .sqlite_state_store import (
+    get_connection,
+    run_migrations,
+)
+from .sqlite_workflow_repository import (
+    SQLiteWorkflowRepository,
+    get_repository,
+)
+from .workflow_repository import (
+    WorkflowRepository,
     create_workflow,
     get_audit_log,
-    get_connection,
     get_workflow,
     get_workflow_by_ticket,
-    run_migrations,
     update_execution_summary,
     update_status,
     update_work_plan,
@@ -16,6 +22,9 @@ from .workflow_status import WorkflowStatus
 
 __all__ = [
     "WorkflowStatus",
+    "WorkflowRepository",
+    "SQLiteWorkflowRepository",
+    "get_repository",
     "create_workflow",
     "update_status",
     "get_workflow",
@@ -23,7 +32,6 @@ __all__ = [
     "get_audit_log",
     "run_migrations",
     "get_connection",
-    "_create_audit_log",
     "update_work_plan",
     "update_execution_summary",
 ]

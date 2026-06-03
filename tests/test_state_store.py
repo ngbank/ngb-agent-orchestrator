@@ -5,7 +5,7 @@ import tempfile
 
 import pytest
 
-from state import state_store
+from state import workflow_repository as state_store
 from state.workflow_status import WorkflowStatus
 
 
@@ -231,16 +231,20 @@ def test_workflow_by_ticket_not_found(test_db):
 
 def test_audit_log_append_only(test_db):
     """Test that audit log has no delete operations."""
-    # This is a code review test - verify no delete methods exist
-    # in the state_store module
+    # Verify no delete methods exist on SQLiteWorkflowRepository
     import inspect
 
-    # Get all functions in state_store module
-    functions = [name for name, obj in inspect.getmembers(state_store) if inspect.isfunction(obj)]
+    from state.sqlite_workflow_repository import SQLiteWorkflowRepository
 
-    # Verify no delete functions
-    delete_functions = [f for f in functions if "delete" in f.lower()]
-    assert len(delete_functions) == 0, f"Found delete functions: {delete_functions}"
+    methods = [
+        name
+        for name, obj in inspect.getmembers(SQLiteWorkflowRepository)
+        if inspect.isfunction(obj) or callable(obj)
+    ]
+
+    # Verify no delete methods
+    delete_methods = [m for m in methods if "delete" in m.lower()]
+    assert len(delete_methods) == 0, f"Found delete methods: {delete_methods}"
 
 
 def test_audit_log_content(test_db):
@@ -696,3 +700,109 @@ def test_clarification_history_backward_compat(test_db):
     assert (
         workflow.get("clarification_history") is None or workflow.get("clarification_history") == []
     )
+
+
+# ---------------------------------------------------------------------------
+# FakeWorkflowRepository — demonstrates injection without a real database
+# ---------------------------------------------------------------------------
+
+
+class FakeWorkflowRepository:
+    """In-memory WorkflowRepository for testing.
+
+    Demonstrates that callers can be decoupled from SQLite by accepting any
+    object that satisfies the WorkflowRepository protocol.
+    """
+
+    def __init__(self) -> None:
+        self._workflows: dict = {}
+
+    def create_workflow(self, ticket_key, work_plan=None, status=None, workflow_id=None):
+        import uuid
+
+        from state.workflow_status import WorkflowStatus
+
+        wid = workflow_id or str(uuid.uuid4())
+        self._workflows[wid] = {
+            "id": wid,
+            "ticket_key": ticket_key,
+            "work_plan": work_plan,
+            "status": status or WorkflowStatus.PENDING,
+        }
+        return wid
+
+    def get_workflow(self, workflow_id):
+        return self._workflows.get(workflow_id)
+
+    def get_workflow_by_ticket(self, ticket_key):
+        return [w for w in self._workflows.values() if w["ticket_key"] == ticket_key]
+
+    def get_latest_retryable_workflow_by_ticket(self, ticket_key):
+        return None
+
+    def list_workflows(self, ticket_key=None, status=None, limit=50):
+        workflows = list(self._workflows.values())
+        if ticket_key:
+            workflows = [w for w in workflows if w["ticket_key"] == ticket_key]
+        return workflows[:limit]
+
+    def update_status(self, workflow_id, status, pr_url=None, actor="system", reason=None):
+        if workflow_id in self._workflows:
+            self._workflows[workflow_id]["status"] = status
+
+    def update_work_plan(self, workflow_id, work_plan, actor="system", reason=None):
+        if workflow_id in self._workflows:
+            self._workflows[workflow_id]["work_plan"] = work_plan
+
+    def update_execution_summary(self, workflow_id, execution_summary, actor="system"):
+        pass
+
+    def update_clarification_history(self, workflow_id, round_entry, actor="system"):
+        pass
+
+    def update_pr_comments(self, workflow_id, comments, actor="system"):
+        pass
+
+    def update_usage_summary(self, workflow_id, stage, data, actor="system"):
+        pass
+
+    def increment_retry_count(self, workflow_id, actor="system"):
+        return 0
+
+    def get_audit_log(self, workflow_id):
+        return []
+
+    def clear_db(self):
+        self._workflows.clear()
+        return 0, 0
+
+
+def test_fake_repository_can_be_injected_without_database():
+    """Demonstrate that FakeWorkflowRepository satisfies WorkflowRepository protocol.
+
+    No database is needed — this proves callers can be tested with a pure
+    in-memory double, satisfying the DIP goal of AOS-96.
+    """
+    from state.workflow_repository import WorkflowRepository
+    from state.workflow_status import WorkflowStatus
+
+    repo = FakeWorkflowRepository()
+
+    # Verify it satisfies the protocol
+    assert isinstance(repo, WorkflowRepository)
+
+    # Create and retrieve a workflow
+    wid = repo.create_workflow("AOS-96", work_plan={"summary": "test"})
+    workflow = repo.get_workflow(wid)
+    assert workflow is not None
+    assert workflow["ticket_key"] == "AOS-96"
+    assert workflow["status"] == WorkflowStatus.PENDING
+
+    # Update status
+    repo.update_status(wid, WorkflowStatus.IN_PROGRESS)
+    workflow = repo.get_workflow(wid)
+    assert workflow["status"] == WorkflowStatus.IN_PROGRESS
+
+    # Query by ticket
+    workflows = repo.get_workflow_by_ticket("AOS-96")
+    assert len(workflows) == 1

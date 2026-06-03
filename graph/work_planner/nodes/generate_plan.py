@@ -9,7 +9,7 @@ import click
 from graph.litellm_callbacks import aggregate_token_usage
 from graph.utils import goose_session, log_path, run_and_tee
 from graph.work_planner.state import WorkPlannerState
-from state.state_store import update_usage_summary
+from state.workflow_repository import update_usage_summary
 
 
 def generate_plan(state: WorkPlannerState) -> dict:

@@ -3,7 +3,7 @@
 import click
 
 from graph.work_planner.state import WorkPlannerState
-from state.state_store import get_workflow_by_ticket
+from state.workflow_repository import get_workflow_by_ticket
 
 
 def check_duplicate(state: WorkPlannerState) -> dict:

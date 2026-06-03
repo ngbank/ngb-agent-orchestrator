@@ -3,7 +3,7 @@
 import click
 
 from graph.work_planner.state import WorkPlannerState
-from state.state_store import create_workflow, get_workflow, update_status
+from state.workflow_repository import create_workflow, get_workflow, update_status
 from state.workflow_status import WorkflowStatus
 
 
