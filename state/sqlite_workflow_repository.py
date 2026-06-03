@@ -15,8 +15,6 @@ from typing import Dict, List, Optional
 
 from .sqlite_state_store import (
     _create_audit_log,
-    _normalize_clarification_history,
-    _normalize_work_plan,
     get_connection,
 )
 from .workflow_status import WorkflowStatus
@@ -45,11 +43,11 @@ class SQLiteWorkflowRepository:
                 return None
             workflow = dict(row)
             if workflow["work_plan"]:
-                workflow["work_plan"] = _normalize_work_plan(json.loads(workflow["work_plan"]))
+                workflow["work_plan"] = json.loads(workflow["work_plan"])
             if workflow.get("clarification_history"):
                 try:
-                    workflow["clarification_history"] = _normalize_clarification_history(
-                        json.loads(workflow["clarification_history"])
+                    workflow["clarification_history"] = json.loads(
+                        workflow["clarification_history"]
                     )
                 except (json.JSONDecodeError, TypeError):
                     workflow["clarification_history"] = []
@@ -71,11 +69,11 @@ class SQLiteWorkflowRepository:
             for row in rows:
                 workflow = dict(row)
                 if workflow["work_plan"]:
-                    workflow["work_plan"] = _normalize_work_plan(json.loads(workflow["work_plan"]))
+                    workflow["work_plan"] = json.loads(workflow["work_plan"])
                 if workflow.get("clarification_history"):
                     try:
-                        workflow["clarification_history"] = _normalize_clarification_history(
-                            json.loads(workflow["clarification_history"])
+                        workflow["clarification_history"] = json.loads(
+                            workflow["clarification_history"]
                         )
                     except (json.JSONDecodeError, TypeError):
                         workflow["clarification_history"] = []
@@ -122,12 +120,10 @@ class SQLiteWorkflowRepository:
             for row in rows:
                 wf = dict(row)
                 if wf["work_plan"]:
-                    wf["work_plan"] = _normalize_work_plan(json.loads(wf["work_plan"]))
+                    wf["work_plan"] = json.loads(wf["work_plan"])
                 if wf.get("clarification_history"):
                     try:
-                        wf["clarification_history"] = _normalize_clarification_history(
-                            json.loads(wf["clarification_history"])
-                        )
+                        wf["clarification_history"] = json.loads(wf["clarification_history"])
                     except (json.JSONDecodeError, TypeError):
                         wf["clarification_history"] = []
                 wf["status"] = WorkflowStatus(wf["status"])

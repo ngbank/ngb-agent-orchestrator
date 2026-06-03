@@ -18,38 +18,7 @@ import sqlite3
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, List, Optional
-
-
-def _normalize_work_plan(work_plan: Optional[Dict]) -> Optional[Dict]:
-    """Migrate legacy risks/questions_for_reviewer fields to concerns on read."""
-    if work_plan is None:
-        return None
-    has_legacy = "risks" in work_plan or "questions_for_reviewer" in work_plan
-    if has_legacy:
-        concerns = []
-        concerns.extend(work_plan.get("risks", []))
-        concerns.extend(work_plan.get("questions_for_reviewer", []))
-        work_plan["concerns"] = concerns
-    # Clean up legacy fields if present
-    work_plan.pop("risks", None)
-    work_plan.pop("questions_for_reviewer", None)
-    return work_plan
-
-
-def _normalize_clarification_history(history: Optional[List[Dict]]) -> Optional[List[Dict]]:
-    """Migrate legacy questions/risks fields to concerns in clarification history on read."""
-    if not history:
-        return history
-    for entry in history:
-        if "concerns" not in entry:
-            concerns = []
-            concerns.extend(entry.get("questions", []))
-            concerns.extend(entry.get("risks", []))
-            entry["concerns"] = concerns
-        entry.pop("questions", None)
-        entry.pop("risks", None)
-    return history
+from typing import Optional
 
 
 def get_db_path() -> str:
