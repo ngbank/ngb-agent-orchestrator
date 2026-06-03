@@ -8,8 +8,8 @@ import click
 
 import dispatcher.commands.common as common
 from graph.utils import log_path
-from state.sqlite_state_store import clear_db
 from state.workflow_repository import (
+    clear_db,
     get_workflow,
     get_workflow_by_ticket,
     list_workflows,
