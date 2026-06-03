@@ -15,7 +15,7 @@ from dispatcher.jira_client import JiraClient, JiraCommentError  # noqa: F401
 from dispatcher.work_plan_formatter import format_execution_summary_comment
 from graph.builder import build_orchestrator  # noqa: F401
 from graph.utils import _get_actor  # noqa: F401
-from state.repository import get_workflow, update_status
+from state.workflow_repository import get_workflow, update_status
 from state.workflow_status import WorkflowStatus
 
 # ---------------------------------------------------------------------------

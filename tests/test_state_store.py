@@ -5,7 +5,7 @@ import tempfile
 
 import pytest
 
-from state import repository as state_store
+from state import workflow_repository as state_store
 from state.workflow_status import WorkflowStatus
 
 
@@ -234,7 +234,7 @@ def test_audit_log_append_only(test_db):
     # Verify no delete methods exist on SQLiteWorkflowRepository
     import inspect
 
-    from state.sqlite_repository import SQLiteWorkflowRepository
+    from state.sqlite_workflow_repository import SQLiteWorkflowRepository
 
     methods = [
         name
@@ -779,7 +779,7 @@ def test_fake_repository_can_be_injected_without_database():
     No database is needed — this proves callers can be tested with a pure
     in-memory double, satisfying the DIP goal of AOS-96.
     """
-    from state.repository import WorkflowRepository
+    from state.workflow_repository import WorkflowRepository
     from state.workflow_status import WorkflowStatus
 
     repo = FakeWorkflowRepository()

@@ -26,7 +26,7 @@ from graph.nodes.await_pr_approval import await_pr_approval
 from graph.nodes.execute_plan import execute_plan
 from graph.state import OrchestratorState
 from graph.work_planner.builder import build_work_planner
-from state.repository import get_db_path
+from state.workflow_repository import get_db_path
 
 
 def _route_after_work_planner(

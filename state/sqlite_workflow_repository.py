@@ -2,7 +2,7 @@
 SQLiteWorkflowRepository: concrete SQLite implementation of WorkflowRepository.
 
 Import this module when you need the SQLite-backed implementation or the
-module-level singleton accessor.  Import :mod:`state.repository` when you only
+module-level singleton accessor.  Import :mod:`state.workflow_repository` when you only
 need the ``WorkflowRepository`` Protocol for type annotations or testing.
 """
 

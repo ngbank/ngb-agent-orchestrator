@@ -10,7 +10,7 @@ Import this module when you need:
   - The convenience functions (``create_workflow``, ``get_workflow``, …) that
     delegate to the default SQLite singleton
 
-Import :mod:`state.sqlite_repository` when you need the concrete
+Import :mod:`state.sqlite_workflow_repository` when you need the concrete
 ``SQLiteWorkflowRepository`` class or the ``get_repository()`` singleton
 directly.
 """
@@ -116,8 +116,8 @@ class WorkflowRepository(Protocol):
 
 def _default_repo():
     # Lazy import breaks the circular dependency:
-    #   repository → sqlite_repository → repository (for the Protocol)
-    from .sqlite_repository import get_repository
+    #   workflow_repository → sqlite_workflow_repository → workflow_repository (for the Protocol)
+    from .sqlite_workflow_repository import get_repository
 
     return get_repository()
 

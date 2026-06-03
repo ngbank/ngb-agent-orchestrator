@@ -5,7 +5,7 @@ from langgraph.types import interrupt
 
 from graph.utils import _get_actor
 from graph.work_planner.state import WorkPlannerState
-from state.repository import update_clarification_history, update_status, update_work_plan
+from state.workflow_repository import update_clarification_history, update_status, update_work_plan
 from state.workflow_status import WorkflowStatus
 
 MAX_CLARIFICATION_ROUNDS = 3

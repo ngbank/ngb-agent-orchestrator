@@ -1,6 +1,14 @@
 """Workflow state tracking module."""
 
-from .repository import (
+from .sqlite_workflow_repository import (
+    SQLiteWorkflowRepository,
+    get_repository,
+)
+from .state_store import (
+    get_connection,
+    run_migrations,
+)
+from .workflow_repository import (
     WorkflowRepository,
     create_workflow,
     get_audit_log,
@@ -9,14 +17,6 @@ from .repository import (
     update_execution_summary,
     update_status,
     update_work_plan,
-)
-from .sqlite_repository import (
-    SQLiteWorkflowRepository,
-    get_repository,
-)
-from .state_store import (
-    get_connection,
-    run_migrations,
 )
 from .workflow_status import WorkflowStatus
 

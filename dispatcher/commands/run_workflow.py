@@ -13,7 +13,7 @@ from dispatcher.jira_client import (
     JiraConfigurationError,
     JiraTicketNotFoundError,
 )
-from state.repository import update_status
+from state.workflow_repository import update_status
 from state.workflow_status import WorkflowStatus
 
 

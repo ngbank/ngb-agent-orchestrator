@@ -3,7 +3,7 @@
 import click
 
 from graph.work_planner.state import WorkPlannerState
-from state.repository import update_work_plan
+from state.workflow_repository import update_work_plan
 
 
 def store_plan(state: WorkPlannerState) -> dict:

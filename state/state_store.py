@@ -8,7 +8,7 @@ This module contains only the SQLite infrastructure concerns:
   - Internal audit-log helper
   - Admin clear_db utility
 
-All workflow CRUD operations have been moved to :mod:`state.repository`
+All workflow CRUD operations have been moved to :mod:`state.workflow_repository`
 (``SQLiteWorkflowRepository``).  Import from there for any read/write
 operations on workflow records.
 """
