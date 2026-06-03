@@ -145,6 +145,16 @@ class SQLiteWorkflowRepository:
         finally:
             conn.close()
 
+    def clear_db(self) -> tuple[int, int]:
+        """Delete all workflow, audit log, and LangGraph checkpoint data.
+
+        Returns:
+            (workflows_deleted, checkpoints_deleted)
+        """
+        from .sqlite_state_store import clear_db as _clear_db
+
+        return _clear_db()
+
     # ------------------------------------------------------------------
     # Write operations
     # ------------------------------------------------------------------

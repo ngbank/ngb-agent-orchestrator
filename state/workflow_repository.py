@@ -103,6 +103,8 @@ class WorkflowRepository(Protocol):
 
     def get_audit_log(self, workflow_id: str) -> List[Dict]: ...
 
+    def clear_db(self) -> tuple[int, int]: ...
+
 
 # ---------------------------------------------------------------------------
 # Module-level convenience functions
@@ -212,9 +214,7 @@ def get_audit_log(workflow_id: str) -> List[Dict]:
 
 
 def clear_db() -> tuple[int, int]:
-    from .sqlite_state_store import clear_db as _clear_db
-
-    return _clear_db()
+    return _default_repo().clear_db()
 
 
 __all__ = [

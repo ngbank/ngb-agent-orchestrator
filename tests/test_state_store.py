@@ -772,6 +772,10 @@ class FakeWorkflowRepository:
     def get_audit_log(self, workflow_id):
         return []
 
+    def clear_db(self):
+        self._workflows.clear()
+        return 0, 0
+
 
 def test_fake_repository_can_be_injected_without_database():
     """Demonstrate that FakeWorkflowRepository satisfies WorkflowRepository protocol.
