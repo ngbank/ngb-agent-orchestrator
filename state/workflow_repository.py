@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Protocol, runtime_checkable
 
-from .state_store import get_db_path, run_migrations
+from .sqlite_state_store import get_db_path, run_migrations
 from .workflow_status import WorkflowStatus
 
 

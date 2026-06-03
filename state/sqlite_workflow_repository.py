@@ -13,7 +13,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Dict, List, Optional
 
-from .state_store import (
+from .sqlite_state_store import (
     _create_audit_log,
     _normalize_clarification_history,
     _normalize_work_plan,
@@ -25,7 +25,7 @@ from .workflow_status import WorkflowStatus
 class SQLiteWorkflowRepository:
     """Concrete WorkflowRepository backed by SQLite.
 
-    All connection management is delegated to :func:`state.state_store.get_connection`
+    All connection management is delegated to :func:`state.sqlite_state_store.get_connection`
     so the DB path is read from the ``DB_PATH`` environment variable on every call.
     This keeps the class stateless and makes it safe to use with environment-variable
     based test fixtures.

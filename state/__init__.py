@@ -1,12 +1,12 @@
 """Workflow state tracking module."""
 
+from .sqlite_state_store import (
+    get_connection,
+    run_migrations,
+)
 from .sqlite_workflow_repository import (
     SQLiteWorkflowRepository,
     get_repository,
-)
-from .state_store import (
-    get_connection,
-    run_migrations,
 )
 from .workflow_repository import (
     WorkflowRepository,
