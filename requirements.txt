@@ -26,7 +26,7 @@ langgraph-checkpoint-sqlite>=3.0.0
 litellm[proxy]>=1.0.0
 
 # MCP Server
-mcp>=1.0.0
+mcp>=1.27.2
 
 # Goose Integration
 # Note: Install Goose separately following official documentation
