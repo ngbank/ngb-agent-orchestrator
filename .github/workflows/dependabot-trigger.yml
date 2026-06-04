@@ -1,0 +1,31 @@
+name: Trigger Dependabot
+
+on:
+  workflow_dispatch:
+    inputs:
+      ecosystem:
+        description: "Ecosystem to update"
+        required: true
+        default: "pip"
+        type: choice
+        options:
+          - pip
+          - github-actions
+
+permissions:
+  contents: read
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Dependabot run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/dependabot/updates" \
+            -f "package-ecosystem=${{ inputs.ecosystem }}" \
+            -f "directory=/"
