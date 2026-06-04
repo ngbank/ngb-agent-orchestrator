@@ -1,7 +1,7 @@
 # Agent Orchestrator Dependencies
 
 # CLI Framework
-click>=8.1.7
+click>=8.4.1
 
 # Environment Management
 python-dotenv>=1.0.0
