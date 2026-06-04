@@ -144,6 +144,9 @@ dispatcher --list --ticket AOS-41
 dispatcher --history --ticket AOS-41
 dispatcher --history --workflow-id <uuid>
 
+# Launch the interactive TUI for keyboard-driven workflow management
+dispatcher --tui
+
 # Clear all workflows and checkpoints from the local database
 dispatcher --clear-db
 ```

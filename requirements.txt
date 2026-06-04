@@ -28,6 +28,9 @@ litellm[proxy]>=1.0.0
 # MCP Server
 mcp>=1.27.2
 
+# TUI Framework
+textual>=0.50.0
+
 # Goose Integration
 # Note: Install Goose separately following official documentation
 # Goose is typically installed via: pip install goose-toolkit

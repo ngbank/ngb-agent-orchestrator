@@ -85,6 +85,8 @@ The test suite covers:
 - `test_graph_edges.py` — LangGraph routing functions
 - `test_jira_client.py` — JIRA client (happy path, auth errors, not found)
 - `test_state_store.py` — SQLite state store (CRUD, migrations, audit log)
+- `test_tui.py` — TUI presentation helpers and Textual Pilot tests
+- `test_tui_integration.py` — TUI smoke tests against a seeded database
 - `test_work_plan_formatter.py` — WorkPlan → JIRA comment formatter
 - `test_work_plan_validator.py` — WorkPlan JSON schema validation
 
@@ -119,6 +121,12 @@ ngb-agent-orchestrator/
 ├── dispatcher/
 │   ├── jira_client.py            # JIRA API client
 │   ├── run.py                    # Main dispatcher entry point
+│   ├── tui/                      # Textual TUI for workflow management
+│   │   ├── app.py                # Main TUI App class
+│   │   ├── widgets.py            # Workflow list, detail pane, status bar
+│   │   ├── modals.py             # Input and confirmation dialogs
+│   │   ├── actions.py            # Action wrappers over CLI handlers
+│   │   └── screens.py            # Screen definitions
 │   ├── work_plan_formatter.py    # WorkPlan → JIRA comment formatter
 │   └── work_plan_validator.py    # WorkPlan JSON schema validator
 ├── docs/                         # Documentation (this folder)
