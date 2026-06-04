@@ -84,21 +84,18 @@ python -m dispatcher.run --reject  --workflow-id b04fd4e0-... --reason "needs mo
 
 ## WorkPlan Clarification Loop
 
-When the plan recipe generates a WorkPlan with `status: "concerns"` or `"blocked"`, or with non-empty `questions_for_reviewer`, the workflow pauses instead of failing. The workflow status transitions to `pending_workplan_clarification`.
+When the plan recipe generates a WorkPlan with `status: "concerns"` or `"blocked"`, the workflow pauses instead of failing. The workflow status transitions to `pending_workplan_clarification`.
 
-The dispatcher prints the questions and risks to the CLI, then suspends:
+The dispatcher prints the concerns to the CLI, then suspends:
 
 ```
 ⏸️  WorkPlan needs clarification (round 1/3)
    Status: concerns
    Workflow ID: b04fd4e0-...
 
-   Risks identified:
+   Concerns identified:
      1. External dependency on third-party API
-
-   Questions for reviewer:
-     1. Which database engine should we use?
-     2. Should this be async or synchronous?
+     2. Which database engine should we use?
 
    To clarify:  dispatcher --clarify --ticket AOS-36
 ```

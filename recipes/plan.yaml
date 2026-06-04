@@ -162,7 +162,7 @@ prompt: |
   - `concerns` CAN be an empty array []
   - `status` MUST be one of: "pass", "concerns", "blocked"
   - `status` MUST NOT be `"pass"` when `concerns` is non-empty (unless all concerns are acknowledged)
-  - Do NOT add any additional fields not in the schema (no `risks`, no `questions_for_reviewer`)
+  - Do NOT add any fields not defined in the schema above
   - All string fields must not be empty (minLength: 1)
   - Each task MUST have id (integer >= 1), description (string), and files_likely_affected (array)
 
@@ -200,8 +200,7 @@ prompt: |
 
   Common validation errors and fixes:
   - "Missing required field 'concerns'" → Add `"concerns": []`
-  - "Additional property 'risks'" → Rename to `"concerns"`
-  - "Additional property 'questions_for_reviewer'" → Merge into `"concerns"` and remove the old field
+  - "Additional property 'risks'" → Rename to `"concerns"` and remove the old field
   - "Invalid status value 'ready'" → Change to "pass", "concerns", or "blocked"
   - "'ticket_key' does not match pattern" → Ensure format like "AOS-38"
   - "Additional property 'extra_field'" → Remove the extra field

@@ -15,8 +15,7 @@ VALID_WORK_PLAN = {
     "summary": "Implement plan generation",
     "approach": "Shell out to Goose plan recipe",
     "tasks": [{"id": 1, "description": "Do the thing", "files_likely_affected": ["a.py"]}],
-    "risks": [],
-    "questions_for_reviewer": [],
+    "concerns": [],
     "status": "pass",
 }
 

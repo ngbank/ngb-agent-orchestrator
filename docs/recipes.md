@@ -51,15 +51,15 @@ Use `goose run --recipe recipes/plan.yaml --explain` to see a recipe's parameter
 **WorkPlan status values**:
 - `pass` — clear scope, ready to implement
 - `concerns` — implementable but has risks or open questions
-- `blocked` — missing critical information; see `questions_for_reviewer`
+- `blocked` — missing critical information; capture details in `concerns`
 
 **Status invariant**:
-- If `risks` or `questions_for_reviewer` is non-empty, status must not be `pass`.
+- If `concerns` is non-empty, status must not be `pass`.
 
 **Safety constraints** (enforced in the prompt):
 - Planning-only run: do not modify repository source files, tests, docs, config, migrations, or recipes
 - Only write `output_path` and temporary validation files under `/tmp/`
-- If unrelated issues are discovered, capture them as `risks`/`questions_for_reviewer` instead of changing code
+- If unrelated issues are discovered, capture them in `concerns` instead of changing code
 
 ---
 

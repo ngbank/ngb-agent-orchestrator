@@ -136,19 +136,3 @@ class TestAdditionalProperties:
         data["tasks"][0]["extra"] = "nope"
         with pytest.raises(WorkPlanValidationError):
             validate_work_plan(data)
-
-
-class TestLegacyFieldsRejected:
-    def test_risks_field_rejected(self):
-        data = _valid_work_plan()
-        del data["concerns"]
-        data["risks"] = ["Old risk"]
-        with pytest.raises(WorkPlanValidationError, match="WorkPlan validation failed"):
-            validate_work_plan(data)
-
-    def test_questions_for_reviewer_field_rejected(self):
-        data = _valid_work_plan()
-        del data["concerns"]
-        data["questions_for_reviewer"] = ["Old question"]
-        with pytest.raises(WorkPlanValidationError, match="WorkPlan validation failed"):
-            validate_work_plan(data)

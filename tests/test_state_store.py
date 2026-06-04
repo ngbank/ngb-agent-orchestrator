@@ -356,8 +356,7 @@ def test_update_work_plan(test_db):
         "summary": "Test plan",
         "approach": "Test approach",
         "tasks": [{"id": 1, "description": "Task 1", "files_likely_affected": []}],
-        "risks": [],
-        "questions_for_reviewer": [],
+        "concerns": [],
         "status": "pass",
     }
 
@@ -605,9 +604,8 @@ def test_update_clarification_history_appends_round(test_db):
     workflow_id = state_store.create_workflow(ticket_key="AOS-85")
     round_entry = {
         "round": 1,
-        "questions": ["What DB?"],
-        "risks": ["Risk A"],
-        "answers": [{"question": "What DB?", "answer": "SQLite"}],
+        "concerns": ["What DB?", "Risk A"],
+        "answers": [{"concern": "What DB?", "answer": "SQLite"}],
     }
 
     state_store.update_clarification_history(workflow_id, round_entry, actor="developer")
@@ -626,11 +624,11 @@ def test_update_clarification_history_appends_multiple_rounds(test_db):
     workflow_id = state_store.create_workflow(ticket_key="AOS-85")
     state_store.update_clarification_history(
         workflow_id,
-        {"round": 1, "questions": ["Q1"], "answers": [{"question": "Q1", "answer": "A1"}]},
+        {"round": 1, "concerns": ["Q1"], "answers": [{"concern": "Q1", "answer": "A1"}]},
     )
     state_store.update_clarification_history(
         workflow_id,
-        {"round": 2, "questions": ["Q2"], "answers": [{"question": "Q2", "answer": "A2"}]},
+        {"round": 2, "concerns": ["Q2"], "answers": [{"concern": "Q2", "answer": "A2"}]},
     )
 
     workflow = state_store.get_workflow(workflow_id)
@@ -644,7 +642,7 @@ def test_update_clarification_history_noop_for_missing_workflow(test_db):
     """Test that update_clarification_history is a no-op when workflow_id does not exist."""
     state_store.update_clarification_history(
         "does-not-exist",
-        {"round": 1, "questions": [], "answers": []},
+        {"round": 1, "concerns": [], "answers": []},
     )
 
 
@@ -653,7 +651,7 @@ def test_update_clarification_history_creates_audit_log(test_db):
     workflow_id = state_store.create_workflow(ticket_key="AOS-85")
     state_store.update_clarification_history(
         workflow_id,
-        {"round": 1, "questions": ["Q?"], "answers": [{"question": "Q?", "answer": "A!"}]},
+        {"round": 1, "concerns": ["Q?"], "answers": [{"concern": "Q?", "answer": "A!"}]},
         actor="dispatcher",
     )
 
@@ -668,7 +666,7 @@ def test_get_workflow_by_ticket_deserializes_clarification_history(test_db):
     workflow_id = state_store.create_workflow(ticket_key="AOS-85")
     state_store.update_clarification_history(
         workflow_id,
-        {"round": 1, "questions": ["Q?"], "answers": []},
+        {"round": 1, "concerns": ["Q?"], "answers": []},
     )
 
     workflows = state_store.get_workflow_by_ticket("AOS-85")
@@ -683,7 +681,7 @@ def test_list_workflows_deserializes_clarification_history(test_db):
     workflow_id = state_store.create_workflow(ticket_key="AOS-85")
     state_store.update_clarification_history(
         workflow_id,
-        {"round": 1, "questions": ["Q?"], "answers": []},
+        {"round": 1, "concerns": ["Q?"], "answers": []},
     )
 
     workflows = state_store.list_workflows(ticket_key="AOS-85")

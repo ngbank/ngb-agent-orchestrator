@@ -66,7 +66,7 @@ sequenceDiagram
             WP->>Validator: validate_work_plan(work_plan_data)
             alt Validation fails or status == "blocked"
                 Validator-->>WP: error → route to error_handler
-            else Plan has concerns/blocked or questions_for_reviewer (AOS-73)
+            else Plan has concerns/blocked (AOS-73)
                 Validator-->>WP: ⚠️  Plan needs clarification
                 Note over WP: Route to await_workplan_clarification
             else Passes validation cleanly
