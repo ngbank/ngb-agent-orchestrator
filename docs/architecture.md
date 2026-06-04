@@ -54,7 +54,7 @@ LangGraph Graph (graph/)
 The CLI entry point. Handles three modes:
 
 - `--ticket KEY` — starts a new workflow
-- `--approve --ticket KEY` — resumes a suspended workflow (approved)
+- `--approve-plan --ticket KEY` — resumes a suspended workflow (approved)
 - `--reject --ticket KEY --reason "..."` — resumes a suspended workflow (rejected)
 
 Builds the LangGraph orchestrator and invokes it. On `GraphInterrupt` (the approval gate), it prints instructions and exits cleanly. The graph state is persisted to SQLite so it can be resumed later.
@@ -132,4 +132,4 @@ The LangGraph graph uses `SqliteSaver` (backed by the same `state/local.db`) as 
 
 - The full graph state is serialised to SQLite at every node boundary.
 - When `await_approval` calls `interrupt()`, the process can exit cleanly.
-- Running `dispatcher.run --approve` rehydrates the graph from the checkpoint and resumes from exactly where it paused.
+- Running `dispatcher.run --approve-plan` rehydrates the graph from the checkpoint and resumes from exactly where it paused.

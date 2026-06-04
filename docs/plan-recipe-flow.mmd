@@ -111,7 +111,7 @@ sequenceDiagram
     rect rgb(255, 250, 220)
         Note over User,SQLite: Step 8: Developer Approval Gate (AOS-40)
         Note over Dispatcher: Graph suspended at await_approval<br/>Status → PENDING_APPROVAL in SQLite
-        User->>Dispatcher: python -m dispatcher.run --approve {workflow_id}<br/>OR<br/>python -m dispatcher.run --reject {workflow_id} --reason "..."
+        User->>Dispatcher: python -m dispatcher.run --approve-plan {workflow_id}<br/>OR<br/>python -m dispatcher.run --reject {workflow_id} --reason "..."
         alt Approved
             Dispatcher->>SQLite: update_status(APPROVED)<br/>audit_log: actor=local_user, action=workflow_approved
             SQLite-->>Dispatcher: ✅ Status updated

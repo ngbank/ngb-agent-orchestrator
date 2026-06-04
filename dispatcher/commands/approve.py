@@ -1,4 +1,4 @@
-"""Handlers for --approve and --reject (WorkPlan approval gate)."""
+"""Handlers for --approve-plan and --reject (WorkPlan approval gate)."""
 
 import sys
 from typing import Optional

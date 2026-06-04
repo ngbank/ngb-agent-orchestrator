@@ -560,7 +560,7 @@ class TestHandleApproveFailedExecution:
             mock_build.return_value = mock_graph
 
             with patch("dispatcher.commands.common._post_execution_comment"):
-                result = cli_runner.invoke(run, ["--approve", "--workflow-id", workflow_id])
+                result = cli_runner.invoke(run, ["--approve-plan", "--workflow-id", workflow_id])
 
         assert result.exit_code == 0
         workflow = state_store.get_workflow(workflow_id)
@@ -595,7 +595,7 @@ class TestHandleApproveFailedExecution:
             mock_build.return_value = mock_graph
 
             with patch("dispatcher.commands.common._post_execution_comment"):
-                result = cli_runner.invoke(run, ["--approve", "--workflow-id", workflow_id])
+                result = cli_runner.invoke(run, ["--approve-plan", "--workflow-id", workflow_id])
 
         assert result.exit_code == 0
         workflow = state_store.get_workflow(workflow_id)
@@ -616,7 +616,7 @@ class TestHandleApproveFailedExecution:
             mock_build.return_value = mock_graph
 
             with patch("dispatcher.commands.common._post_execution_comment"):
-                result = cli_runner.invoke(run, ["--approve", "--workflow-id", workflow_id])
+                result = cli_runner.invoke(run, ["--approve-plan", "--workflow-id", workflow_id])
 
         assert result.exit_code == 0
         workflow = state_store.get_workflow(workflow_id)
@@ -647,7 +647,7 @@ class TestHandleApproveFailedExecution:
             mock_build.return_value = mock_graph
 
             with patch("dispatcher.commands.common._post_execution_comment"):
-                result = cli_runner.invoke(run, ["--approve", "--workflow-id", workflow_id])
+                result = cli_runner.invoke(run, ["--approve-plan", "--workflow-id", workflow_id])
 
         assert result.exit_code == 0
         workflow = state_store.get_workflow(workflow_id)
@@ -800,7 +800,7 @@ class TestHandleClarify:
                 )
 
         assert result.exit_code == 0
-        assert "--approve" in result.output
+        assert "--approve-plan" in result.output
 
 
 # ---------------------------------------------------------------------------

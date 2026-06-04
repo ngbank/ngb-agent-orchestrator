@@ -31,7 +31,7 @@ flowchart LR
 ```
 
 1. **Plan phase** — Goose fetches the ticket, analyses the repo, and produces a structured `WorkPlan` JSON (tasks, files affected, risks). The planner posts it as a JIRA comment so the developer can review it in context.
-2. **Approval gate** — the LangGraph workflow suspends. The developer runs `dispatcher --approve` or `--reject` from the terminal.
+2. **Approval gate** — the LangGraph workflow suspends. The developer runs `dispatcher --approve-plan` or `--reject` from the terminal.
 3. **Execute phase** — on approval, Goose reads the WorkPlan, creates a feature branch, implements each task, runs the test suite, and commits. A JSON execution summary (build/test status, files changed, commit SHA) is persisted to SQLite.
 
 See [docs/architecture.md](docs/architecture.md) for a full sequence diagram and component reference.
@@ -130,7 +130,7 @@ See [docs/mcp-server.md](docs/mcp-server.md) for full details including how to r
 dispatcher --ticket AOS-41
 
 # After reviewing the WorkPlan comment on JIRA, approve or reject:
-dispatcher --approve --ticket AOS-41
+dispatcher --approve-plan --ticket AOS-41
 dispatcher --reject  --ticket AOS-41 --reason "scope too broad"
 
 # Resume a failed workflow from the node that failed
