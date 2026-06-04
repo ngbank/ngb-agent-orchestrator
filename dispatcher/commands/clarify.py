@@ -144,7 +144,7 @@ def _handle_clarify(ticket_key: Optional[str], workflow_id: Optional[str] = None
             click.echo("")
             click.echo("✅ Plan regenerated and posted to JIRA.")
             approve_ticket = workflow.get("ticket_key", ticket_key)
-            click.echo(f"   To approve:  dispatcher --approve --ticket {approve_ticket}")
+            click.echo(f"   To approve:  dispatcher --approve-plan --ticket {approve_ticket}")
             reject_ticket = workflow.get("ticket_key", ticket_key)
             click.echo(
                 f"   To reject:   dispatcher --reject  --ticket {reject_ticket} " '--reason "..."'

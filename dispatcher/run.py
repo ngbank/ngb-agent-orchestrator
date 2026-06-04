@@ -15,7 +15,7 @@ keeps ``dispatcher --list`` / ``dispatcher --help`` near-instant.
 Usage:
     python -m dispatcher.run --ticket AOS-36
     python -m dispatcher.run --ticket AOS-36 --dry-run
-    python -m dispatcher.run --approve --workflow-id <uuid>
+    python -m dispatcher.run --approve-plan --workflow-id <uuid>
     python -m dispatcher.run --reject --ticket AOS-36 --reason "scope too broad"
 """
 
@@ -39,8 +39,8 @@ load_dotenv()
     help="Print actions without executing (no API calls or database changes)",
 )
 @click.option(
-    "--approve",
-    "do_approve",
+    "--approve-plan",
+    "do_approve_plan",
     is_flag=True,
     help="Approve the pending WorkPlan (use with --ticket or --workflow-id)",
 )
@@ -132,12 +132,12 @@ load_dotenv()
     "workflow_id",
     default=None,
     metavar="UUID",
-    help="Target a specific workflow by ID (use with --approve or --reject)",
+    help="Target a specific workflow by ID (use with --approve-plan or --reject)",
 )
 def run(
     ticket: str,
     dry_run: bool,
-    do_approve: bool,
+    do_approve_plan: bool,
     do_reject: bool,
     do_cancel: bool,
     do_clarify: bool,
@@ -165,10 +165,10 @@ def run(
         dispatcher --ticket AOS-36 --dry-run
 
         # Approve by ticket key
-        dispatcher --approve --ticket AOS-36
+        dispatcher --approve-plan --ticket AOS-36
 
         # Approve by workflow ID
-        dispatcher --approve --workflow-id <uuid>
+        dispatcher --approve-plan --workflow-id <uuid>
 
         # Reject by ticket key
         dispatcher --reject --ticket AOS-36 --reason "scope too broad"
@@ -267,9 +267,9 @@ def run(
         _handle_retry(ticket, workflow_id)
         return
 
-    if do_approve:
+    if do_approve_plan:
         if not ticket and not workflow_id:
-            click.echo("\u274c --approve requires --ticket or --workflow-id", err=True)
+            click.echo("\u274c --approve-plan requires --ticket or --workflow-id", err=True)
             sys.exit(1)
         from dispatcher.commands.approve import _handle_approve
 
@@ -313,7 +313,9 @@ def run(
         return
 
     if not ticket:
-        click.echo("\u274c --ticket is required when not using --approve or --reject", err=True)
+        click.echo(
+            "\u274c --ticket is required when not using --approve-plan or --reject", err=True
+        )
         sys.exit(1)
 
     if "-" not in ticket:

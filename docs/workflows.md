@@ -27,7 +27,7 @@ Output:
 ⏸️  WorkPlan is ready for review.
    Workflow ID: b04fd4e0-1edc-4f95-8489-da914470b58d
 
-   To approve:  python -m dispatcher.run --approve --ticket AOS-41
+   To approve:  python -m dispatcher.run --approve-plan --ticket AOS-41
    To reject:   python -m dispatcher.run --reject --ticket AOS-41 --reason "your reason"
 ```
 
@@ -47,7 +47,7 @@ After reviewing the WorkPlan comment on JIRA:
 
 ```bash
 # Approve — resumes the graph, triggers the execute phase
-python -m dispatcher.run --approve --ticket AOS-41
+python -m dispatcher.run --approve-plan --ticket AOS-41
 
 # Reject — terminates the workflow, no code changes made
 python -m dispatcher.run --reject --ticket AOS-41 --reason "scope too broad"
@@ -56,7 +56,7 @@ python -m dispatcher.run --reject --ticket AOS-41 --reason "scope too broad"
 You can also target a specific workflow by ID (useful when multiple runs exist for the same ticket):
 
 ```bash
-python -m dispatcher.run --approve --workflow-id b04fd4e0-1edc-4f95-8489-da914470b58d
+python -m dispatcher.run --approve-plan --workflow-id b04fd4e0-1edc-4f95-8489-da914470b58d
 python -m dispatcher.run --reject  --workflow-id b04fd4e0-... --reason "needs more detail"
 ```
 
