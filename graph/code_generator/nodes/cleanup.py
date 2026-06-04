@@ -9,10 +9,10 @@ import shutil
 
 import click
 
-from graph.executor.state import ExecutionState
+from graph.code_generator.state import CodeGeneratorState
 
 
-def cleanup(state: ExecutionState) -> dict:
+def cleanup(state: CodeGeneratorState) -> dict:
     """Remove temp files and the working clone created by clone_repo.
 
     Reads:  working_dir, work_plan_path, summary_path, reasoning_path

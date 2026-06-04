@@ -2,13 +2,13 @@
 
 import click
 
-from graph.executor.state import ExecutionState
+from graph.code_generator.state import CodeGeneratorState
 from graph.litellm_callbacks import aggregate_token_usage
 from state.workflow_repository import update_execution_summary, update_status, update_usage_summary
 from state.workflow_status import WorkflowStatus
 
 
-def persist_results(state: ExecutionState) -> dict:
+def persist_results(state: CodeGeneratorState) -> dict:
     """Persist the execution summary and transition workflow status.
 
     On the happy path this also aggregates and stores token usage.

@@ -1,12 +1,12 @@
-"""Conditional edge routing functions for the executor subgraph."""
+"""Conditional edge routing functions for the code_generator subgraph."""
 
 from typing import Literal
 
-from graph.executor.state import ExecutionState
+from graph.code_generator.state import CodeGeneratorState
 
 
 def route_after_resolve(
-    state: ExecutionState,
+    state: CodeGeneratorState,
 ) -> Literal["clone_repo", "persist_results"]:
     """Skip to persist_results if resolve_repo failed."""
     if state.get("exec_error"):
@@ -15,7 +15,7 @@ def route_after_resolve(
 
 
 def route_after_clone(
-    state: ExecutionState,
+    state: CodeGeneratorState,
 ) -> Literal["run_goose", "persist_results"]:
     """Skip to persist_results if clone_repo failed."""
     if state.get("exec_error"):

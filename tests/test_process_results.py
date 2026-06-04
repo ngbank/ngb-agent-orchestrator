@@ -11,7 +11,7 @@ import tempfile
 
 def test_process_results_parses_valid_summary_json():
     """process_results returns the parsed dict when the summary file is valid JSON."""
-    from graph.executor.nodes.process_results import process_results
+    from graph.code_generator.nodes.process_results import process_results
 
     summary = {
         "ticket_key": "AOS-97",
@@ -37,7 +37,7 @@ def test_process_results_parses_valid_summary_json():
 
 def test_process_results_returns_failure_summary_on_missing_file():
     """process_results gracefully handles a missing summary file."""
-    from graph.executor.nodes.process_results import process_results
+    from graph.code_generator.nodes.process_results import process_results
 
     result = process_results({"ticket_key": "AOS-97", "summary_path": "/nonexistent/path_xyz.json"})
     summary = result["execution_summary"]
@@ -49,7 +49,7 @@ def test_process_results_returns_failure_summary_on_missing_file():
 
 def test_process_results_returns_failure_summary_on_invalid_json():
     """process_results gracefully handles a summary file with invalid JSON."""
-    from graph.executor.nodes.process_results import process_results
+    from graph.code_generator.nodes.process_results import process_results
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         f.write("{ not valid json {{")
@@ -66,7 +66,7 @@ def test_process_results_returns_failure_summary_on_invalid_json():
 
 def test_process_results_partial_status_preserved():
     """process_results does not modify a 'partial' status returned by the recipe."""
-    from graph.executor.nodes.process_results import process_results
+    from graph.code_generator.nodes.process_results import process_results
 
     summary = {
         "ticket_key": "AOS-97",

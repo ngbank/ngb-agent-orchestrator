@@ -1,7 +1,7 @@
 """
-ExecutionState: state for the executor subgraph.
+CodeGeneratorState: state for the code_generator subgraph.
 
-ExecutionState carries fields shared with OrchestratorState (which flow in from
+CodeGeneratorState carries fields shared with OrchestratorState (which flow in from
 the parent graph and whose updates propagate back) plus execution-local fields
 that are only meaningful within the subgraph and are dropped on exit.
 """
@@ -11,7 +11,7 @@ from typing import Optional
 from typing_extensions import TypedDict
 
 
-class ExecutionState(TypedDict, total=False):
+class CodeGeneratorState(TypedDict, total=False):
     # --- shared with OrchestratorState ---
     workflow_id: Optional[str]
     ticket_key: str

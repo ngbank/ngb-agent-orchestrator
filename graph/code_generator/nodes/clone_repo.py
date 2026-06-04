@@ -6,12 +6,12 @@ import tempfile
 
 import click
 
-from graph.executor.nodes.resolve_repo import _failure_summary
-from graph.executor.state import ExecutionState
+from graph.code_generator.nodes.resolve_repo import _failure_summary
+from graph.code_generator.state import CodeGeneratorState
 from graph.utils import log_path, run_and_tee
 
 
-def clone_repo(state: ExecutionState) -> dict:
+def clone_repo(state: CodeGeneratorState) -> dict:
     """Create temp workspace files and clone the target repository.
 
     Reads:  workflow_id, ticket_key, repo_url, work_plan_data
