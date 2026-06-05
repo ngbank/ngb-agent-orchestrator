@@ -29,7 +29,7 @@ litellm[proxy]>=1.87.1
 mcp>=1.27.2
 
 # TUI Framework
-textual>=0.50.0
+textual>=8.2.7
 
 # Goose Integration
 # Note: Install Goose separately following official documentation
