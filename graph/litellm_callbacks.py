@@ -66,8 +66,37 @@ def _coalesce_int(*values: Any) -> int:
     return 0
 
 
+def _llm_failures_path() -> Path:
+    return _logs_dir() / "llm_failures.jsonl"
+
+
 class TokenUsageLogger(CustomLogger):
     """Append one JSON line with usage stats for each completed LLM call."""
+
+    async def async_log_failure_event(
+        self,
+        kwargs: dict[str, Any],
+        response_obj: Any,
+        start_time: Any,
+        end_time: Any,
+    ) -> None:
+        exception = kwargs.get("exception")
+        entry = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "workflow_id": os.getenv("NGB_WORKFLOW_ID", ""),
+            "stage": os.getenv("NGB_WORKFLOW_STAGE", ""),
+            "model": kwargs.get("model"),
+            "request_id": kwargs.get("litellm_call_id"),
+            "exception_type": type(exception).__name__ if exception else None,
+            "exception_message": str(exception) if exception else None,
+            "traceback": kwargs.get("traceback_exception"),
+            "original_response": kwargs.get("original_response"),
+            "additional_args": kwargs.get("additional_args"),
+        }
+        line = json.dumps(entry, default=str, separators=(",", ":"), ensure_ascii=True)
+        with _WRITE_LOCK:
+            with _llm_failures_path().open("a", encoding="utf-8") as fp:
+                fp.write(line + "\n")
 
     async def async_log_success_event(
         self,
@@ -96,6 +125,42 @@ class TokenUsageLogger(CustomLogger):
             prompt_tokens + completion_tokens,
         )
 
+        # Responses API stop reason lives in output items or status, not choices.
+        output_items = response.get("output") or []
+        responses_api_stop = None
+        if output_items:
+            last_item = output_items[-1] if isinstance(output_items, list) else {}
+            responses_api_stop = last_item.get("stop_reason") or last_item.get("type")
+        stop_reason = (
+            response.get("choices", [{}])[0].get("finish_reason")
+            or response.get("stop_reason")
+            or response.get("finish_reason")
+            or responses_api_stop
+            or response.get("status")
+        )
+
+        # Compact request summary for post-hoc debugging (avoids storing full payload).
+        req_summary: dict[str, Any] = {}
+        additional_args = kwargs.get("additional_args") or {}
+        complete_input = additional_args.get("complete_input_dict") or {}
+        input_messages = complete_input.get("input") or []
+        if input_messages:
+            last_fc = next(
+                (
+                    m.get("name")
+                    for m in reversed(input_messages)
+                    if m.get("type") == "function_call"
+                ),
+                None,
+            )
+            req_summary = {
+                "num_messages": len(input_messages),
+                "last_tool_call": last_fc,
+                "reasoning": complete_input.get("reasoning"),
+                "truncation": complete_input.get("truncation"),
+                "max_output_tokens": complete_input.get("max_output_tokens"),
+            }
+
         entry = {
             "timestamp": datetime.now(UTC).isoformat(),
             "workflow_id": os.getenv("NGB_WORKFLOW_ID", ""),
@@ -105,10 +170,9 @@ class TokenUsageLogger(CustomLogger):
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": total_tokens,
-            "stop_reason": response.get("choices", [{}])[0].get("finish_reason")
-            or response.get("stop_reason")
-            or response.get("finish_reason"),
+            "stop_reason": stop_reason,
             "usage": usage,
+            "req": req_summary,
         }
 
         line = json.dumps(entry, separators=(",", ":"), ensure_ascii=True)

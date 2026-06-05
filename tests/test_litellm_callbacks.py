@@ -1,12 +1,14 @@
-"""Unit tests for litellm_callbacks.aggregate_token_usage."""
+"""Unit tests for litellm_callbacks.aggregate_token_usage and TokenUsageLogger."""
 
+import asyncio
 import json
 import os
 import tempfile
+from datetime import datetime, timezone
 
 import pytest
 
-from graph.litellm_callbacks import aggregate_token_usage
+from graph.litellm_callbacks import TokenUsageLogger, aggregate_token_usage
 
 
 @pytest.fixture
@@ -189,3 +191,71 @@ def test_aggregate_null_stop_reason_excluded(jsonl_dir):
 
     assert result["turns"] == 1
     assert result["stop_reasons"] == []
+
+
+# ---------------------------------------------------------------------------
+# TokenUsageLogger.async_log_failure_event
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def failure_logger_env(monkeypatch):
+    """Set env vars and LOGS_DIR so the logger writes to a temp dir."""
+    with tempfile.TemporaryDirectory() as tmp:
+        monkeypatch.setenv("LOGS_DIR", tmp)
+        monkeypatch.setenv("NGB_WORKFLOW_ID", "wf-fail-001")
+        monkeypatch.setenv("NGB_WORKFLOW_STAGE", "execute")
+        yield tmp
+
+
+def test_failure_event_writes_to_jsonl(failure_logger_env):
+    """async_log_failure_event appends one entry to llm_failures.jsonl."""
+    logger = TokenUsageLogger()
+    exc = RuntimeError("Stream decode error: missing field `error`")
+    kwargs = {
+        "model": "azure/gpt-5.4",
+        "litellm_call_id": "call-abc123",
+        "exception": exc,
+        "traceback_exception": "Traceback ...",
+        "original_response": '{"type":"response.failed","response":{"status":"failed","output":[]}}',
+        "additional_args": {"api_base": "https://example.azure.com"},
+    }
+
+    asyncio.run(
+        logger.async_log_failure_event(
+            kwargs, None, datetime.now(timezone.utc), datetime.now(timezone.utc)
+        )
+    )
+
+    failures_path = os.path.join(failure_logger_env, "wf-fail-001", "llm_failures.jsonl")
+    assert os.path.exists(failures_path), "llm_failures.jsonl was not created"
+
+    with open(failures_path) as fp:
+        entry = json.loads(fp.readline())
+
+    assert entry["workflow_id"] == "wf-fail-001"
+    assert entry["stage"] == "execute"
+    assert entry["model"] == "azure/gpt-5.4"
+    assert entry["request_id"] == "call-abc123"
+    assert entry["exception_type"] == "RuntimeError"
+    assert "missing field" in entry["exception_message"]
+    assert entry["traceback"] == "Traceback ..."
+    assert "response.failed" in entry["original_response"]
+
+
+def test_failure_event_handles_missing_fields(failure_logger_env):
+    """async_log_failure_event handles kwargs with no exception or response."""
+    logger = TokenUsageLogger()
+
+    asyncio.run(
+        logger.async_log_failure_event(
+            {}, None, datetime.now(timezone.utc), datetime.now(timezone.utc)
+        )
+    )
+
+    failures_path = os.path.join(failure_logger_env, "wf-fail-001", "llm_failures.jsonl")
+    assert os.path.exists(failures_path)
+    with open(failures_path) as fp:
+        entry = json.loads(fp.readline())
+    assert entry["exception_type"] is None
+    assert entry["original_response"] is None

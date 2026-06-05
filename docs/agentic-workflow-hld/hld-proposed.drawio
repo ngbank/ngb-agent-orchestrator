@@ -1,0 +1,729 @@
+<mxfile host="65bd71144e">
+    <diagram id="hld-v2" name="HLD">
+        <mxGraphModel dx="1479" dy="966" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-2" value="Triggers" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;fontStyle=1;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="1150" y="410" width="220" height="300" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-3" value="&lt;br&gt;Jira (status changed based)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="1170" y="460" width="180" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-4" value="FleetOps Middleware&#xa;(auth, validation,&#xa;ticket creation,&#xa;idempotency)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1170" y="620" width="180" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-5" value="Control Plane" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;fontStyle=1;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="1430" y="390" width="520" height="1190" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-6" value="Webhook Receiver" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1580" y="460" width="200" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-7" value="Workflow API / Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" parent="1" vertex="1">
+                    <mxGeometry x="1580" y="630" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-8" value="Work Plan + Recipe" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" parent="1" vertex="1">
+                    <mxGeometry x="1581" y="799" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-9" style="edgeStyle=none;html=1;entryX=1;entryY=1;entryDx=0;entryDy=0;rounded=0;curved=1;" parent="1" source="EdAH23wTT8TAoaTBZzOQ-10" target="EdAH23wTT8TAoaTBZzOQ-2" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1430" y="930"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-10" value="Approval / Clarification /&#xa;Retry Logic" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" parent="1" vertex="1">
+                    <mxGeometry x="1580" y="884" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-11" value="Execution Layer on AKS" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;verticalAlign=top;fontStyle=1;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="2251" y="390" width="320" height="460" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-12" value="Kubernetes Job Controller" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="2290" y="504" width="240" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-13" value="Ephemeral Dev Pod" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="2290" y="580" width="240" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-14" value="Goose" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="2290" y="664" width="240" height="36" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-15" value="Git / Build / Test / Codegen Tools" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="2291" y="729" width="240" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-16" value="External Systems" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;verticalAlign=top;fontStyle=1;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="2251" y="870" width="319" height="270" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-17" value="Jira" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" parent="1" vertex="1">
+                    <mxGeometry x="2281" y="907" width="239" height="43" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-18" value="GitHub / PR" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" parent="1" vertex="1">
+                    <mxGeometry x="2281" y="960" width="239" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-19" value="Artifacts / Logs Storage" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" parent="1" vertex="1">
+                    <mxGeometry x="2281" y="1010" width="239" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-20" value="" style="endArrow=block;html=1;rounded=0;" parent="1" source="EdAH23wTT8TAoaTBZzOQ-3" target="EdAH23wTT8TAoaTBZzOQ-6" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-21" style="endArrow=block;html=1;rounded=0;" parent="1" source="EdAH23wTT8TAoaTBZzOQ-40" target="EdAH23wTT8TAoaTBZzOQ-4" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-22" value="" style="endArrow=block;html=1;rounded=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="EdAH23wTT8TAoaTBZzOQ-4" target="EdAH23wTT8TAoaTBZzOQ-7" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-23" value="Workflow Message Broker&lt;br&gt;execute-jobs + execute-results&lt;br&gt;[not day 1]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;dashed=1;fontStyle=2;" parent="1" vertex="1">
+                    <mxGeometry x="2000" y="560" width="200" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-24" value="Job Dispatcher (AKS)&lt;br&gt;consumes execute-jobs&lt;br&gt;creates K8s Jobs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;dashed=1;fontStyle=2;" parent="1" vertex="1">
+                    <mxGeometry x="2290" y="420" width="240" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-25" value="" style="endArrow=block;html=1;rounded=0;dashed=1;" parent="1" source="EdAH23wTT8TAoaTBZzOQ-24" target="EdAH23wTT8TAoaTBZzOQ-12" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-26" value="&lt;b&gt;Day 1 vs Scale&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;Day 1:&lt;/b&gt; Orchestrator submits jobs via HTTP to the K8s Job Controller. Pod reports status, heartbeats, and results back through the Workflow API (never touches the State Store directly). LangGraph Checkpointer handles resume across the approval gate.&lt;br&gt;&lt;br&gt;&lt;b&gt;Scale:&lt;/b&gt; Orchestrator can publish to the bus and a Job Dispatcher pod in AKS (or KEDA ScaledJob) consumes execute-jobs messages and creates K8s Jobs. To be used when decoupling across clusters/clouds or per-message autoscaling is required.&lt;br&gt;&lt;br&gt;&lt;div&gt;&lt;b&gt;Scale&lt;/b&gt;: Integrate with EQAssure&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff8dc;strokeColor=#999999;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;spacingRight=8;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="2920" y="1618" width="580" height="172" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-27" style="endArrow=block;html=1;rounded=0;" parent="1" source="EdAH23wTT8TAoaTBZzOQ-12" target="EdAH23wTT8TAoaTBZzOQ-13" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-28" style="endArrow=block;html=1;rounded=0;" parent="1" source="EdAH23wTT8TAoaTBZzOQ-13" target="EdAH23wTT8TAoaTBZzOQ-14" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-29" value="Security / Secrets / Audit  (cross-cutting control-plane capability)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;verticalAlign=middle;align=center;fontStyle=1;fontSize=13;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1430" y="350" width="1220" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-30" value="&lt;b&gt;Metrics / Observability&lt;/b&gt;&amp;nbsp; (cross-cutting telemetry across control plane, execution pod, and external integrations)&lt;br&gt;&lt;hr&gt;&lt;div style=&quot;text-align:left;padding:4px 12px;font-weight:normal;&quot;&gt;&lt;b&gt;Scope (today&#39;s requirements):&lt;/b&gt;&lt;br&gt;• &lt;b&gt;Audit log&lt;/b&gt; — immutable record of triggers, decisions, approvals, state transitions&lt;br&gt;• &lt;b&gt;Agent traces (OTel)&lt;/b&gt; — one span per LangGraph node; GenAI semantic conventions for LLM spans&lt;br&gt;• &lt;b&gt;Token usage &amp;amp; cost&lt;/b&gt; — per workflow / ticket / model / node, via LiteLLM OTel callback&lt;br&gt;• &lt;b&gt;Quality drift detection&lt;/b&gt; — validator pass rate, retry count, clarification count, PR rejection rate over time&lt;br&gt;• &lt;b&gt;Exceptions&lt;/b&gt; — captured on active span; correlated by trace_id&lt;br&gt;&lt;br&gt;&lt;b&gt;Correlation key:&lt;/b&gt; W3C trace_id + workflow_id + jira_ticket attributes on every span / log / audit event.&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;verticalAlign=top;align=center;fontStyle=0;fontSize=12;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1610" y="1630" width="890" height="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="obs-stack-note" value="&lt;b&gt;Recommended Stack&lt;/b&gt;&lt;br&gt;&lt;i&gt;Reuses existing Elastic + Sentry + OTel investment; no new vendor.&lt;/i&gt;&lt;hr&gt;&lt;table cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;font-size:11px;border-collapse:collapse;width:100%;text-align:left;&quot;&gt;&lt;tbody&gt;&lt;tr style=&quot;background: rgb(232, 232, 232);&quot;&gt;&lt;th style=&quot;border: 1px solid rgb(153, 153, 153);&quot;&gt;Need&lt;/th&gt;&lt;th style=&quot;border: 1px solid rgb(153, 153, 153);&quot;&gt;Tool&lt;/th&gt;&lt;th style=&quot;border: 1px solid rgb(153, 153, 153);&quot;&gt;Notes&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td style=&quot;border: 1px solid rgb(153, 153, 153);&quot;&gt;Audit log&lt;/td&gt;&lt;td style=&quot;border: 1px solid rgb(153, 153, 153);&quot;&gt;&lt;b&gt;Elastic&lt;/b&gt;&lt;/td&gt;&lt;td style=&quot;border: 1px solid rgb(153, 153, 153);&quot;&gt;Structured events from state transitions; SQLite is source of truth, mirrored to Elastic&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td style=&quot;border: 1px solid rgb(153, 153, 153);&quot;&gt;Agent traces (OTel)&lt;/td&gt;&lt;td style=&quot;border: 1px solid rgb(153, 153, 153);&quot;&gt;&lt;b&gt;Elastic APM&lt;/b&gt;&lt;/td&gt;&lt;td style=&quot;border: 1px solid rgb(153, 153, 153);&quot;&gt;OTel SDK; one span per LangGraph node; GenAI semantic conventions&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td style=&quot;border: 1px solid rgb(153, 153, 153);&quot;&gt;Exceptions&lt;/td&gt;&lt;td style=&quot;border: 1px solid rgb(153, 153, 153);&quot;&gt;&lt;b&gt;Sentry&lt;/b&gt;&lt;/td&gt;&lt;td style=&quot;border: 1px solid rgb(153, 153, 153);&quot;&gt;Already in use; attach trace_id so it links to Elastic&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td style=&quot;border: 1px solid rgb(153, 153, 153);&quot;&gt;Token usage &amp;amp; cost&lt;/td&gt;&lt;td style=&quot;border: 1px solid rgb(153, 153, 153);&quot;&gt;&lt;b&gt;Elastic&lt;/b&gt; dashboard&lt;/td&gt;&lt;td style=&quot;border: 1px solid rgb(153, 153, 153);&quot;&gt;Built from LiteLLM OTel attributes (gen_ai.usage.*)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td style=&quot;border: 1px solid rgb(153, 153, 153);&quot;&gt;Quality drift dashboards&lt;/td&gt;&lt;td style=&quot;border: 1px solid rgb(153, 153, 153);&quot;&gt;&lt;b&gt;Elastic&lt;/b&gt; dashboard&lt;/td&gt;&lt;td style=&quot;border: 1px solid rgb(153, 153, 153);&quot;&gt;Score signals: validator pass/fail, retries, clarifications, PR rejections&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td style=&quot;border: 1px solid rgb(153, 153, 153);&quot;&gt;Eval runner (offline)&lt;/td&gt;&lt;td style=&quot;border: 1px solid rgb(153, 153, 153);&quot;&gt;&lt;b&gt;promptfoo&lt;/b&gt; / deepeval in CI&lt;/td&gt;&lt;td style=&quot;border: 1px solid rgb(153, 153, 153);&quot;&gt;Push scores to Elastic; add Langfuse later if prompt iteration becomes a team activity&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;br&gt;&lt;div style=&quot;font-size:11px;text-align:left;&quot;&gt;&lt;b&gt;Future-proofing:&lt;/b&gt; OTel pipeline is vendor-neutral. Adding Langfuse (or other LLM-trace UI) later is purely additive — fan out at the OTel Collector; no migration needed.&lt;/div&gt;" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#fff2cc;strokeColor=#d6b656;align=center;verticalAlign=top;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="1610" y="1870" width="890" height="250" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-31" style="endArrow=none;html=1;rounded=0;dashed=1;dashPattern=1 4;strokeColor=#9673a6;" parent="1" target="EdAH23wTT8TAoaTBZzOQ-11" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="2288.090909090909" y="380" as="sourcePoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-32" value="Skill Resolver" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" parent="1" vertex="1">
+                    <mxGeometry x="900" y="1310" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-33" value="Developer Portal / Catalog" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;fontStyle=1;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="370" y="1170" width="320" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-34" value="Service Metadata&#xa;Stack / Domain / Owner&#xa;Policies / Tags" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="390" y="1220" width="280" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-35" value="Skill Sources" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;verticalAlign=top;fontStyle=1;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="350" y="1380" width="340" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-36" value="Skills Repo / Registry" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="1430" width="280" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-37" value="Tools / MCP Layer" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;verticalAlign=top;fontStyle=1;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="2260" y="1330" width="320" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-38" value="MCP Tools&#xa;Jira / GitHub / Cortex APIs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" parent="1" vertex="1">
+                    <mxGeometry x="2290" y="1380" width="260" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-39" value="Key Vault" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" parent="1" vertex="1">
+                    <mxGeometry x="2290" y="1460" width="260" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-40" value="Developer Portal&#xa;(Cortex plugin / FleetOps)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="1170" y="540" width="180" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-41" value="MS Teams &lt;br&gt;(outbound notifications)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="2281" y="1060" width="239" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-43" value="END" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=0;" parent="1" vertex="1">
+                    <mxGeometry x="1580" y="1510" width="200" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-44" value="CheckPointer" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/databases/Azure_Database_PostgreSQL_Server.svg;" parent="1" vertex="1">
+                    <mxGeometry x="1520" y="570" width="37.5" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-45" value="State Store" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/databases/Azure_Database_PostgreSQL_Server.svg;" parent="1" vertex="1">
+                    <mxGeometry x="1810" y="569.3299999999999" width="38" height="50.67" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-46" style="edgeStyle=none;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="EdAH23wTT8TAoaTBZzOQ-47" target="EdAH23wTT8TAoaTBZzOQ-33" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-47" value="Repo metadata Finder" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" parent="1" vertex="1">
+                    <mxGeometry x="900" y="1230" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-48" style="edgeStyle=none;html=1;entryX=0.995;entryY=0.343;entryDx=0;entryDy=0;entryPerimeter=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" parent="1" source="EdAH23wTT8TAoaTBZzOQ-32" target="EdAH23wTT8TAoaTBZzOQ-35" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-49" style="edgeStyle=none;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;strokeWidth=0;" parent="1" source="EdAH23wTT8TAoaTBZzOQ-50" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1780" y="1085" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-50" value="Generate output" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="2290" y="790" width="240" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-51" value="LLM Layer" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;verticalAlign=top;fontStyle=1;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="1980" y="684" width="240" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-52" value="LLM Gateway (LiteLLM)&#xa;routing / quotas / callbacks&#xa;token usage logging" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1995" y="729" width="210" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-53" value="Azure AI Foundry&#xa;(model providers)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" parent="1" vertex="1">
+                    <mxGeometry x="1995" y="809" width="210" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-54" style="endArrow=block;html=1;rounded=0;" parent="1" source="EdAH23wTT8TAoaTBZzOQ-52" target="EdAH23wTT8TAoaTBZzOQ-53" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-56" style="endArrow=block;html=1;rounded=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="EdAH23wTT8TAoaTBZzOQ-14" target="EdAH23wTT8TAoaTBZzOQ-52" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-57" value="" style="image;aspect=fixed;html=1;points=[];align=center;fontSize=12;image=img/lib/azure2/ai_machine_learning/AI_Studio.svg;" parent="1" vertex="1">
+                    <mxGeometry x="2010" y="821.5" width="32.94" height="35" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-58" value="Raises PR&lt;br&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;i&gt;+ enable auto-merge&lt;/i&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=0;" parent="1" vertex="1">
+                    <mxGeometry x="1581" y="1190" width="200" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-67" value="Agent Review PR&lt;br&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;i&gt;LLM code review via GH API&lt;/i&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=0;" parent="1" vertex="1">
+                    <mxGeometry x="1580" y="1277" width="200" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="sec-scans-node" value="Security Agent&lt;br&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;i&gt;diff-only triage&lt;br&gt;Sonar + Checkmarx One&lt;/i&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=0;" parent="1" vertex="1">
+                    <mxGeometry x="1581" y="1120" width="199" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="sec-scans-loopback" value="critical → fix" style="endArrow=block;html=1;rounded=0;dashed=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" parent="1" source="sec-scans-node" target="EdAH23wTT8TAoaTBZzOQ-66" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1410" y="1140"/>
+                            <mxPoint x="1410" y="1040"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="badge-secscans" value="VERIFY" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1729.5" y="1126" width="45" height="14" as="geometry"/>
+                </mxCell>
+                <mxCell id="sec-agent-note" value="&lt;b&gt;Security Agent &amp;mdash; details&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;Scope:&lt;/b&gt; diff-only. Pre-existing findings on touched files are ignored to avoid blocking unrelated PRs. Backlog hygiene is handled by scheduled full-repo scans (IMPROVE stage, auto-files JIRA).&lt;br&gt;&lt;br&gt;&lt;b&gt;Sources (consumed via API, not re-run):&lt;/b&gt;&lt;br&gt;&amp;nbsp;&amp;nbsp;\u2022 &lt;b&gt;SonarQube&lt;/b&gt; \u2014 PR analysis mode; Quality Gate &quot;on New Code&quot;.&lt;br&gt;&amp;nbsp;&amp;nbsp;\u2022 &lt;b&gt;Checkmarx One&lt;/b&gt; \u2014 filter findings to &lt;i&gt;status=New&lt;/i&gt;.&lt;br&gt;&lt;br&gt;&lt;b&gt;Decision:&lt;/b&gt;&lt;br&gt;&amp;nbsp;&amp;nbsp;\u2022 &lt;b&gt;critical&lt;/b&gt; \u2192 loop back to Execute Plan with structured fix proposal (dismisses stale approvals).&lt;br&gt;&amp;nbsp;&amp;nbsp;\u2022 &lt;b&gt;high / medium / low&lt;/b&gt; \u2192 post as PR comments; do not block.&lt;br&gt;&lt;br&gt;&lt;b&gt;Notes:&lt;/b&gt;&lt;br&gt;&amp;nbsp;&amp;nbsp;\u2022 The scanners themselves still run as required CI status checks on the PR (branch-protection gate). The agent is the triage + auto-fix layer on top.&lt;br&gt;&amp;nbsp;&amp;nbsp;\u2022 Scanners are licensed/audited tools \u2014 we do not replace them with the LLM. The LLM only triages and proposes fixes.&lt;br&gt;&amp;nbsp;&amp;nbsp;\u2022 Sysdig (image / runtime / IaC) is intentionally out of scope here; it gates the deploy pipeline downstream, not the source PR." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff8dc;strokeColor=#999999;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;spacingRight=8;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="667" width="500" height="333" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-68" value="Await GH Webhook&lt;br&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;i&gt;merged | abandoned | changes_requested&lt;/i&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=0;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1580" y="1400" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-69" style="endArrow=block;html=1;rounded=0;" parent="1" source="EdAH23wTT8TAoaTBZzOQ-58" target="EdAH23wTT8TAoaTBZzOQ-67" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-70" style="endArrow=block;html=1;rounded=0;" parent="1" source="EdAH23wTT8TAoaTBZzOQ-67" target="EdAH23wTT8TAoaTBZzOQ-68" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-71" value="merged | abandoned" style="endArrow=block;html=1;rounded=0;" parent="1" source="EdAH23wTT8TAoaTBZzOQ-68" target="EdAH23wTT8TAoaTBZzOQ-43" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-72" value="" style="endArrow=block;html=1;rounded=0;dashed=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="EdAH23wTT8TAoaTBZzOQ-68" target="EdAH23wTT8TAoaTBZzOQ-66" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1480" y="1270"/>
+                            <mxPoint x="1480" y="1020"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-73" value="&lt;b&gt;PR Lifecycle (Read Execution → Raises PR → Agent Review → Auto-merge)&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;1. Read Execution&lt;/b&gt;: pod completes, posts callback {branch, head_sha, files_changed} to control plane. Pod exits.&lt;br&gt;&lt;br&gt;&lt;b&gt;2. Raises PR&lt;/b&gt;: control plane opens PR (base=main, head=feature/AOS-XX) using GitHub App #1 (author). Body rendered from ticket + plan + clarifications. Immediately enables &lt;i&gt;auto-merge&lt;/i&gt; (squash) — GH holds it armed and merges atomically once all branch-protection gates are green.&lt;br&gt;&lt;br&gt;&lt;b&gt;3a. Agent Review PR (code review)&lt;/b&gt;: control plane fetches diff via GH API, calls LLM with ticket + plan + diff. Posts a formal review via GitHub App #2 (reviewer): APPROVE or REQUEST_CHANGES.&lt;br&gt;&lt;br&gt;&lt;b&gt;3b. Security Agent (diff-only)&lt;/b&gt;: triages findings from Sonar PR analysis + Checkmarx One (filter status=New). On critical → loops back to Execute Plan with a fix proposal. Otherwise posts comments and proceeds. See &quot;Security Agent—details&quot; side note.&lt;br&gt;&lt;br&gt;&lt;b&gt;4. Await GH Webhook&lt;/b&gt;: graph suspends. Branch protection requires N approvals (1 bot + 1 human) + CI green + conversations resolved. Human reviews directly on GitHub.&lt;br&gt;&lt;br&gt;&lt;b&gt;Terminal events (pull_request webhook):&lt;/b&gt;&lt;br&gt;&amp;nbsp;&amp;nbsp;• closed, merged=true → post_merge: JIRA Done, status=completed&lt;br&gt;&amp;nbsp;&amp;nbsp;• closed, merged=false → abandon: JIRA Won&#39;t Do, status=cancelled&lt;br&gt;&amp;nbsp;&amp;nbsp;• review changes_requested → re-dispatch Execute Plan with feedback (same branch, dismisses stale approvals)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff8dc;strokeColor=#999999;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;spacingRight=8;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="2770" y="960" width="260" height="570" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-59" value="Read Execution" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=0;" parent="1" vertex="1">
+                    <mxGeometry x="1580" y="1060" width="200" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-60" value="Context Engine" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#66CC00;verticalAlign=top;fontStyle=1;fontSize=14;dashed=1;strokeWidth=3;" parent="1" vertex="1">
+                    <mxGeometry x="780" y="1160" width="405" height="320" as="geometry"/>
+                </mxCell>
+                <mxCell id="context-phase-scope" value="Phase 1: resolvers only (repo metadata + skills)&lt;br&gt;Phase 2+: add context store (vector + graph)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#66CC00;dashed=1;fontSize=10;fontColor=#333333;align=center;verticalAlign=middle;" parent="1" vertex="1">
+                    <mxGeometry x="800" y="1410" width="365" height="56" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-61" value="&lt;span style=&quot;font-weight: normal;&quot;&gt;Get Context&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1581" y="719" width="200" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-62" value="" style="shape=image;html=1;verticalAlign=top;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;imageAspect=0;aspect=fixed;image=https://icons.diagrams.net/icon-cache1/Boxicons_Regular_Vol_1-2633/bx-brain-800.svg" parent="1" vertex="1">
+                    <mxGeometry x="1721" y="732" width="24" height="24" as="geometry"/>
+                </mxCell>
+                <mxCell id="stage-title" value="SDLC Stages" style="text;html=1;align=right;verticalAlign=middle;fontSize=11;fontStyle=2;fontColor=#666666;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="180" width="180" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="stage-plan" value="&lt;b&gt;PLAN&lt;/b&gt;&#xa;story → ADR" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=middle;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="230" y="180" width="360" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="stage-build" value="&lt;b&gt;BUILD&lt;/b&gt;&#xa;ADR → diff" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=middle;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="590" y="180" width="360" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="stage-verify" value="&lt;b&gt;VERIFY&lt;/b&gt;&#xa;diff → green" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;verticalAlign=middle;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="950" y="180" width="360" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="stage-release" value="&lt;b&gt;RELEASE&lt;/b&gt;&#xa;safe → live" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;verticalAlign=middle;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1310" y="180" width="360" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="stage-observe" value="&lt;b&gt;OBSERVE&lt;/b&gt;&#xa;live → signal" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d4edda;strokeColor=#5a8a5a;verticalAlign=middle;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1670" y="180" width="360" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="stage-improve" value="&lt;b&gt;IMPROVE&lt;/b&gt;&#xa;signal → backlog" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;verticalAlign=middle;align=center;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="2030" y="180" width="360" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="cov-title" value="Today&#39;s coverage" style="text;html=1;align=right;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#666666;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="222" width="180" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="cov-plan" value="built" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#82b366;strokeColor=#82b366;fontColor=#ffffff;align=center;verticalAlign=middle;fontSize=10;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="230" y="222" width="360" height="16" as="geometry"/>
+                </mxCell>
+                <mxCell id="cov-build" value="built" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#82b366;strokeColor=#82b366;fontColor=#ffffff;align=center;verticalAlign=middle;fontSize=10;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="590" y="222" width="360" height="16" as="geometry"/>
+                </mxCell>
+                <mxCell id="cov-verify" value="partial (build+test in execute_plan; no separate gate)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe699;strokeColor=#d6b656;align=center;verticalAlign=middle;fontSize=10;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="950" y="222" width="360" height="16" as="geometry"/>
+                </mxCell>
+                <mxCell id="cov-release" value="PR loop only (no prod release)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe699;strokeColor=#d6b656;align=center;verticalAlign=middle;fontSize=10;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1310" y="222" width="360" height="16" as="geometry"/>
+                </mxCell>
+                <mxCell id="cov-observe" value="missing" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontColor=#666666;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;" parent="1" vertex="1">
+                    <mxGeometry x="1670" y="222" width="360" height="16" as="geometry"/>
+                </mxCell>
+                <mxCell id="cov-improve" value="missing" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontColor=#666666;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;" parent="1" vertex="1">
+                    <mxGeometry x="2030" y="222" width="360" height="16" as="geometry"/>
+                </mxCell>
+                <mxCell id="badge-getctx" value="PLAN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1745" y="719" width="36" height="14" as="geometry"/>
+                </mxCell>
+                <mxCell id="badge-approval" value="PLAN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1745" y="893" width="36" height="14" as="geometry"/>
+                </mxCell>
+                <mxCell id="badge-execute" value="BUILD" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=9;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1740" y="976" width="40" height="14" as="geometry"/>
+                </mxCell>
+                <mxCell id="badge-readexec" value="VERIFY" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1735" y="1056" width="45" height="14" as="geometry"/>
+                </mxCell>
+                <mxCell id="badge-pr" value="RELEASE" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=9;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1720" y="1410" width="50" height="14" as="geometry"/>
+                </mxCell>
+                <mxCell id="badge-review" value="VERIFY" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1735" y="1186" width="45" height="14" as="geometry"/>
+                </mxCell>
+                <mxCell id="badge-workplan" value="PLAN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1745" y="802" width="36" height="14" as="geometry"/>
+                </mxCell>
+                <mxCell id="badge-repofinder" value="PLAN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1064" y="1233" width="36" height="14" as="geometry"/>
+                </mxCell>
+                <mxCell id="badge-skillresolver" value="PLAN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1064" y="1313" width="36" height="14" as="geometry"/>
+                </mxCell>
+                <mxCell id="badge-pod" value="BUILD" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=9;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="2490" y="583" width="40" height="14" as="geometry"/>
+                </mxCell>
+                <mxCell id="badge-goose" value="BUILD" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=9;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="2490" y="667" width="40" height="14" as="geometry"/>
+                </mxCell>
+                <mxCell id="badge-tools" value="VERIFY" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="2475" y="732" width="45" height="14" as="geometry"/>
+                </mxCell>
+                <mxCell id="badge-genout" value="VERIFY" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="2482" y="795" width="45" height="14" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-63" value="" style="shape=actor;whiteSpace=wrap;html=1;strokeWidth=3;" parent="1" vertex="1">
+                    <mxGeometry x="1744" y="930" width="20" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-64" value="&lt;b&gt;Output:&lt;br&gt;&lt;br&gt;{&lt;/b&gt;&lt;div&gt;&lt;b&gt;&amp;nbsp;&amp;nbsp;&lt;/b&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;workflow_id&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;&amp;nbsp; status: DONE/ERROR&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;&amp;nbsp; target branch: feature/yada&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;b&gt;}&lt;br&gt;&lt;/b&gt;&lt;br&gt;&lt;b&gt;&lt;br&gt;&lt;br&gt;&lt;br&gt;&lt;/b&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff8dc;strokeColor=#999999;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;spacingRight=8;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="2610" y="745" width="170" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-65" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.636;entryY=1;entryDx=0;entryDy=0;entryPerimeter=0;curved=1;" parent="1" source="EdAH23wTT8TAoaTBZzOQ-68" target="EdAH23wTT8TAoaTBZzOQ-2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="EdAH23wTT8TAoaTBZzOQ-66" value="&lt;span style=&quot;font-weight: normal;&quot;&gt;Execute Plan&lt;br&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;&lt;i&gt;create K8s job&lt;/i&gt;&lt;/font&gt;&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1580" y="995" width="200" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="rev-banner" value="REVIEW ANNOTATIONS v2 — proposed changes (do not redraw the diagram yet; these are the deltas to discuss)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;verticalAlign=middle;align=center;fontStyle=1;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="130" y="2260" width="2740" height="36" as="geometry"/>
+                </mxCell>
+                <mxCell id="rev-legend" value="&lt;b&gt;Legend for annotations&lt;/b&gt;&lt;br&gt;Yellow note = open question for review&#xa;Orange callout = Lighthouse PoC scope&#xa;Faded grey = considered &amp; deferred (Phase 2+)&#xa;Inline coloured strip = marker pointing at an existing element to revisit" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="1750" width="320" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="rev-lighthouse" value="&lt;b&gt;1. LIGHTHOUSE PoC — prove governance on a thin slice&lt;/b&gt;&lt;br&gt;&lt;br&gt;Scope: &lt;b&gt;Requirements → Architect → Coder → Tester&lt;/b&gt; for &lt;b&gt;one real story&lt;/b&gt;.&#xa;&#xa;&lt;b&gt;Real (not stubbed):&lt;/b&gt; Context Store, Audit Log, OPA / Policy Engine, HITL Console.&#xa;&lt;b&gt;Writes:&lt;/b&gt; branch-only (no main, no infra, no prod).&#xa;&lt;b&gt;Everything else read-only.&lt;/b&gt;&#xa;&#xa;Gate to expand: must survive a compliance review.&#xa;Everything outside this slice is &lt;b&gt;Phase 2+&lt;/b&gt;." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d79b00;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;fontSize=11;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="1750" width="420" height="180" as="geometry"/>
+                </mxCell>
+                <mxCell id="rev-sor" value="&lt;b&gt;2. SYSTEM OF RECORD — split by KIND of fact, not duplicate the same fact&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;table cellpadding=&quot;4&quot; cellspacing=&quot;0&quot; style=&quot;border-collapse:collapse;font-size:10px;&quot;&gt;&lt;tr style=&quot;background:#f5f5f5;&quot;&gt;&lt;th align=&quot;left&quot;&gt;Kind of fact&lt;/th&gt;&lt;th align=&quot;left&quot;&gt;SoR&lt;/th&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Story / requirement / AC&lt;/td&gt;&lt;td&gt;&lt;b&gt;Jira&lt;/b&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Workflow runtime state (gate, retry, checkpoint)&lt;/td&gt;&lt;td&gt;&lt;b&gt;State Store&lt;/b&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Work plans / clarifications / exec summary&lt;/td&gt;&lt;td&gt;&lt;b&gt;State Store&lt;/b&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Code&lt;/td&gt;&lt;td&gt;&lt;b&gt;GitHub&lt;/b&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;ADRs&lt;/td&gt;&lt;td&gt;&lt;b&gt;Confluence OR repo /docs&lt;/b&gt; (pick one)&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Audit / decisions&lt;/td&gt;&lt;td&gt;&lt;b&gt;Audit Log (append-only)&lt;/b&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;br&gt;Today the State Store mirrors story status from Jira but never writes it back as the source-of-truth field. Every dataset has &lt;b&gt;exactly one writer&lt;/b&gt;; other systems mirror only.&#xa;&#xa;Clean seam into Kevin&#39;s data-shift-left model." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff8dc;strokeColor=#999999;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="150" y="2420" width="420" height="260" as="geometry"/>
+                </mxCell>
+                <mxCell id="rev-sor-rule" value="&lt;b&gt;Jira owns the story. State Store owns the run. They never own the same field.&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=center;verticalAlign=middle;fontStyle=1;fontSize=14;strokeWidth=3;" parent="1" vertex="1">
+                    <mxGeometry x="900" y="1820" width="420" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="rev-mcp" value="&lt;b&gt;3. MCP GOVERNANCE — ~24 write paths is an InfoSec landmine&lt;/b&gt;&lt;br&gt;&lt;br&gt;Risk: 2am incident-response pagers if MCPs are unmaintained or untrusted.&#xa;&#xa;&lt;b&gt;Required for every MCP server (manifest):&lt;/b&gt;&#xa;• Owner (team) and on-call rotation&#xa;• Source: &lt;b&gt;internal vs 3rd-party&lt;/b&gt; (3rd-party requires risk assessment)&#xa;• Maintenance status (active / deprecated / abandoned)&#xa;• &lt;b&gt;Read vs Write&lt;/b&gt; tools split (get_* vs put_*)&#xa;• Per-recipe / per-agent &lt;b&gt;allow-list&lt;/b&gt;&#xa;• Scoped credentials (no shared service accounts)&#xa;• Versioned contract + deprecation policy&#xa;&#xa;&lt;b&gt;Gate:&lt;/b&gt; no MCP enters the allow-list without manifest + InfoSec sign-off." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1300" y="2310" width="440" height="240" as="geometry"/>
+                </mxCell>
+                <mxCell id="rev-gates" value="&lt;b&gt;4. GATES — &quot;every gate mandatory&quot; is throughput death&lt;/b&gt;&lt;br&gt;&lt;br&gt;Place &lt;b&gt;human (H)&lt;/b&gt; gates only at &lt;b&gt;irreversible / regulated&lt;/b&gt; boundaries. Everything else uses automated quality (G) gates.&#xa;&#xa;&lt;b&gt;H gates (mandatory, human):&lt;/b&gt;&#xa;• H-Secure — pre-merge, before Secure stage&#xa;• H-Release — pre-prod release&#xa;&#xa;&lt;b&gt;G gates (automated):&lt;/b&gt;&#xa;• G-Schema — WorkPlan validation&#xa;• G-Build — compile + unit&#xa;• G-Verify — integration / E2E&#xa;• G-Eval — scorecard threshold&#xa;&#xa;&lt;b&gt;Today&#39;s WorkPlan approval&lt;/b&gt; → demote to optional &quot;preview&quot; outside regulated paths." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="750" y="2740" width="420" height="240" as="geometry"/>
+                </mxCell>
+                <mxCell id="rev-tiers" value="&lt;b&gt;5. CAPABILITY TIERS — remove model names from architecture&lt;/b&gt;&lt;br&gt;&lt;br&gt;Pinning Opus / Sonnet / GPT-x per agent &lt;b&gt;ages in weeks&lt;/b&gt; and contradicts the Model Router.&#xa;&#xa;&lt;b&gt;Abstract to capability + compliance tiers:&lt;/b&gt;&#xa;• &lt;b&gt;T1 — extraction&lt;/b&gt; (small, cheap)&#xa;• &lt;b&gt;T2 — reasoning&lt;/b&gt; (frontier, large context)&#xa;• &lt;b&gt;T3 — coding&lt;/b&gt; (code-specialised)&#xa;• &lt;b&gt;T4 — verification&lt;/b&gt; (different family from T2/T3 to avoid bias)&#xa;&#xa;&lt;b&gt;Compliance tag&lt;/b&gt; per tier: data-residency, training-opt-out, PII allowed.&#xa;&#xa;Model Router (LiteLLM) maps tier+compliance → concrete model. Diagram never mentions vendors." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1280" y="2670" width="420" height="240" as="geometry"/>
+                </mxCell>
+                <mxCell id="rev-ctx" value="&lt;b&gt;6. CONTEXT STORE — where comprehension debt accumulates silently&lt;/b&gt;&lt;br&gt;&lt;br&gt;Hardest, least-glamorous, &lt;b&gt;owned by Builders (not an agent)&lt;/b&gt;.&#xa;&#xa;&lt;b&gt;Open design questions (must answer before Phase 2):&lt;/b&gt;&#xa;1. &lt;b&gt;Isolation&lt;/b&gt; — boundary per story / epic / project / tenant?&#xa;2. &lt;b&gt;Eviction policy&lt;/b&gt; — LRU? per-stage TTL? on PR-merge?&#xa;3. &lt;b&gt;What survives a full Plan→Build→Verify cycle?&lt;/b&gt; (ADRs? rejected approaches? clarifications?)&#xa;4. &lt;b&gt;Cross-story leakage&lt;/b&gt; — story A&#39;s ADR must not silently bias story B.&#xa;5. &lt;b&gt;Provenance&lt;/b&gt; — every retrieved chunk must cite source artefact + commit/version.&#xa;6. &lt;b&gt;Right to be forgotten&lt;/b&gt; — how do we purge?&#xa;&#xa;Today: Jira + cloned repo. No graph/vector store yet — &lt;b&gt;don&#39;t adopt one until #1–#6 are answered&lt;/b&gt;." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;fontSize=11;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="20" y="1960" width="500" height="280" as="geometry"/>
+                </mxCell>
+                <mxCell id="rev-durability" value="&lt;b&gt;7. LAYER 1 DURABILITY — validate PoC commitment vs compliance surface&lt;/b&gt;&lt;br&gt;&lt;br&gt;PoC committed to: &lt;b&gt;LangGraph + SQLite Checkpointer&lt;/b&gt;.&#xa;&#xa;&lt;b&gt;Open questions to answer before scale:&lt;/b&gt;&#xa;• Partial failure: what happens if the pod dies mid-Execute?&#xa;• Mid-workflow crash: is checkpointer state recoverable from cold-start?&#xa;• Replay: are LLM calls deterministic enough? (cache + seeded prompts)&#xa;• Audit replay-ability: can we reconstruct any past run end-to-end from the audit log alone?&#xa;&#xa;&lt;b&gt;LangGraph vs Temporal — tradeoffs:&lt;/b&gt;&#xa;• LangGraph: low ops cost, ergonomic for agent flows, in-process state, &lt;b&gt;single-node&lt;/b&gt; durability today.&#xa;• Temporal: battle-tested durable execution, multi-cluster, history-replay first-class, &lt;b&gt;higher ops cost + agent ergonomics weaker&lt;/b&gt;.&#xa;&#xa;&lt;b&gt;Decision:&lt;/b&gt; stay on LangGraph for the Lighthouse. Re-evaluate Temporal &lt;b&gt;only&lt;/b&gt; if compliance review demands cross-region durable execution or replay guarantees we cannot meet." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="610" y="2340" width="540" height="280" as="geometry"/>
+                </mxCell>
+                <mxCell id="rev-ownership" value="&lt;b&gt;8. OWNERSHIP — write down who owns what (Builders vs Process Owners)&lt;/b&gt;&lt;br&gt;&lt;br&gt;Two kinds of work hide in this diagram:&#xa;&#xa;&lt;b&gt;BUILDERS (engineering — code, schemas, durability)&lt;/b&gt;&#xa;• Context Store design + isolation + eviction&#xa;• State Store / Checkpointer / migrations&#xa;• LangGraph orchestrator nodes &amp; edges&#xa;• MCP servers (internal) + manifest schema&#xa;• Recipes (plan / execute / verify)&#xa;• LLM Gateway config + capability-tier router&#xa;• Eval / scorecard harness&#xa;&#xa;&lt;b&gt;PROCESS OWNERS (governance — policy, gates, audit)&lt;/b&gt;&#xa;• Gate taxonomy (which G, which H, where)&#xa;• OPA / Rego policy bundles&#xa;• HITL Console UX + approval SLAs&#xa;• Audit log retention + replay procedure&#xa;• MCP allow-list approvals + InfoSec sign-off&#xa;• Compliance evidence packs&#xa;• Incident response / on-call runbook for agent failures&#xa;&#xa;&lt;b&gt;Action:&lt;/b&gt; assign named owners (RACI) before Lighthouse kick-off." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;fontSize=11;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="1930" y="2640" width="500" height="320" as="geometry"/>
+                </mxCell>
+                <mxCell id="rev-stages" value="&lt;b&gt;9. LIFECYCLE STAGES — overlay Plan → Build → Verify → Secure → Release → Observe → Improve&lt;/b&gt;&lt;br&gt;&lt;br&gt;Today the diagram is organised by &lt;b&gt;layer&lt;/b&gt; (triggers / control / execution).&#xa;Add a thin horizontal band along the top labelling lifecycle stages so reviewers see:&#xa;&#xa;• What we have today: &lt;b&gt;Plan + Build&lt;/b&gt; (and partial Verify)&#xa;• What&#39;s missing: &lt;b&gt;Secure, Release, Observe, Improve&lt;/b&gt;&#xa;• Where future agents land (Tester, SecOps, Release) without redesigning the layer view&#xa;&#xa;&lt;b&gt;Feedback arrow:&lt;/b&gt; Observe → Improve → Plan (dotted), so the loop is visibly closed.&#xa;Failures re-enter the &lt;b&gt;responsible agent&lt;/b&gt;, NOT the start of the pipeline." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="2620" y="2550" width="540" height="280" as="geometry"/>
+                </mxCell>
+                <mxCell id="rev-oos" value="&lt;b&gt;10. EXPLICITLY OUT OF SCOPE (Phase 2+)&lt;/b&gt;&lt;br&gt;&lt;br&gt;Pre-empt review questions by labelling these as deferred:&#xa;&#xa;• &lt;b&gt;Platform Agent / IaC MCP / Terraform&lt;/b&gt;&#xa;• &lt;b&gt;SRE Agent / PagerDuty / Dynatrace&lt;/b&gt;&#xa;• &lt;b&gt;Release Agent / ServiceNow / ArgoCD&lt;/b&gt;&#xa;• &lt;b&gt;Graph DB context store&lt;/b&gt; (using SQL+repo until #6 answered)&#xa;• &lt;b&gt;Temporal&lt;/b&gt; (LangGraph for Lighthouse)&#xa;• &lt;b&gt;Cross-cluster orchestrator&lt;/b&gt;&#xa;• &lt;b&gt;Parallel multi-ticket execution&lt;/b&gt; (sequential day 1)&#xa;&#xa;Show on diagram as faded/grey cluster with &quot;Phase 2+&quot; tag." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;fontSize=11;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="3080" y="2110" width="380" height="280" as="geometry"/>
+                </mxCell>
+                <mxCell id="rev-mark-lighthouse" value="LIGHTHOUSE PoC scope marker — Req → Architect → Coder → Tester only; everything else read-only" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d79b00;fontSize=11;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="1430" y="332" width="900" height="18" as="geometry"/>
+                </mxCell>
+                <mxCell id="rev-mark-sor" value="see #2: Jira = SoR for stories; State Store = process-of-record only — avoid dual-write" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff8dc;strokeColor=#999999;fontSize=10;fontStyle=2;" parent="1" vertex="1">
+                    <mxGeometry x="1810" y="540" width="430" height="18" as="geometry"/>
+                </mxCell>
+                <mxCell id="rev-mark-tier" value="see #5: replace any model name here with capability tier (T1/T2/T3/T4) + compliance tag" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;fontStyle=2;" parent="1" vertex="1">
+                    <mxGeometry x="2255" y="1162" width="430" height="18" as="geometry"/>
+                </mxCell>
+                <mxCell id="rev-mark-ctx" value="see #6: Context Engine — answer isolation / eviction / cross-story leakage before adding a graph/vector DB" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;fontStyle=2;" parent="1" vertex="1">
+                    <mxGeometry x="732.5" y="1526" width="500" height="18" as="geometry"/>
+                </mxCell>
+                <mxCell id="rev-mark-mcp" value="see #3: each MCP needs manifest (owner, internal/3rd-party, R/W split, allow-list, scoped creds)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;fontStyle=2;" parent="1" vertex="1">
+                    <mxGeometry x="2260" y="1535" width="430" height="18" as="geometry"/>
+                </mxCell>
+                <mxCell id="5" value="" style="shape=image;html=1;verticalAlign=top;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;imageAspect=0;aspect=fixed;image=https://icons.diagrams.net/icon-cache1/Boxicons_Regular_Vol_1-2633/bx-brain-800.svg" parent="1" vertex="1">
+                    <mxGeometry x="1747" y="819" width="24" height="24" as="geometry"/>
+                </mxCell>
+                <mxCell id="ueNlDixZYggd2Ir2u6uq-5" value="" style="shape=image;html=1;verticalAlign=top;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;imageAspect=0;aspect=fixed;image=https://icons.diagrams.net/icon-cache1/Boxicons_Regular_Vol_1-2633/bx-brain-800.svg" parent="1" vertex="1">
+                    <mxGeometry x="2458" y="670" width="24" height="24" as="geometry"/>
+                </mxCell>
+                <mxCell id="ueNlDixZYggd2Ir2u6uq-6" value="VERIFY" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1729.5" y="1277" width="45" height="14" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="triggers-detail" name="Triggers Detail">
+        <mxGraphModel dx="1257" dy="821" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1200" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="Trigger Channels — Detailed Flow" style="text;html=1;align=center;verticalAlign=middle;fontSize=20;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="20" width="1620" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend" value="&lt;b&gt;Legend&lt;/b&gt;&lt;br&gt;Solid arrow = trigger / inbound&#xa;Dashed arrow = notification / mirror (outbound)&#xa;Day 1 = Jira trigger only&#xa;Phase 2 = FleetOps + Cortex chat&#xa;Notifications = MS Teams (read-only)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff8dc;strokeColor=#999999;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="80" width="280" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="g_j" value="Channel 1 — Jira (Day 1, system of record)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;fontStyle=1;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="220" width="1620" height="290" as="geometry"/>
+                </mxCell>
+                <mxCell id="j_human" value="Human&#xa;(developer)" style="shape=umlActor;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;verticalAlign=top;html=1;outlineConnect=0;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="290" width="40" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="j_jira" value="Jira&#xa;status: Ready for agent&#xa;⇄ Awaiting human review" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="180" y="280" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="j_whr" value="Webhook Receiver&#xa;(verify signature,&#xa;dedupe by delivery id)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="430" y="280" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="j_lookup" value="State Store lookup&#xa;active gate? gate_id?&#xa;last bot_comment_id?" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" parent="1" vertex="1">
+                    <mxGeometry x="680" y="280" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="j_parse" value="Parse newest human comment&#xa;for /approve, /reject &lt;reason&gt;,&#xa;/clarify &lt;answer&gt;, /retry, /cancel" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" parent="1" vertex="1">
+                    <mxGeometry x="930" y="280" width="240" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="j_orch" value="Orchestrator&#xa;(start / resume gate)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1220" y="280" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="j_back" value="Bot comment + status flip&#xa;back to Awaiting human review" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="1460" y="280" width="180" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="j_note" value="&lt;b&gt;Loop semantics&lt;/b&gt;&lt;br&gt;Only TWO Jira statuses: &lt;i&gt;Ready for agent&lt;/i&gt; (trigger edge) and &lt;i&gt;Awaiting human review&lt;/i&gt; (parked at a gate). Fine-grained workflow state lives in the SQLite state store, never in Jira. The bot posts a single structured comment per gate with allowed slash-commands; the human replies and flips status to &lt;i&gt;Ready for agent&lt;/i&gt;. The receiver only scans comments newer than the bot marker, authored by humans. Idempotency = (ticket_id, gate_id, resolving_comment_id)." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="420" width="1560" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="j_e1" value="status change" style="endArrow=block;html=1;rounded=0;" parent="1" source="j_human" target="j_jira" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="j_e2" value="webhook" style="endArrow=block;html=1;rounded=0;" parent="1" source="j_jira" target="j_whr" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="j_e3" style="endArrow=block;html=1;rounded=0;" parent="1" source="j_whr" target="j_lookup" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="j_e4" style="endArrow=block;html=1;rounded=0;" parent="1" source="j_lookup" target="j_parse" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="j_e5" value="match" style="endArrow=block;html=1;rounded=0;" parent="1" source="j_parse" target="j_orch" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="j_e6" value="no match" style="endArrow=block;html=1;rounded=0;dashed=1;" parent="1" source="j_parse" target="j_back" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="j_e7" value="comment + PR link" style="endArrow=block;html=1;rounded=0;dashed=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.75;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="j_orch" target="j_jira" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1190" y="400"/>
+                            <mxPoint x="910" y="400"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="g_3a" value="Channel 2 — Cortex FleetOps (Phase 2 — Day 1 candidate, fan-out across repos)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;verticalAlign=top;fontStyle=1;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="520" width="1620" height="300" as="geometry"/>
+                </mxCell>
+                <mxCell id="f_human" value="Platform&#xa;owner" style="shape=umlActor;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;verticalAlign=top;html=1;outlineConnect=0;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="600" width="40" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="f_cortex" value="Cortex FleetOps plugin&#xa;pick task + N services&#xa;(sequential day 1)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" parent="1" vertex="1">
+                    <mxGeometry x="180" y="590" width="220" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="f_mw" value="FleetOps Middleware&#xa;auth (Cortex SSO)&#xa;ticket fan-out&#xa;create epic + N tickets&#xa;idempotency keys" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="450" y="580" width="220" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="f_jira_create" value="Jira&#xa;Epic + child tickets&#xa;(status: Ready for agent)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="720" y="580" width="220" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="f_whr" value="Webhook Receiver&#xa;(same as Channel 1)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" parent="1" vertex="1">
+                    <mxGeometry x="990" y="600" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="f_orch" value="Orchestrator runs&#xa;sequentially per ticket&#xa;(day 1) — parallel later" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" parent="1" vertex="1">
+                    <mxGeometry x="1240" y="600" width="220" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="f_pr" value="PR per repo&#xa;+ digest comment back&#xa;to each child ticket" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" parent="1" vertex="1">
+                    <mxGeometry x="1490" y="600" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="f_e1" style="endArrow=block;html=1;rounded=0;" parent="1" source="f_human" target="f_cortex" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="f_e2" value="HTTPS + SSO" style="endArrow=block;html=1;rounded=0;" parent="1" source="f_cortex" target="f_mw" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="f_e3" value="acli / API" style="endArrow=block;html=1;rounded=0;" parent="1" source="f_mw" target="f_jira_create" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="f_e4" value="status webhook" style="endArrow=block;html=1;rounded=0;" parent="1" source="f_jira_create" target="f_whr" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="f_e5" style="endArrow=block;html=1;rounded=0;" parent="1" source="f_whr" target="f_orch" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="f_e6" style="endArrow=block;html=1;rounded=0;dashed=1;" parent="1" source="f_orch" target="f_pr" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="f_note" value="&lt;b&gt;Why FleetOps as middleware (not direct Cortex → control plane)&lt;/b&gt;&lt;br&gt;Centralises auth, schema validation, rate limiting, and the fan-out logic that creates an epic + N child tickets. Once tickets exist, the rest of the flow reuses Channel 1 — the Webhook Receiver does not need to know whether the trigger originated from a human in Jira or from Cortex. This keeps a single state machine and a single resume path. Day 1: sequential execution per ticket (small blast radius). Phase 2: parallel with concurrency cap." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="740" width="1560" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="g_3b" value="Channel 3 — Cortex per-service chat plugin (Phase 2)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;fontStyle=1;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="870" width="1620" height="240" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_human" value="Service&#xa;owner" style="shape=umlActor;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;verticalAlign=top;html=1;outlineConnect=0;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="950" width="40" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_chat" value="Cortex service page&#xa;agent chat plugin&#xa;ticket id input + chat" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" parent="1" vertex="1">
+                    <mxGeometry x="180" y="940" width="220" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_mw" value="FleetOps Middleware&#xa;same component, route:&#xa;POST /v1/runs (start)&#xa;POST /v1/runs/{id}/gate&#xa;GET  /v1/runs/{id}/events (SSE)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="450" y="930" width="240" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_whr" value="Webhook Receiver&#xa;(start_workflow + gate_resolve)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" parent="1" vertex="1">
+                    <mxGeometry x="740" y="950" width="240" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_orch" value="Orchestrator&#xa;streams events back" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" parent="1" vertex="1">
+                    <mxGeometry x="1030" y="950" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_jira" value="Jira&#xa;digest comments&#xa;(audit + final PR link)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="1280" y="950" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_e1" style="endArrow=block;html=1;rounded=0;" parent="1" source="c_human" target="c_chat" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_e2" value="HTTPS + SSO" style="endArrow=block;html=1;rounded=0;" parent="1" source="c_chat" target="c_mw" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_e3" style="endArrow=block;html=1;rounded=0;" parent="1" source="c_mw" target="c_whr" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_e4" style="endArrow=block;html=1;rounded=0;" parent="1" source="c_whr" target="c_orch" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_e5" value="SSE events" style="endArrow=classic;startArrow=classic;html=1;rounded=0;dashed=1;" parent="1" source="c_orch" target="c_chat" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_e6" value="digest mirror" style="endArrow=block;html=1;rounded=0;dashed=1;" parent="1" source="c_orch" target="c_jira" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c_note" value="&lt;b&gt;Per-service chat — interaction surface, not source of truth&lt;/b&gt;&lt;br&gt;The plugin gives a real conversational UI for clarifications and rich plan rendering (markdown, diffs, syntax highlighting) that Jira comments can&#39;t deliver. Jira remains authoritative: every gate decision and the final PR link are mirrored back as digest comments. If Cortex is down, the developer falls back to the Jira channel — no run is stranded. Auth is handled by the FleetOps Middleware via Cortex SSO." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="1050" width="1560" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="g_n" value="Notifications (all channels) — outbound only, never accept gate decisions" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;verticalAlign=top;fontStyle=1;fontSize=14;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="1130" width="1620" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="n_orch" value="Orchestrator&#xa;(gate opened / failure /&#xa;long-waiting gate)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" parent="1" vertex="1">
+                    <mxGeometry x="180" y="1180" width="220" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="n_teams" value="MS Teams&#xa;adaptive card with link to&#xa;Jira / Cortex (no buttons)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="500" y="1180" width="240" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="n_human" value="Human" style="shape=umlActor;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;verticalAlign=top;html=1;outlineConnect=0;" parent="1" vertex="1">
+                    <mxGeometry x="840" y="1180" width="40" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="n_back" value="acts in Jira or Cortex&#xa;(notification has no gate buttons)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;" parent="1" vertex="1">
+                    <mxGeometry x="940" y="1180" width="260" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="n_e1" value="post card" style="endArrow=block;html=1;rounded=0;dashed=1;" parent="1" source="n_orch" target="n_teams" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="n_e2" value="ping" style="endArrow=block;html=1;rounded=0;dashed=1;" parent="1" source="n_teams" target="n_human" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="n_e3" value="click → opens Jira/Cortex" style="endArrow=block;html=1;rounded=0;dashed=1;" parent="1" source="n_human" target="n_back" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="n_note" value="Teams is a pure notifier in v1: it does not carry gate state, does not accept slash-commands, and is not a fallback if Jira/Cortex are down. Promoting Teams to interactive (Adaptive Card buttons that POST decisions through the FleetOps Middleware) is a phase-2 option." style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1240" y="1170" width="400" height="80" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="lifecycle-view" name="Lifecycle View">
+        <mxGraphModel dx="1796" dy="1173" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2600" pageHeight="1400" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="lv-title" value="Lifecycle View — same components, arranged left-to-right by SDLC stage" style="text;html=1;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="20" width="2520" height="36" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-rule" value="&lt;b&gt;Jira owns the story. State Store owns the run. They never own the same field.&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=center;verticalAlign=middle;fontStyle=1;fontSize=14;strokeWidth=3;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="60" width="2520" height="36" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-plan" value="PLAN" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;fontStyle=1;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="120" width="360" height="900" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-build" value="BUILD" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;fontStyle=1;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="400" y="120" width="360" height="900" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-verify" value="VERIFY" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;verticalAlign=top;fontStyle=1;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="760" y="120" width="360" height="900" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-secure" value="SECURE" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;verticalAlign=top;fontStyle=1;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="1120" y="120" width="360" height="900" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-release" value="RELEASE" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;verticalAlign=top;fontStyle=1;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="1480" y="120" width="360" height="900" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-observe" value="OBSERVE" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d4edda;strokeColor=#5a8a5a;verticalAlign=top;fontStyle=1;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="1840" y="120" width="360" height="900" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-improve" value="IMPROVE" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;verticalAlign=top;fontStyle=1;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="2200" y="120" width="360" height="900" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-trigger" value="Trigger&#xa;(Jira status / Cortex)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="170" width="280" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-fetch" value="Fetch ticket + repo metadata" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="240" width="280" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-getctx" value="Get Context (Context Engine)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="310" width="280" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-genplan" value="Generate WorkPlan&#xa;(Goose plan recipe)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="380" width="280" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-gschema" value="G-Schema&#xa;(WorkPlan validation)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff8dc;strokeColor=#d79b00;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="460" width="280" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-postjira" value="Post WorkPlan to Jira&#xa;(SoR: story stays in Jira)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="530" width="280" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-approve" value="Optional preview / clarification&#xa;(promote to H only if regulated)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff8dc;strokeColor=#d79b00;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="610" width="280" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-execplan" value="Execute Plan&#xa;(Coder Agent / Goose execute)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="440" y="170" width="280" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-pod" value="Ephemeral Dev Pod&#xa;(K8s Job)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" parent="1" vertex="1">
+                    <mxGeometry x="440" y="250" width="280" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-branch" value="Feature branch + commits" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" parent="1" vertex="1">
+                    <mxGeometry x="440" y="320" width="280" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-readexec" value="Read Execution&#xa;(callback to control plane)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" parent="1" vertex="1">
+                    <mxGeometry x="440" y="390" width="280" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-build-test" value="Build + Unit tests&#xa;(in pod, today inside execute_plan)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="800" y="170" width="280" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-gbuild" value="G-Build (auto)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff8dc;strokeColor=#d79b00;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="800" y="250" width="280" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-gverify" value="G-Verify&#xa;(integration / E2E — planned)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff8dc;strokeColor=#d79b00;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="800" y="310" width="280" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-tester" value="Tester Agent (planned)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="800" y="390" width="280" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-geval" value="G-Eval&#xa;(scorecard threshold)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff8dc;strokeColor=#d79b00;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="800" y="460" width="280" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-agentreview" value="Agent Review PR&#xa;(LLM diff review via GH API)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" parent="1" vertex="1">
+                    <mxGeometry x="1160" y="170" width="280" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-secops" value="SecOps Agent (planned)&#xa;SAST / SCA / DAST" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1160" y="250" width="280" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-hsec" value="H-Secure (mandatory human)&#xa;pre-merge sign-off" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="1160" y="330" width="280" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-pr" value="Raise PR&#xa;(GitHub App #1)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" parent="1" vertex="1">
+                    <mxGeometry x="1520" y="170" width="280" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-await" value="Await GH Webhook&#xa;(merged | abandoned | changes)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" parent="1" vertex="1">
+                    <mxGeometry x="1520" y="240" width="280" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-hrel" value="H-Release (planned)&#xa;prod gate" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;strokeWidth=2;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1520" y="320" width="280" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-merge" value="Auto-merge / deploy" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" parent="1" vertex="1">
+                    <mxGeometry x="1520" y="400" width="280" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-otel" value="Telemetry / OTel (planned)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5a8a5a;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1880" y="170" width="280" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-tokenusage" value="Token usage / cost&#xa;(LiteLLM callbacks — built)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5a8a5a;" parent="1" vertex="1">
+                    <mxGeometry x="1880" y="240" width="280" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-audit" value="Audit Log (append-only)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#5a8a5a;" parent="1" vertex="1">
+                    <mxGeometry x="1880" y="320" width="280" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-eval" value="Eval / Scorecard harness (planned)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="2240" y="170" width="280" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-feedback" value="Feedback to responsible agent&#xa;(NOT to Plan stage)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="2240" y="240" width="280" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-backlog" value="Backlog refinement&#xa;(Jira: new tickets)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="2240" y="320" width="280" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-sor-band" value="System of Record (per kind of fact)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff8dc;strokeColor=#999999;verticalAlign=top;fontStyle=1;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="1040" width="2520" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-sor-jira" value="&lt;b&gt;Jira&lt;/b&gt;&#xa;Stories, requirements, AC,&#xa;story status (Ready for agent ⇄ Awaiting human review)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="1080" width="380" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-sor-state" value="&lt;b&gt;State Store&lt;/b&gt;&#xa;Workflow run state, gate state, retries,&#xa;WorkPlans, clarifications, exec summary, audit log" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" parent="1" vertex="1">
+                    <mxGeometry x="490" y="1080" width="380" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-sor-github" value="&lt;b&gt;GitHub&lt;/b&gt;&#xa;Code, branches, PRs, reviews, CI status" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" parent="1" vertex="1">
+                    <mxGeometry x="900" y="1080" width="380" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-sor-adr" value="&lt;b&gt;ADRs&lt;/b&gt;&#xa;Confluence OR repo /docs (decide one)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;dashed=1;" parent="1" vertex="1">
+                    <mxGeometry x="1310" y="1080" width="380" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-sor-mirror" value="&lt;b&gt;Mirroring rule&lt;/b&gt;&#xa;Every dataset has exactly one writer.&#xa;Other systems mirror reads only — never write back the same field." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1720" y="1080" width="800" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="lv-fb-edge" value="Feedback (re-enters responsible agent)" style="endArrow=block;html=1;rounded=0;dashed=1;curved=1;strokeColor=#666666;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.8;entryDx=0;entryDy=0;" parent="1" source="lv-feedback" target="lv-plan" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="2200" y="900"/>
+                            <mxPoint x="200" y="900"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
