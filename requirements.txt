@@ -23,7 +23,7 @@ langgraph-checkpoint-sqlite>=3.0.0
 
 # LiteLLM — model abstraction layer
 # [proxy] extras required for running the ephemeral proxy server in goose_session().
-litellm[proxy]>=1.0.0
+litellm[proxy]>=1.87.1
 
 # MCP Server
 mcp>=1.27.2
