@@ -4,7 +4,7 @@
 click>=8.4.1
 
 # Environment Management
-python-dotenv>=1.0.0
+python-dotenv>=1.2.2
 
 # Data Validation
 pydantic>=2.0.0
