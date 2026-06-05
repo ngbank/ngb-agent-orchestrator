@@ -134,6 +134,12 @@ load_dotenv()
     metavar="UUID",
     help="Target a specific workflow by ID (use with --approve-plan or --reject)",
 )
+@click.option(
+    "--tui",
+    "do_tui",
+    is_flag=True,
+    help="Launch the interactive Textual TUI for workflow management",
+)
 def run(
     ticket: str,
     dry_run: bool,
@@ -152,6 +158,7 @@ def run(
     do_reject_pr: bool,
     reason: str,
     workflow_id: str,
+    do_tui: bool,
 ) -> None:
     """
     Main dispatcher entry point for workflow orchestration.
@@ -210,6 +217,12 @@ def run(
         dispatcher --clear-db
     """
     # --- dispatch to the right sub-command ---
+    if do_tui:
+        from dispatcher.tui.app import run_tui
+
+        run_tui()
+        return
+
     if do_logs:
         if not ticket and not workflow_id:
             click.echo("\u274c --logs requires --ticket or --workflow-id", err=True)
