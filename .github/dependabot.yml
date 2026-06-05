@@ -29,3 +29,5 @@ updates:
       - "ci"
     commit-message:
       prefix: "ci"
+
+# manual-trigger ecosystem=pip directory=/ at=2026-06-05T02:11:07Z
