@@ -11,6 +11,11 @@ on:
         options:
           - pip
           - github-actions
+      directory:
+        description: "Dependabot directory"
+        required: true
+        default: "/"
+        type: string
 
 permissions:
   contents: read
@@ -21,11 +26,34 @@ jobs:
     steps:
       - name: Trigger Dependabot run
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.DEPENDABOT_TRIGGER_TOKEN || secrets.GITHUB_TOKEN }}
+          USING_PAT: ${{ secrets.DEPENDABOT_TRIGGER_TOKEN != '' }}
         run: |
-          gh api \
+          set -euo pipefail
+
+          echo "Triggering Dependabot for ecosystem='${{ inputs.ecosystem }}' directory='${{ inputs.directory }}'"
+          if [[ "${USING_PAT}" != "true" ]]; then
+            echo "::warning::Using default GITHUB_TOKEN. If this fails with 404, add a PAT secret named DEPENDABOT_TRIGGER_TOKEN."
+          fi
+
+          set +e
+          output=$(gh api \
             --method POST \
             -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
             "/repos/${{ github.repository }}/dependabot/updates" \
             -f "package-ecosystem=${{ inputs.ecosystem }}" \
-            -f "directory=/"
+            -f "directory=${{ inputs.directory }}" 2>&1)
+          exit_code=$?
+          set -e
+
+          echo "$output"
+
+          if [[ $exit_code -ne 0 ]]; then
+            if echo "$output" | grep -qi "Not Found"; then
+              echo "::error::Dependabot updates endpoint returned 404. This is commonly caused by insufficient token privileges."
+              echo "::error::Create a classic PAT (repo scope) and save it as DEPENDABOT_TRIGGER_TOKEN repository secret."
+              echo "::error::Also verify Dependabot version updates are enabled in repository settings."
+            fi
+            exit $exit_code
+          fi
