@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       ecosystem:
-        description: "Ecosystem to update"
+        description: "Ecosystem to annotate in trigger comment"
         required: true
         default: "pip"
         type: choice
@@ -12,48 +12,57 @@ on:
           - pip
           - github-actions
       directory:
-        description: "Dependabot directory"
+        description: "Directory to annotate in trigger comment"
         required: true
         default: "/"
         type: string
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   trigger:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Dependabot run
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Nudge Dependabot by updating config timestamp
         env:
           GH_TOKEN: ${{ secrets.DEPENDABOT_TRIGGER_TOKEN || secrets.GITHUB_TOKEN }}
-          USING_PAT: ${{ secrets.DEPENDABOT_TRIGGER_TOKEN != '' }}
         run: |
           set -euo pipefail
 
-          echo "Triggering Dependabot for ecosystem='${{ inputs.ecosystem }}' directory='${{ inputs.directory }}'"
-          if [[ "${USING_PAT}" != "true" ]]; then
-            echo "::warning::Using default GITHUB_TOKEN. If this fails with 404, add a PAT secret named DEPENDABOT_TRIGGER_TOKEN."
+          file=".github/dependabot.yml"
+          if [[ ! -f "$file" ]]; then
+            echo "::error::Missing $file."
+            exit 1
           fi
 
-          set +e
-          output=$(gh api \
-            --method POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "/repos/${{ github.repository }}/dependabot/updates" \
-            -f "package-ecosystem=${{ inputs.ecosystem }}" \
-            -f "directory=${{ inputs.directory }}" 2>&1)
-          exit_code=$?
-          set -e
+          marker="# manual-trigger"
+          timestamp="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          line="$marker ecosystem=${{ inputs.ecosystem }} directory=${{ inputs.directory }} at=$timestamp"
 
-          echo "$output"
-
-          if [[ $exit_code -ne 0 ]]; then
-            if echo "$output" | grep -qi "Not Found"; then
-              echo "::error::Dependabot updates endpoint returned 404. This is commonly caused by insufficient token privileges."
-              echo "::error::Create a classic PAT (repo scope) and save it as DEPENDABOT_TRIGGER_TOKEN repository secret."
-              echo "::error::Also verify Dependabot version updates are enabled in repository settings."
-            fi
-            exit $exit_code
+          if grep -q "^$marker" "$file"; then
+            sed -i "s|^$marker.*|$line|" "$file"
+          else
+            printf "\n%s\n" "$line" >> "$file"
           fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet -- "$file"; then
+            echo "No changes detected; nothing to commit."
+            exit 0
+          fi
+
+          git add "$file"
+          git commit -m "ci: nudge dependabot run [skip ci]"
+
+          branch="${GITHUB_REF#refs/heads/}"
+          git push origin "HEAD:$branch"
+
+          echo "Updated $file and pushed to $branch. Dependabot should re-evaluate version updates shortly."
