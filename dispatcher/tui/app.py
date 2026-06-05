@@ -20,8 +20,8 @@ from dispatcher.tui.actions import (
     comment_pr,
     reject_pr,
     reject_workflow,
-    run_workflow,
     retry_workflow,
+    run_workflow,
     show_logs,
 )
 from dispatcher.tui.modals import ConfirmModal, InputModal
