@@ -91,8 +91,7 @@ JSON Schema contract for WorkPlan documents. Validated by `dispatcher/work_plan_
 | `summary` | string | One-sentence description |
 | `approach` | string | Implementation strategy |
 | `tasks` | array | Ordered list of `{id, description, files_likely_affected}` |
-| `risks` | array | Identified risks (may be empty) |
-| `questions_for_reviewer` | array | Open questions (may be empty) |
+| `concerns` | array | Identified risks or open questions for a reviewer (may be empty) |
 | `status` | `"pass"` \| `"concerns"` \| `"blocked"` | Planner confidence |
 
 ### `config/litellm.yaml`

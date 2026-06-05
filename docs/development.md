@@ -80,6 +80,7 @@ python -m pytest tests/test_state_store.py -v
 python -m pytest tests/test_jira_client.py::TestJiraClient::test_get_ticket_success -v
 ```
 
+
 The test suite covers:
 - `test_dispatcher.py` — CLI entry point, workflow orchestration
 - `test_graph_edges.py` — LangGraph routing functions
@@ -89,6 +90,8 @@ The test suite covers:
 - `test_tui_integration.py` — TUI smoke tests against a seeded database
 - `test_work_plan_formatter.py` — WorkPlan → JIRA comment formatter
 - `test_work_plan_validator.py` — WorkPlan JSON schema validation
+Test files live in `tests/`. Run `python -m pytest tests/ -v` to see the full list.
+
 
 ---
 
@@ -151,7 +154,8 @@ ngb-agent-orchestrator/
 ├── state/
 │   ├── __init__.py               # Public API exports
 │   ├── migrations/               # SQL migration files
-│   ├── state_store.py            # SQLite CRUD functions
+│   ├── sqlite_workflow_repository.py  # SQLite implementation
+│   ├── workflow_repository.py    # WorkflowRepository protocol + module API
 │   └── workflow_status.py        # WorkflowStatus enum
 ├── tests/                        # Test suite
 ├── .flake8                       # Flake8 configuration
