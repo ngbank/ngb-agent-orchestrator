@@ -20,6 +20,7 @@ from dispatcher.tui.actions import (
     comment_pr,
     reject_pr,
     reject_workflow,
+    run_workflow,
     retry_workflow,
     show_logs,
 )
@@ -44,6 +45,7 @@ class WorkflowTUI(App[None]):
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("r", "refresh", "Refresh"),
+        ("n", "new_run", "New Run"),
         ("a", "approve", "Approve"),
         ("j", "reject", "Reject"),
         ("c", "clarify", "Clarify"),
@@ -94,6 +96,28 @@ class WorkflowTUI(App[None]):
 
     def action_refresh(self) -> None:
         self._refresh_workflows()
+
+    def action_new_run(self) -> None:
+        def on_ticket(ticket: str | None) -> None:
+            if ticket is None:
+                return
+
+            ticket_key = ticket.strip()
+            if not ticket_key:
+                self._notify("Ticket key is required.", "warning")
+                return
+
+            try:
+                msg = run_workflow(ticket_key, dry_run=False)
+                self._notify(msg, "information")
+            except ActionError as e:
+                self._notify(str(e), "error")
+            self._refresh_workflows()
+
+        self.push_screen(
+            InputModal("Enter ticket key to start workflow:", placeholder="AOS-999"),
+            on_ticket,
+        )
 
     def action_approve(self) -> None:
         wf = self._get_selected()

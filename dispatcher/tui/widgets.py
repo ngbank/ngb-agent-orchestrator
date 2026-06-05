@@ -33,8 +33,17 @@ class WorkflowList(Static):
         yield table
 
     def update_workflows(self, workflows: List[Dict]) -> None:
-        self._workflows = workflows
         table = self.query_one("#workflow_table", DataTable)
+
+        # Preserve current selection when the table is rebuilt on auto-refresh.
+        selected_id = None
+        try:
+            if table.cursor_row is not None and table.is_valid_row_index(table.cursor_row):
+                selected_id = self._workflows[table.cursor_row].get("id")
+        except Exception:
+            selected_id = None
+
+        self._workflows = workflows
         table.clear()
         for wf in workflows:
             status_val = wf["status"].value
@@ -47,6 +56,21 @@ class WorkflowList(Static):
                 wf["id"],
                 key=wf["id"],
             )
+
+        if not workflows:
+            return
+
+        selected_index = 0
+        if selected_id is not None:
+            for idx, wf in enumerate(workflows):
+                if wf.get("id") == selected_id:
+                    selected_index = idx
+                    break
+
+        try:
+            table.move_cursor(row=selected_index, column=0)
+        except Exception:
+            pass
 
     def get_selected_workflow(self) -> Optional[Dict]:
         try:
@@ -141,6 +165,6 @@ class StatusBar(Static):
 
     def compose(self):
         yield Label(
-            "q:quit  r:refresh  a:approve  j:reject  c:clarify  y:retry  x:cancel  "
+            "q:quit  r:refresh  n:new-run  a:approve  j:reject  c:clarify  y:retry  x:cancel  "
             "p:comment-pr  o:approve-pr  l:logs  d:clear-db  ↑↓:navigate"
         )

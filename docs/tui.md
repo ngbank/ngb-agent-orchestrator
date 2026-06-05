@@ -41,6 +41,7 @@ Both commands launch the same Textual application.
 |-----|--------|
 | `q` | Quit the TUI |
 | `r` | Refresh the workflow list |
+| `n` | Start a new workflow by entering a ticket key |
 | `↑` / `↓` | Navigate the workflow list |
 | `a` | Approve the selected pending WorkPlan |
 | `j` | Reject the selected pending WorkPlan (prompts for reason) |

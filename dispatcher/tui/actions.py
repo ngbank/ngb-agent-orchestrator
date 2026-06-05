@@ -9,6 +9,7 @@ from dispatcher.commands.approve import _handle_approve, _handle_reject
 from dispatcher.commands.clarify import _handle_clarify
 from dispatcher.commands.pr import _handle_approve_pr, _handle_comment_pr, _handle_reject_pr
 from dispatcher.commands.retry import _handle_retry
+from dispatcher.commands.run_workflow import _handle_run
 
 
 class ActionError(Exception):
@@ -149,3 +150,16 @@ def clear_database() -> str:
         return "Database cleared."
     except Exception as e:
         raise ActionError(f"Clear DB failed: {e}") from e
+
+
+def run_workflow(ticket_key: str, dry_run: bool = False) -> str:
+    """Start a new workflow for a ticket."""
+    try:
+        _handle_run(ticket_key, dry_run)
+        return f"Workflow started for {ticket_key}."
+    except SystemExit as e:
+        if e.code != 0:
+            raise ActionError(f"Failed to start workflow for {ticket_key}.") from e
+        return f"Workflow started for {ticket_key}."
+    except Exception as e:
+        raise ActionError(f"Failed to start workflow for {ticket_key}: {e}") from e
