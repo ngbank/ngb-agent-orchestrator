@@ -14,7 +14,7 @@ jsonschema>=4.0.0
 sqlalchemy>=2.0.50
 
 # JIRA Integration
-jira>=3.5.0
+jira>=3.10.5
 
 # LangGraph — state machine orchestration with resumable checkpointing
 langgraph>=1.2.4
