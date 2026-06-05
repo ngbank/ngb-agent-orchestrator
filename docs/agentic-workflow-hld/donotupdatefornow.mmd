@@ -1,0 +1,50 @@
+flowchart LR
+    H["Human Trigger<br/>CLI / UI / Cortex Plugin"]
+    A["Agent Trigger<br/>MCP / Copilot / Other Agents"]
+
+    H --> CP
+    A --> CP
+
+    subgraph CPG[Control Plane]
+        CP[Workflow Service / API]
+        LG[LangGraph Orchestrator<br/>stateless worker pool]
+        CK[("LangGraph Checkpointer<br/>SqliteSaver")]:::checkpoint
+        ST[Workflow State Store]
+        WP[Work Plan + Recipe]
+        AP[Approval / Clarification Gates]
+        AU[Audit / Policy / Governance]
+    end
+
+    CP --> LG
+    LG <-->|save / resume per-node| CK
+    LG --> WP
+    LG --> AP
+    LG --> ST
+    LG --> AU
+
+    classDef checkpoint fill:#fff3b0,stroke:#d4a017,stroke-width:2px,color:#000;
+
+    LG --> EX[Create AKS Job / Ephemeral Pod]
+    AP -. approve / reject / clarify .-> LG
+
+    subgraph AKS[Ephemeral Execution Pod / Job]
+        WS["Dev Workspace<br/>Repo checkout<br/>Branch / Worktree<br/>Build tools<br/>Test tools<br/>Language runtimes<br/>Temp artifacts"]
+        G[Goose Execution Engine]
+        BT[Build / Test / Validate]
+        AR["Execution Results<br/>Diff / Logs / Test Results"]
+    end
+
+    EX --> WS
+    WS --> G
+    G --> BT
+    BT --> AR
+
+    AR --> LG
+
+    LG --> GH[GitHub / PR Broker]
+    LG --> JR[Jira]
+    LG --> BL[Blob / Artifact Storage]
+
+    GH --> ST
+    JR --> ST
+    BL --> ST
