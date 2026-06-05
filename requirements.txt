@@ -22,8 +22,13 @@ langchain-core>=1.4.0
 langgraph-checkpoint-sqlite>=3.1.0
 
 # LiteLLM — model abstraction layer
-# [proxy] extras required for running the ephemeral proxy server in goose_session().
-litellm[proxy]>=1.87.1
+# Do NOT use litellm[proxy] extras: they pin rich==13.9.4 which conflicts with
+# textual>=8.2.7 (requires rich>=14.2.0). Instead, install only the packages
+# needed to run `litellm --config ... --port ...` as a subprocess proxy server.
+litellm>=1.87.1
+fastapi>=0.124.0
+uvicorn>=0.33.0
+gunicorn>=23.0.0
 
 # MCP Server
 mcp>=1.27.2
