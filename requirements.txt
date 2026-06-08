@@ -28,7 +28,7 @@ langgraph-checkpoint-sqlite>=3.1.0
 litellm>=1.87.1
 fastapi>=0.124.0
 uvicorn>=0.33.0
-gunicorn>=23.0.0
+gunicorn>=26.0.0
 
 # MCP Server
 mcp>=1.27.2
