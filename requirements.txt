@@ -42,6 +42,12 @@ mcp>=1.27.2
 # TUI Framework
 textual>=8.2.7
 
+# OpenTelemetry — Day-0 local tracing (see docs/configuration.md for env vars)
+opentelemetry-api>=1.27.0
+opentelemetry-sdk>=1.27.0
+# Optional: install opentelemetry-exporter-otlp-proto-grpc for OTLP export
+# pip install opentelemetry-exporter-otlp-proto-grpc
+
 # Goose Integration
 # Note: Install Goose separately following official documentation
 # Goose is typically installed via: pip install goose-toolkit

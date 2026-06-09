@@ -8,6 +8,7 @@ from langgraph.errors import GraphInterrupt
 
 import dispatcher.commands.common as common
 from dispatcher.exceptions import TicketAuthError, TicketConfigError, TicketNotFoundError
+
 from state.workflow_repository import update_status
 from state.workflow_status import WorkflowStatus
 
@@ -32,16 +33,27 @@ def _handle_run(ticket: str, dry_run: bool) -> None:
 
     try:
         graph = common.build_orchestrator()
-        final_state = graph.invoke(
+        final_state = common.run_graph_stream(
+            graph,
             {"ticket_key": ticket, "dry_run": False, "workflow_id": workflow_id},
-            config=thread_config,
+            workflow_id=workflow_id,
+            ticket_key=ticket,
+            thread_config=thread_config,
         )
 
-        if final_state.get("error"):
+        if final_state is None:
+            final_state = {}
+
+        # Resolve the actual final state from the last stream event.
+        # In "updates" mode each event is a dict of {node_name: state_delta};
+        # we need to read the actual thread state for the final values.
+        resolved_state = graph.get_state(thread_config).values if graph else {}
+
+        if resolved_state.get("error"):
             sys.exit(1)
 
-        wf_id = final_state.get("workflow_id", workflow_id)
-        if final_state.get("approval_decision") != "approved":
+        wf_id = resolved_state.get("workflow_id", workflow_id)
+        if resolved_state.get("approval_decision") != "approved":
             # Graph suspended at await_approval — instructions already printed
             # by the node.  Nothing more to do here.
             return
@@ -53,7 +65,7 @@ def _handle_run(ticket: str, dry_run: bool) -> None:
             reason="All stages completed successfully",
         )
         click.echo("🎉 Workflow completed successfully")
-        common._post_execution_comment(ticket, final_state.get("execution_summary"))
+        common._post_execution_comment(ticket, resolved_state.get("execution_summary"))
 
     except GraphInterrupt:
         # The graph hit interrupt() inside await_approval.  The node already

@@ -53,6 +53,57 @@ No proxy server is required. Set `GOOSE_MODEL` to a LiteLLM model string — the
 |---|---|---|---|
 | `DB_PATH` | No | `state/local.db` | Path to the SQLite database |
 
+### OpenTelemetry (Day-0 Tracing)
+
+Tracing is always enabled. Configure the exporter via environment variables — no code changes needed to switch.
+
+| Variable | Default | Description |
+|---|---|---|
+| `OTEL_EXPORTER_TYPE` | `console` | Exporter type: `console` (stdout) or `otlp` (local OTel Collector) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | gRPC endpoint for OTLP exporter (only used when `OTEL_EXPORTER_TYPE=otlp`) |
+| `OTEL_SERVICE_NAME` | `ngb-agent-orchestrator` | Service name attached to all spans |
+
+#### Day-0 Console Export (default)
+
+No extra setup needed. Spans are printed to stdout alongside normal logs:
+
+```bash
+# Default — spans print to stdout
+OTEL_EXPORTER_TYPE=console dispatcher --ticket AOS-109
+```
+
+Sample span output:
+```
+{
+    "name": "graph.node.work_planner",
+    "context": {"trace_id": "0x...", "span_id": "0x..."},
+    "attributes": {
+        "workflow.id": "abc-123",
+        "jira.ticket_key": "AOS-109",
+        "graph.node_name": "work_planner"
+    },
+    "status": {"status_code": "OK"}
+}
+```
+
+#### Local OTLP Export (optional)
+
+Requires installing the gRPC exporter:
+```bash
+pip install opentelemetry-exporter-otlp-proto-grpc
+```
+
+Start a local OTel Collector (e.g. via Docker):
+```bash
+docker run -p 4317:4317 otel/opentelemetry-collector-contrib:latest
+```
+
+Then set:
+```bash
+OTEL_EXPORTER_TYPE=otlp
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+```
+
 ### Optional
 
 | Variable | Default | Description |
