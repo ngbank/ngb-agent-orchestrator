@@ -12,14 +12,20 @@ from typing import List
 from jira import JIRA
 from jira.exceptions import JIRAError
 
+from dispatcher.exceptions import (
+    TicketAuthError,
+    TicketConfigError,
+    TicketNotFoundError,
+)
 
-class JiraConfigurationError(Exception):
+
+class JiraConfigurationError(TicketConfigError):
     """Raised when JIRA configuration is missing or invalid."""
 
     pass
 
 
-class JiraAuthenticationError(Exception):
+class JiraAuthenticationError(TicketAuthError):
     """Raised when JIRA authentication fails."""
 
     pass
@@ -31,7 +37,7 @@ class JiraAPIError(Exception):
     pass
 
 
-class JiraTicketNotFoundError(Exception):
+class JiraTicketNotFoundError(TicketNotFoundError):
     """Raised when a JIRA ticket is not found (404)."""
 
     pass

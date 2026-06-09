@@ -382,6 +382,103 @@ class TestPostExecutionComment:
             # Should not raise
             _post_execution_comment("AOS-42", {"status": "success", "pr_url": ""})
 
+    def test_accepts_injected_comment_poster(self):
+        """FakeCommentPoster can be injected — no JiraClient constructed."""
+        from dispatcher.commands.common import _post_execution_comment
+
+        class FakeCommentPoster:
+            def __init__(self):
+                self.calls = []
+
+            def post_comment(self, ticket_key: str, comment: str) -> bool:
+                self.calls.append((ticket_key, comment))
+                return True
+
+        fake = FakeCommentPoster()
+        execution_summary = {
+            "ticket_key": "AOS-100",
+            "branch": "feature/AOS-100",
+            "build": "pass",
+            "tests": "pass",
+            "files_changed": [],
+            "commit_sha": "abc123",
+            "pr_url": "https://github.com/org/repo/pull/1",
+            "status": "success",
+        }
+        with patch("dispatcher.commands.common.JiraClient") as mock_jira_class:
+            _post_execution_comment("AOS-100", execution_summary, comment_poster=fake)
+            mock_jira_class.assert_not_called()
+
+        assert len(fake.calls) == 1
+        assert fake.calls[0][0] == "AOS-100"
+
+    def test_abstract_ticket_not_found_caught_by_run_workflow(
+        self, test_db, cli_runner, memory_checkpointer
+    ):
+        """TicketNotFoundError (abstract) raised directly is caught by run_workflow handler."""
+        from dispatcher.exceptions import TicketNotFoundError
+
+        with patch("graph.work_planner.nodes.fetch_ticket.JiraClient") as mock:
+            mock_instance = Mock()
+            mock_instance.get_ticket.side_effect = TicketNotFoundError("abstract not found")
+            mock.return_value = mock_instance
+
+            with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
+                from graph.builder import build_orchestrator
+
+                mock_build.side_effect = lambda: build_orchestrator(
+                    checkpointer=memory_checkpointer
+                )
+                result = cli_runner.invoke(run, ["--ticket", "ABSTRACT-1"])
+
+        assert result.exit_code == 1
+        assert "❌ Ticket not found" in result.output
+
+
+class TestFetchTicketNode:
+    """Tests for graph/work_planner/nodes/fetch_ticket.py dependency injection."""
+
+    def test_uses_injected_ticket_source(self):
+        """fetch_ticket uses an injected TicketSource stub — no JiraClient constructed."""
+        from dispatcher.jira_client import JiraTicket
+        from graph.work_planner.nodes.fetch_ticket import fetch_ticket
+
+        class FakeTicketSource:
+            def get_ticket(self, ticket_key: str) -> JiraTicket:
+                return JiraTicket(
+                    key=ticket_key,
+                    title="Fake Ticket",
+                    description="Injected description",
+                    labels=["injected"],
+                    status="In Progress",
+                )
+
+        result = fetch_ticket(
+            {"ticket_key": "FAKE-1"},
+            ticket_source=FakeTicketSource(),
+        )
+        assert result["ticket"]["key"] == "FAKE-1"
+        assert result["ticket"]["title"] == "Fake Ticket"
+        assert result["ticket"]["labels"] == ["injected"]
+
+    def test_default_uses_jira_client(self):
+        """fetch_ticket constructs a JiraClient when no ticket_source is provided."""
+        from graph.work_planner.nodes.fetch_ticket import fetch_ticket
+
+        with patch("graph.work_planner.nodes.fetch_ticket.JiraClient") as mock_cls:
+            mock_instance = Mock()
+            from dispatcher.jira_client import JiraTicket
+
+            mock_instance.get_ticket.return_value = JiraTicket(
+                key="TEST-1", title="T", description="", labels=[], status="To Do"
+            )
+            mock_cls.return_value = mock_instance
+
+            result = fetch_ticket({"ticket_key": "TEST-1"})
+
+        mock_cls.assert_called_once()
+        assert result["ticket"]["key"] == "TEST-1"
+
 
 class TestHandleHistory:
     """Tests for --history / _handle_history."""

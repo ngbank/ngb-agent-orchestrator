@@ -10,6 +10,7 @@ from typing import Optional
 import click
 
 from dispatcher.constants import NODE_EMOJI, STATUS_DISPLAY
+from dispatcher.protocols import CommentPoster
 from graph.utils import _get_actor  # noqa: F401
 from state.workflow_repository import get_workflow, update_status
 from state.workflow_status import WorkflowStatus
@@ -89,8 +90,20 @@ def _mark_workflow_interrupted(
     )
 
 
-def _post_execution_comment(ticket_key: Optional[str], execution_summary: Optional[dict]) -> None:
-    """Post execution summary (including pr_url if present) as a JIRA comment."""
+def _post_execution_comment(
+    ticket_key: Optional[str],
+    execution_summary: Optional[dict],
+    comment_poster: Optional[CommentPoster] = None,
+) -> None:
+    """Post execution summary (including pr_url if present) as a JIRA comment.
+
+    Args:
+        ticket_key: The JIRA ticket key to post to.
+        execution_summary: The execution summary dict from the graph final state.
+        comment_poster: Optional CommentPoster implementation. Defaults to a
+            freshly-constructed JiraClient so existing call sites require no
+            changes.
+    """
     global JiraClient, JiraCommentError, format_execution_summary_comment
 
     if not ticket_key or not execution_summary:
@@ -115,8 +128,8 @@ def _post_execution_comment(ticket_key: Optional[str], execution_summary: Option
                 format_execution_summary_comment = _format_execution_summary_comment
 
         comment = format_execution_summary_comment(execution_summary)
-        jira = JiraClient()
-        jira.post_comment(ticket_key, comment)
+        poster: CommentPoster = comment_poster if comment_poster is not None else JiraClient()
+        poster.post_comment(ticket_key, comment)
         pr_url = execution_summary.get("pr_url", "")
         if pr_url:
             click.echo(f"🔗 PR created: {pr_url}")
