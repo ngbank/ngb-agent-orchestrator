@@ -7,12 +7,13 @@ import tempfile
 import click
 
 from graph.litellm_callbacks import aggregate_token_usage
+from graph.node_result import WorkPlannerNodeResult
 from graph.utils import goose_session, log_path, run_and_tee
 from graph.work_planner.state import WorkPlannerState
 from state.workflow_repository import update_usage_summary
 
 
-def generate_plan(state: WorkPlannerState) -> dict:
+def generate_plan(state: WorkPlannerState) -> WorkPlannerNodeResult:
     """Invoke the Goose plan recipe and return the resulting WorkPlan as state.
 
     1. Creates a temp file path for the output JSON.

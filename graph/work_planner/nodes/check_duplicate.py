@@ -2,11 +2,12 @@
 
 import click
 
+from graph.node_result import WorkPlannerNodeResult
 from graph.work_planner.state import WorkPlannerState
 from state.workflow_repository import get_workflow_by_ticket
 
 
-def check_duplicate(state: WorkPlannerState) -> dict:
+def check_duplicate(state: WorkPlannerState) -> WorkPlannerNodeResult:
     ticket_key = state.get("ticket_key", "")
     own_workflow_id = state.get("workflow_id")
     workflows = get_workflow_by_ticket(ticket_key)

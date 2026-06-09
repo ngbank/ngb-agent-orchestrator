@@ -5,10 +5,11 @@ import dataclasses
 import click
 
 from dispatcher.jira_client import JiraClient
+from graph.node_result import WorkPlannerNodeResult
 from graph.work_planner.state import WorkPlannerState
 
 
-def fetch_ticket(state: WorkPlannerState) -> dict:
+def fetch_ticket(state: WorkPlannerState) -> WorkPlannerNodeResult:
     ticket_key = state.get("ticket_key", "")
     click.echo(f"📥 Fetching ticket {ticket_key}...")
     jira_client = JiraClient()
