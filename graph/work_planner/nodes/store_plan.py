@@ -3,11 +3,13 @@
 import click
 
 from graph.node_result import WorkPlannerNodeResult
-from graph.work_planner.state import WorkPlannerState
+from graph.work_planner.state import (
+    StorePlanInputState,
+)
 from state.workflow_repository import update_work_plan
 
 
-def store_plan(state: WorkPlannerState) -> WorkPlannerNodeResult:
+def store_plan(state: StorePlanInputState) -> WorkPlannerNodeResult:
     work_plan_data = state.get("work_plan_data")
     workflow_id = state.get("workflow_id")
 

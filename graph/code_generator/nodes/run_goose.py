@@ -5,11 +5,11 @@ from pathlib import Path
 
 import click
 
-from graph.code_generator.state import CodeGeneratorState
+from graph.code_generator.state import RunGooseInputState
 from graph.utils import goose_session, run_and_tee
 
 
-def run_goose(state: CodeGeneratorState) -> dict:
+def run_goose(state: RunGooseInputState) -> dict:
     """Shell out to `goose run --recipe recipes/execute.yaml`.
 
     goose_session is opened and closed entirely within this node — it is the

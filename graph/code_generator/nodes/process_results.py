@@ -10,10 +10,10 @@ import json
 import click
 
 from graph.code_generator.nodes.resolve_repo import _failure_summary
-from graph.code_generator.state import CodeGeneratorState
+from graph.code_generator.state import ProcessResultsInputState, ProcessResultsOutputState
 
 
-def process_results(state: CodeGeneratorState) -> dict:
+def process_results(state: ProcessResultsInputState) -> ProcessResultsOutputState:
     """Read and parse the execution summary JSON written by the Goose recipe.
 
     Reads:  summary_path, ticket_key

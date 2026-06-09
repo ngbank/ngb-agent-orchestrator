@@ -3,11 +3,13 @@
 import click
 
 from dispatcher.work_plan_validator import WorkPlanValidationError, validate_work_plan
-from graph.node_result import WorkPlannerNodeResult
-from graph.work_planner.state import WorkPlannerState
+from graph.work_planner.state import (
+    ValidatePlanInputState,
+    ValidatePlanOutputState,
+)
 
 
-def validate_plan(state: WorkPlannerState) -> WorkPlannerNodeResult:
+def validate_plan(state: ValidatePlanInputState) -> ValidatePlanOutputState:
     work_plan_data = state.get("work_plan_data")
     if not work_plan_data:
         return {}

@@ -3,14 +3,13 @@
 import click
 from langgraph.types import interrupt
 
-from graph.node_result import OrchestratorNodeResult
-from graph.state import OrchestratorState
+from graph.state import ApprovalInputState, ApprovalOutputState
 from graph.utils import _get_actor
 from state.workflow_repository import get_workflow, update_status
 from state.workflow_status import WorkflowStatus
 
 
-def await_approval(state: OrchestratorState) -> OrchestratorNodeResult:
+def await_approval(state: ApprovalInputState) -> ApprovalOutputState:
     """Interrupt the graph until the developer explicitly approves or rejects.
 
     On first entry (no prior decision in state):
