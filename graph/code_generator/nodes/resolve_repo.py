@@ -2,7 +2,7 @@
 
 import click
 
-from graph.code_generator.state import CodeGeneratorState
+from graph.code_generator.state import ResolveRepoInputState, ResolveRepoOutputState
 from mcp_server.server import get_repo_for_project
 
 
@@ -21,7 +21,7 @@ def _failure_summary(ticket_key: str, error: str) -> dict:
     }
 
 
-def resolve_repo(state: CodeGeneratorState) -> dict:
+def resolve_repo(state: ResolveRepoInputState) -> ResolveRepoOutputState:
     """Resolve the git repository URL for the ticket's project key.
 
     Reads:  ticket_key

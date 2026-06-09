@@ -7,11 +7,11 @@ import tempfile
 import click
 
 from graph.code_generator.nodes.resolve_repo import _failure_summary
-from graph.code_generator.state import CodeGeneratorState
+from graph.code_generator.state import CloneRepoInputState, CloneRepoOutputState
 from graph.utils import log_path, run_and_tee
 
 
-def clone_repo(state: CodeGeneratorState) -> dict:
+def clone_repo(state: CloneRepoInputState) -> CloneRepoOutputState:
     """Create temp workspace files and clone the target repository.
 
     Reads:  workflow_id, ticket_key, repo_url, work_plan_data
@@ -49,14 +49,6 @@ def clone_repo(state: CodeGeneratorState) -> dict:
     )
     os.close(reasoning_fd)
 
-    workspace = {
-        "working_dir": working_dir,
-        "work_plan_path": work_plan_path,
-        "summary_path": summary_path,
-        "reasoning_path": reasoning_path,
-        "exec_log_path": str(lp),
-    }
-
     # Attempt git clone
     click.echo(f"📂 Cloning {repo_url} into {working_dir}... (log: {lp})")
     try:
@@ -72,10 +64,20 @@ def clone_repo(state: CodeGeneratorState) -> dict:
         click.echo(f"❌ Failed to clone repository: {e}", err=True)
         error_msg = f"Failed to clone {repo_url}: {e}"
         return {
-            **workspace,
+            "working_dir": working_dir,
+            "work_plan_path": work_plan_path,
+            "summary_path": summary_path,
+            "reasoning_path": reasoning_path,
+            "exec_log_path": str(lp),
             "execution_summary": _failure_summary(ticket_key, error_msg),
             "exec_error": error_msg,
             "failed_node": "execute_plan",
         }
 
-    return workspace
+    return {
+        "working_dir": working_dir,
+        "work_plan_path": work_plan_path,
+        "summary_path": summary_path,
+        "reasoning_path": reasoning_path,
+        "exec_log_path": str(lp),
+    }

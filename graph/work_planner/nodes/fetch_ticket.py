@@ -7,14 +7,16 @@ import click
 
 from dispatcher.jira_client import JiraClient
 from dispatcher.protocols import TicketSource
-from graph.node_result import WorkPlannerNodeResult
-from graph.work_planner.state import WorkPlannerState
+from graph.work_planner.state import (
+    FetchTicketInputState,
+    FetchTicketOutputState,
+)
 
 
 def fetch_ticket(
-    state: WorkPlannerState,
+    state: FetchTicketInputState,
     ticket_source: Optional[TicketSource] = None,
-) -> WorkPlannerNodeResult:
+) -> FetchTicketOutputState:
     """Fetch a JIRA ticket and store it in state.
 
     Args:

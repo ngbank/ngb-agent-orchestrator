@@ -2,11 +2,13 @@
 
 import click
 
-from graph.node_result import WorkPlannerNodeResult
-from graph.work_planner.state import WorkPlannerState
+from graph.work_planner.state import (
+    ValidateInputInputState,
+    ValidateInputOutputState,
+)
 
 
-def validate_input(state: WorkPlannerState) -> WorkPlannerNodeResult:
+def validate_input(state: ValidateInputInputState) -> ValidateInputOutputState:
     ticket_key = state.get("ticket_key", "")
     if not ticket_key or "-" not in ticket_key:
         error = f"Invalid ticket format: '{ticket_key}'. Expected format: PROJECT-123"

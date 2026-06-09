@@ -3,16 +3,20 @@
 import click
 from langgraph.types import interrupt
 
-from graph.node_result import WorkPlannerNodeResult
 from graph.utils import _get_actor
-from graph.work_planner.state import WorkPlannerState
+from graph.work_planner.state import (
+    AwaitClarificationInputState,
+    AwaitClarificationOutputState,
+)
 from state.workflow_repository import update_clarification_history, update_status, update_work_plan
 from state.workflow_status import WorkflowStatus
 
 MAX_CLARIFICATION_ROUNDS = 3
 
 
-def await_workplan_clarification(state: WorkPlannerState) -> WorkPlannerNodeResult:
+def await_workplan_clarification(
+    state: AwaitClarificationInputState,
+) -> AwaitClarificationOutputState:
     """Interrupt the graph until the developer answers WorkPlan concerns.
 
     On first entry (or subsequent rounds):
