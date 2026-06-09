@@ -1,19 +1,15 @@
 """
 Shared constants, utilities, and helpers used across command handlers.
 
-Heavy imports live at this module's top level — they are only triggered when a
-command handler submodule (which imports this module) is itself lazily imported
-inside a dispatch branch in dispatcher/run.py. This keeps CLI startup fast for
-commands that don't need the graph or JIRA stack.
+Heavy dependencies are imported lazily inside helper functions so modules that
+only consume lightweight helpers/constants do not pay graph/JIRA startup costs.
 """
 
 from typing import Optional
 
 import click
 
-from dispatcher.jira_client import JiraClient, JiraCommentError  # noqa: F401
-from dispatcher.work_plan_formatter import format_execution_summary_comment
-from graph.builder import build_orchestrator  # noqa: F401
+from dispatcher.constants import NODE_EMOJI, STATUS_DISPLAY
 from graph.utils import _get_actor  # noqa: F401
 from state.workflow_repository import get_workflow, update_status
 from state.workflow_status import WorkflowStatus
@@ -22,33 +18,25 @@ from state.workflow_status import WorkflowStatus
 # Display helpers
 # ---------------------------------------------------------------------------
 
-# Status display config: (emoji, label)
-_STATUS_DISPLAY = {
-    "pending": ("🕐", "pending"),
-    "in_progress": ("⚙️ ", "in_progress"),
-    "pending_workplan_clarification": ("💬", "pending_workplan_clarification"),
-    "pending_approval": ("⏸️ ", "pending_approval"),
-    "pending_pr_approval": ("🔍", "pending_pr_approval"),
-    "pr_commented": ("💬", "pr_commented"),
-    "approved": ("✅", "approved"),
-    "rejected": ("🚫", "rejected"),
-    "completed": ("🎉", "completed"),
-    "failed": ("❌", "failed"),
-    "cancelled": ("⛔", "cancelled"),
-}
+_STATUS_DISPLAY = STATUS_DISPLAY
+_NODE_EMOJI = NODE_EMOJI
 
-# Node display config: emoji per top-level node name
-_NODE_EMOJI = {
-    "__start__": "▶ ",
-    "work_planner": "📋",
-    "await_approval": "⏸️ ",
-    "execute_plan": "⚙️ ",
-    "__end__": "🏁",
-}
+# Lazy-loaded in _post_execution_comment. Kept as module attributes so tests
+# can patch them without importing heavy dependencies at module import time.
+JiraClient = None
+JiraCommentError = Exception
+format_execution_summary_comment = None
 
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
+
+
+def build_orchestrator(*args, **kwargs):
+    """Lazily import and construct the orchestrator graph."""
+    from graph.builder import build_orchestrator as _build_orchestrator
+
+    return _build_orchestrator(*args, **kwargs)
 
 
 def _mark_workflow_interrupted(
@@ -103,9 +91,29 @@ def _mark_workflow_interrupted(
 
 def _post_execution_comment(ticket_key: Optional[str], execution_summary: Optional[dict]) -> None:
     """Post execution summary (including pr_url if present) as a JIRA comment."""
+    global JiraClient, JiraCommentError, format_execution_summary_comment
+
     if not ticket_key or not execution_summary:
         return
     try:
+        if (
+            JiraClient is None
+            or JiraCommentError is Exception
+            or format_execution_summary_comment is None
+        ):
+            from dispatcher.jira_client import JiraClient as _JiraClient
+            from dispatcher.jira_client import JiraCommentError as _JiraCommentError
+            from dispatcher.work_plan_formatter import (
+                format_execution_summary_comment as _format_execution_summary_comment,
+            )
+
+            if JiraClient is None:
+                JiraClient = _JiraClient
+            if JiraCommentError is Exception:
+                JiraCommentError = _JiraCommentError
+            if format_execution_summary_comment is None:
+                format_execution_summary_comment = _format_execution_summary_comment
+
         comment = format_execution_summary_comment(execution_summary)
         jira = JiraClient()
         jira.post_comment(ticket_key, comment)

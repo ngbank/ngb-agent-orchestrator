@@ -7,6 +7,7 @@ from typing import Optional
 import click
 
 import dispatcher.commands.common as common
+from dispatcher.constants import NODE_EMOJI, STATUS_DISPLAY
 from graph.utils import log_path
 from state.workflow_repository import (
     clear_db,
@@ -71,7 +72,7 @@ def _handle_list(ticket_key: Optional[str]) -> None:
 
     for wf in workflows:
         status_val = wf["status"].value
-        emoji, label = common._STATUS_DISPLAY.get(status_val, ("  ", status_val))
+        emoji, label = STATUS_DISPLAY.get(status_val, ("  ", status_val))
         created = wf["created_at"][:19].replace("T", " ")
         click.echo(f"{wf['ticket_key']:<12} {emoji} {label:<16} {wf['id']}  {created}")
 
@@ -101,7 +102,7 @@ def _handle_history(
         resolved_ticket = ticket_key
 
     status_val = wf["status"].value
-    emoji, label = common._STATUS_DISPLAY.get(status_val, ("  ", status_val))
+    emoji, label = STATUS_DISPLAY.get(status_val, ("  ", status_val))
     click.echo(f"\nWorkflow history for {resolved_ticket} ({resolved_id})")
     click.echo(f"Status: {emoji} {label}")
     click.echo()
@@ -127,7 +128,7 @@ def _handle_history(
                 continue
             for task in state.tasks:
                 node = task.name
-                node_emoji = common._NODE_EMOJI.get(node, "  ")
+                node_emoji = NODE_EMOJI.get(node, "  ")
                 # Determine outcome
                 if task.error:
                     outcome = f"❌ error: {task.error}"
