@@ -11,6 +11,7 @@ from langgraph.errors import GraphInterrupt
 from langgraph.types import Command
 
 import dispatcher.commands.common as common
+
 from state.workflow_repository import get_workflow, get_workflow_by_ticket
 from state.workflow_status import WorkflowStatus
 
@@ -120,10 +121,15 @@ def _handle_clarify(ticket_key: Optional[str], workflow_id: Optional[str] = None
 
     try:
         graph = common.build_orchestrator()
-        final_state = graph.invoke(
+        common.run_graph_stream(
+            graph,
             Command(resume={"answers": answers}),
-            config=thread_config,
+            workflow_id=resolved_id,
+            ticket_key=workflow.get("ticket_key") or ticket_key or "",
+            thread_config=thread_config,
         )
+
+        final_state = graph.get_state(thread_config).values or {}
 
         if final_state.get("error"):
             click.echo(f"❌ Workflow error: {final_state['error']}", err=True)

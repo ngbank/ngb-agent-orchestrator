@@ -34,10 +34,40 @@ format_execution_summary_comment = None
 
 
 def build_orchestrator(*args, **kwargs):
-    """Lazily import and construct the orchestrator graph."""
+    """Lazily import and construct the orchestrator graph.
+
+    Also ensures OTel tracing is initialised exactly once before any graph
+    work begins — keeping setup_tracing() out of every individual command.
+    """
+    from graph.otel import setup_tracing
     from graph.builder import build_orchestrator as _build_orchestrator
 
+    setup_tracing()
     return _build_orchestrator(*args, **kwargs)
+
+
+def run_graph_stream(
+    graph,
+    input,
+    *,
+    workflow_id: str,
+    ticket_key: str,
+    thread_config: dict,
+):
+    """Set OTel workflow context and drive the graph stream to completion.
+
+    Centralises the set_workflow_context + instrument_graph_stream pattern
+    that every command previously repeated inline.
+
+    Returns the last stream event (or ``None`` if the stream emitted nothing).
+    """
+    from graph.otel import instrument_graph_stream, set_workflow_context
+
+    set_workflow_context(workflow_id=workflow_id, ticket_key=ticket_key)
+    last_event = None
+    for event in instrument_graph_stream(graph, input, config=thread_config):
+        last_event = event
+    return last_event
 
 
 def _mark_workflow_interrupted(

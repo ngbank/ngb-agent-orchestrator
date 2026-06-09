@@ -8,7 +8,7 @@ from langgraph.errors import GraphInterrupt
 
 import dispatcher.commands.common as common
 from dispatcher.exceptions import TicketAuthError, TicketConfigError, TicketNotFoundError
-from graph.otel import instrument_graph_stream, set_workflow_context, setup_tracing
+
 from state.workflow_repository import update_status
 from state.workflow_status import WorkflowStatus
 
@@ -31,19 +31,15 @@ def _handle_run(ticket: str, dry_run: bool) -> None:
     thread_config = {"configurable": {"thread_id": workflow_id}}
     graph = None
 
-    # Initialise OTel tracing and set correlation context for this workflow.
-    setup_tracing()
-    set_workflow_context(workflow_id=workflow_id, ticket_key=ticket)
-
     try:
         graph = common.build_orchestrator()
-        final_state = None
-        for event in instrument_graph_stream(
+        final_state = common.run_graph_stream(
             graph,
             {"ticket_key": ticket, "dry_run": False, "workflow_id": workflow_id},
-            config=thread_config,
-        ):
-            final_state = event
+            workflow_id=workflow_id,
+            ticket_key=ticket,
+            thread_config=thread_config,
+        )
 
         if final_state is None:
             final_state = {}

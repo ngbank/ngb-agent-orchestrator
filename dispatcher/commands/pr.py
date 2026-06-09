@@ -11,6 +11,7 @@ from langgraph.errors import GraphInterrupt
 from langgraph.types import Command
 
 import dispatcher.commands.common as common
+
 from state.workflow_repository import get_workflow, get_workflow_by_ticket, update_status
 from state.workflow_status import WorkflowStatus
 
@@ -52,11 +53,15 @@ def _handle_approve_pr(ticket_key: Optional[str], workflow_id: Optional[str] = N
 
     try:
         graph = common.build_orchestrator()
-        final_state = graph.invoke(
+        common.run_graph_stream(
+            graph,
             Command(resume={"decision": "approved"}),
-            config=thread_config,
+            workflow_id=resolved_id,
+            ticket_key=ticket_key or workflow.get("ticket_key", ""),
+            thread_config=thread_config,
         )
 
+        final_state = graph.get_state(thread_config).values or {}
         wf_id = final_state.get("workflow_id", resolved_id)
         update_status(
             wf_id,
@@ -153,10 +158,15 @@ def _handle_comment_pr(ticket_key: Optional[str], workflow_id: Optional[str] = N
 
     try:
         graph = common.build_orchestrator()
-        final_state = graph.invoke(
+        common.run_graph_stream(
+            graph,
             Command(resume={"decision": "commented", "comments": comments_text}),
-            config=thread_config,
+            workflow_id=resolved_id,
+            ticket_key=workflow.get("ticket_key") or ticket_key or "",
+            thread_config=thread_config,
         )
+
+        final_state = graph.get_state(thread_config).values or {}
 
         if final_state.get("error"):
             click.echo(f"❌ Workflow error: {final_state['error']}", err=True)
@@ -229,10 +239,14 @@ def _handle_reject_pr(
 
     try:
         graph = common.build_orchestrator()
-        graph.invoke(
+        common.run_graph_stream(
+            graph,
             Command(resume={"decision": "rejected", "reason": reason}),
-            config=thread_config,
+            workflow_id=resolved_id,
+            ticket_key=ticket_key or workflow.get("ticket_key", ""),
+            thread_config=thread_config,
         )
+
         update_status(
             resolved_id,
             WorkflowStatus.REJECTED,

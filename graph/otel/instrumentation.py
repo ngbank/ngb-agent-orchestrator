@@ -93,7 +93,7 @@ def get_tracer() -> trace.Tracer:
 
 def instrument_graph_stream(
     graph: Any,
-    initial_state: dict[str, Any],
+    initial_state: Any,
     config: dict[str, Any],
     *,
     stream_mode: str = "updates",

@@ -7,6 +7,7 @@ import click
 from langgraph.errors import GraphInterrupt
 
 import dispatcher.commands.common as common
+
 from graph.retry import prepare_retry
 from state.workflow_repository import (
     get_latest_retryable_workflow_by_ticket,
@@ -107,7 +108,15 @@ def _handle_retry(ticket_key: Optional[str], workflow_id: Optional[str] = None) 
     )
 
     try:
-        final_state = graph.invoke(None, config=thread_config)
+        common.run_graph_stream(
+            graph,
+            None,
+            workflow_id=resolved_id,
+            ticket_key=workflow.get("ticket_key", ticket_key or ""),
+            thread_config=thread_config,
+        )
+
+        final_state = graph.get_state(thread_config).values or {}
 
         ticket_key_final = final_state.get("ticket_key", workflow["ticket_key"])
         execution_summary = final_state.get("execution_summary") or {}

@@ -8,6 +8,7 @@ from langgraph.errors import GraphInterrupt
 from langgraph.types import Command
 
 import dispatcher.commands.common as common
+
 from state.workflow_repository import get_workflow, get_workflow_by_ticket, update_status
 from state.workflow_status import WorkflowStatus
 
@@ -48,10 +49,15 @@ def _handle_approve(ticket_key: str, workflow_id: Optional[str] = None) -> None:
 
     try:
         graph = common.build_orchestrator()
-        final_state = graph.invoke(
+        common.run_graph_stream(
+            graph,
             Command(resume={"decision": "approved"}),
-            config=thread_config,
+            workflow_id=resolved_id,
+            ticket_key=ticket_key,
+            thread_config=thread_config,
         )
+
+        final_state = graph.get_state(thread_config).values or {}
 
         wf_id = final_state.get("workflow_id", resolved_id)
         ticket_key = final_state.get("ticket_key", "")
@@ -128,10 +134,14 @@ def _handle_reject(ticket_key: str, reason: str, workflow_id: Optional[str] = No
 
     try:
         graph = common.build_orchestrator()
-        graph.invoke(
+        common.run_graph_stream(
+            graph,
             Command(resume={"decision": "rejected", "reason": reason}),
-            config=thread_config,
+            workflow_id=resolved_id,
+            ticket_key=ticket_key,
+            thread_config=thread_config,
         )
+
         click.echo(f"🚫 Workflow {resolved_id} rejected" + (f": {reason}" if reason else ""))
 
     except Exception as e:
