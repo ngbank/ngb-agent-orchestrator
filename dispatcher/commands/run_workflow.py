@@ -7,12 +7,7 @@ import click
 from langgraph.errors import GraphInterrupt
 
 import dispatcher.commands.common as common
-from dispatcher.jira_client import (
-    JiraAPIError,
-    JiraAuthenticationError,
-    JiraConfigurationError,
-    JiraTicketNotFoundError,
-)
+from dispatcher.exceptions import TicketAuthError, TicketConfigError, TicketNotFoundError
 from state.workflow_repository import update_status
 from state.workflow_status import WorkflowStatus
 
@@ -66,11 +61,11 @@ def _handle_run(ticket: str, dry_run: bool) -> None:
         # PENDING_APPROVAL in the DB.
         pass
 
-    except JiraTicketNotFoundError as e:
+    except TicketNotFoundError as e:
         click.echo(f"❌ Ticket not found: {e}", err=True)
         sys.exit(1)
 
-    except JiraConfigurationError as e:
+    except TicketConfigError as e:
         click.echo(f"❌ JIRA configuration error: {e}", err=True)
         click.echo("   Please check your environment variables:", err=True)
         click.echo("     - JIRA_URL", err=True)
@@ -78,14 +73,9 @@ def _handle_run(ticket: str, dry_run: bool) -> None:
         click.echo("     - JIRA_API_TOKEN", err=True)
         sys.exit(1)
 
-    except JiraAuthenticationError as e:
+    except TicketAuthError as e:
         click.echo(f"❌ JIRA authentication error: {e}", err=True)
         click.echo("   Please verify your credentials are correct.", err=True)
-        sys.exit(1)
-
-    except JiraAPIError as e:
-        click.echo(f"❌ JIRA API error: {e}", err=True)
-        click.echo("   Please retry or check JIRA availability/connectivity.", err=True)
         sys.exit(1)
 
     except KeyboardInterrupt:
