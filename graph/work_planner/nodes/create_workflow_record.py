@@ -2,12 +2,13 @@
 
 import click
 
+from graph.node_result import WorkPlannerNodeResult
 from graph.work_planner.state import WorkPlannerState
 from state.workflow_repository import create_workflow, get_workflow, update_status
 from state.workflow_status import WorkflowStatus
 
 
-def create_workflow_record(state: WorkPlannerState) -> dict:
+def create_workflow_record(state: WorkPlannerState) -> WorkPlannerNodeResult:
     ticket_key = state.get("ticket_key", "")
     # Use the pre-seeded workflow_id from run.py (which also serves as the
     # LangGraph thread_id) so both systems share a single identifier.

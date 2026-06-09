@@ -3,13 +3,14 @@
 import click
 from langgraph.types import interrupt
 
+from graph.node_result import OrchestratorNodeResult
 from graph.state import OrchestratorState
 from graph.utils import _get_actor
 from state.workflow_repository import get_workflow, update_pr_comments, update_status
 from state.workflow_status import WorkflowStatus
 
 
-def await_pr_approval(state: OrchestratorState) -> dict:
+def await_pr_approval(state: OrchestratorState) -> OrchestratorNodeResult:
     """Interrupt the graph until the PR is approved, rejected, or commented on.
 
     On first entry (no prior decision in state):
