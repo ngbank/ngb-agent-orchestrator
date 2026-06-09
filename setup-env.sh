@@ -195,6 +195,22 @@ if $DO_ENV; then
 
     success ".env file generated."
 
+    # ---------------------------------------------------------------------------
+    # Upsert new env vars that may be missing from pre-existing .env files.
+    # Each entry is: VAR_NAME DEFAULT_VALUE
+    # If the var is already set (even to empty) it is left unchanged.
+    # ---------------------------------------------------------------------------
+    upsert_env_var() {
+        local var_name="$1"
+        local default_value="$2"
+        if ! grep -q "^${var_name}=" .env 2>/dev/null; then
+            printf '\n# Added by setup-env.sh\n%s=%s\n' "$var_name" "$default_value" >> .env
+            info "Added missing var: ${var_name}=${default_value}"
+        fi
+    }
+
+    upsert_env_var "OTEL_EXPORTER_TYPE" "console"
+
     info "Allowing direnv to load .env..."
     direnv allow .
     success "direnv configured. The .env will be loaded automatically on shell entry."
