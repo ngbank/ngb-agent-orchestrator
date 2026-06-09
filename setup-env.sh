@@ -5,9 +5,9 @@
 #
 # Stages (all run by default; pass flags to run specific stages only):
 #   --python   Install Python 3.13.x via pyenv and pin .python-version
-#   --deps     Create/update the venv and install pip dependencies
+#   --deps     Create/update the .venv and install pip dependencies
 #   --env      Fetch secrets from 1Password and generate .env
-#   --clean    Remove venv/ and .env, then run all stages from scratch
+#   --clean    Remove .venv/ (and legacy venv/) and .env, then run all stages from scratch
 #
 # Examples:
 #   ./setup-env.sh                   # run all stages
@@ -75,13 +75,14 @@ if $DO_CLEAN; then
     DO_ENV=true
 fi
 
-VENV_DIR="$(pwd)/venv"
+VENV_DIR="$(pwd)/.venv"
 
 # ---------------------------------------------------------------------------
 # Clean (runs before all other stages)
 # ---------------------------------------------------------------------------
 if $DO_CLEAN; then
     info "Cleaning environment artifacts..."
+    [[ -d "$(pwd)/venv" ]] && { rm -rf "$(pwd)/venv"; info "Removed $(pwd)/venv"; }
     [[ -d "$VENV_DIR" ]] && { rm -rf "$VENV_DIR"; info "Removed $VENV_DIR"; }
     [[ -f ".env" ]]      && { rm -f  ".env";       info "Removed .env"; }
     success "Clean complete."
