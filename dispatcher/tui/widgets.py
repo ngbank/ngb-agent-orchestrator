@@ -6,7 +6,7 @@ from typing import Dict, List, Optional
 
 from textual.widgets import DataTable, Label, Static
 
-from dispatcher.commands.common import _STATUS_DISPLAY
+from dispatcher.constants import STATUS_DISPLAY
 
 
 class WorkflowList(Static):
@@ -47,7 +47,7 @@ class WorkflowList(Static):
         table.clear()
         for wf in workflows:
             status_val = wf["status"].value
-            emoji, label = _STATUS_DISPLAY.get(status_val, ("  ", status_val))
+            emoji, label = STATUS_DISPLAY.get(status_val, ("  ", status_val))
             updated = wf.get("updated_at", "")[:19].replace("T", " ")
             table.add_row(
                 wf["ticket_key"],
@@ -119,7 +119,7 @@ class DetailPane(Static):
             return
 
         status_val = workflow["status"].value
-        emoji, label = _STATUS_DISPLAY.get(status_val, ("  ", status_val))
+        emoji, label = STATUS_DISPLAY.get(status_val, ("  ", status_val))
         title.update(f"{emoji} {workflow['ticket_key']} — {label}")
 
         lines: List[str] = [
