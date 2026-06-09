@@ -18,7 +18,6 @@ graph suspends until the PR is approved, commented on, or rejected via CLI.
 import sqlite3
 from typing import Literal
 
-from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, StateGraph
 
 from graph.code_generator.builder import build_code_generator
@@ -26,6 +25,7 @@ from graph.nodes.await_approval import await_approval
 from graph.nodes.await_pr_approval import await_pr_approval
 from graph.state import OrchestratorState
 from graph.work_planner.builder import build_work_planner
+from state.observable_sqlite_saver import ObservableSqliteSaver
 from state.workflow_repository import get_db_path
 
 
@@ -67,7 +67,7 @@ def build_orchestrator(checkpointer=None):
     """
     if checkpointer is None:
         conn = sqlite3.connect(get_db_path(), check_same_thread=False)
-        checkpointer = SqliteSaver(conn)
+        checkpointer = ObservableSqliteSaver(conn)
 
     work_planner = build_work_planner()
     code_generator = build_code_generator()
