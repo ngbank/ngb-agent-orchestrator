@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import IO, List, Optional
@@ -40,6 +41,7 @@ _AZURE_API_VERSIONS: dict[str, str] = {
     "gpt-4.1": "2024-12-01-preview",
     "gpt-5.3-codex": "2025-04-01-preview",
     "gpt-5.4": "preview",
+    "Kimi-K2.6": "2024-12-01-preview",  # Azure Foundry model
 }
 
 
@@ -53,9 +55,14 @@ def _free_port() -> int:
 def _wait_for_proxy(
     port: int, timeout: float = 30.0, proc: Optional[subprocess.Popen] = None
 ) -> None:
-    """Block until the litellm proxy on *port* responds to /health, or raise."""
+    """Block until the litellm proxy on *port* responds to health check, or raise."""
     deadline = time.monotonic() + timeout
-    url = f"http://127.0.0.1:{port}/health/liveliness"
+    # Try multiple health endpoints (different versions of LiteLLM use different paths)
+    health_endpoints = [
+        f"http://127.0.0.1:{port}/health",
+        f"http://127.0.0.1:{port}/health/ready",
+        f"http://127.0.0.1:{port}/health/liveliness",
+    ]
     while time.monotonic() < deadline:
         # If the process died, fail fast with diagnostics.
         if proc is not None and proc.poll() is not None:
@@ -63,11 +70,20 @@ def _wait_for_proxy(
                 f"litellm proxy process exited with code {proc.returncode}"
                 f" before becoming healthy. Check the proxy log for details."
             )
-        try:
-            urllib.request.urlopen(url, timeout=1)
-            return
-        except Exception:
-            time.sleep(0.5)
+        for url in health_endpoints:
+            try:
+                response = urllib.request.urlopen(url, timeout=5)
+                if 200 <= response.status < 300:
+                    # Success! Return immediately
+                    return
+            except urllib.error.HTTPError:
+                # HTTPError means proxy is responding, but this endpoint returned non-2xx
+                # Try next endpoint
+                continue
+            except Exception:
+                # Connection refused or timeout, keep trying
+                pass
+        time.sleep(0.5)
     raise RuntimeError(f"litellm proxy on port {port} did not become healthy within {timeout}s")
 
 
