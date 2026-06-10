@@ -1,10 +1,12 @@
 """Unit tests for state_store module."""
 
 import os
+import sqlite3
 import tempfile
 
 import pytest
 
+from state import get_connection
 from state import workflow_repository as state_store
 from state.workflow_status import WorkflowStatus
 
@@ -921,3 +923,282 @@ def test_retry_count_atomicity(test_db):
 
     audit_log = state_store.get_audit_log(workflow_id)
     assert any(entry["action"] == "workflow_retried" for entry in audit_log)
+
+
+# =====================================================================
+# Negative Tests: Rollback Scenarios (AOS-113: Audit Log Durability)
+# =====================================================================
+
+
+def test_status_update_rollback_on_audit_failure(test_db):
+    """Test that status update is rolled back if audit log creation fails.
+
+    Verifies review finding F1: if audit creation fails, the workflow state
+    update must be rolled back so no orphaned state exists without audit trail.
+    """
+    workflow_id = state_store.create_workflow(ticket_key="AOS-113")
+
+    # Get initial status
+    workflow_before = state_store.get_workflow(workflow_id)
+    initial_status = workflow_before["status"]
+
+    # Drop the audit_log table to force a constraint violation
+    # This simulates a failure during _create_audit_log()
+    try:
+        conn = get_connection()
+        conn.execute("DROP TABLE audit_log")
+        conn.commit()
+        conn.close()
+    except sqlite3.OperationalError:
+        pass
+
+    # Attempt to update status — should fail and rollback
+    try:
+        state_store.update_status(
+            workflow_id=workflow_id,
+            status=WorkflowStatus.IN_PROGRESS,
+            actor="test_actor",
+            reason="Should fail",
+        )
+    except (sqlite3.OperationalError, Exception):
+        # Expected: update fails due to missing audit_log table
+        pass
+
+    # Restore the audit_log table
+    state_store.run_migrations()
+
+    # Verify workflow status was NOT changed (rollback successful)
+    workflow_after = state_store.get_workflow(workflow_id)
+    assert workflow_after["status"] == initial_status
+
+
+def test_work_plan_update_rollback_no_partial_state(test_db):
+    """Test that work plan update is rolled back as a whole.
+
+    If a work plan update fails partway through, neither the work_plan
+    nor the audit entry should be committed.
+    """
+    workflow_id = state_store.create_workflow(ticket_key="AOS-113", work_plan={"v": 1})
+
+    # Get initial state
+    workflow_before = state_store.get_workflow(workflow_id)
+    initial_plan = workflow_before["work_plan"]
+
+    # Create a work plan that we'll try to update
+    new_plan = {"v": 2, "complex": {"nested": {"data": [1, 2, 3]}}}
+
+    # Force a failure by corrupting the database connection mid-transaction
+    try:
+        conn = get_connection()
+        conn.execute("DROP TABLE audit_log")
+        conn.commit()
+        conn.close()
+    except sqlite3.OperationalError:
+        pass
+
+    # Attempt update — should fail
+    try:
+        state_store.update_work_plan(workflow_id, new_plan, actor="test_actor")
+    except (sqlite3.OperationalError, Exception):
+        pass
+
+    # Restore the table
+    state_store.run_migrations()
+
+    # Verify work_plan was NOT changed (rollback successful)
+    workflow_after = state_store.get_workflow(workflow_id)
+    assert workflow_after["work_plan"] == initial_plan
+
+
+def test_execution_summary_rollback_preserves_original(test_db):
+    """Test that execution summary update rolls back on failure.
+
+    If audit creation fails, the execution_summary update should be rolled back.
+    """
+    workflow_id = state_store.create_workflow(ticket_key="AOS-113")
+
+    # Set an initial execution_summary
+    initial_summary = {"status": "pending", "step": 1}
+    state_store.update_execution_summary(workflow_id, initial_summary, actor="system")
+
+    workflow_before = state_store.get_workflow(workflow_id)
+    stored_before = workflow_before["execution_summary"]
+
+    # Try to update with a corrupted database
+    try:
+        conn = get_connection()
+        conn.execute("DROP TABLE audit_log")
+        conn.commit()
+        conn.close()
+    except sqlite3.OperationalError:
+        pass
+
+    new_summary = {"status": "running", "step": 2}
+    try:
+        state_store.update_execution_summary(workflow_id, new_summary, actor="test_actor")
+    except (sqlite3.OperationalError, Exception):
+        pass
+
+    # Restore
+    state_store.run_migrations()
+
+    # Verify execution_summary was NOT changed
+    workflow_after = state_store.get_workflow(workflow_id)
+    assert workflow_after["execution_summary"] == stored_before
+
+
+def test_usage_summary_rollback_no_orphaned_state(test_db):
+    """Test that usage_summary update is rolled back when audit creation fails.
+
+    Verifies that partial usage_summary updates are not committed if the
+    audit log creation fails.
+    """
+    workflow_id = state_store.create_workflow(ticket_key="AOS-113")
+
+    # Add initial usage data
+    initial_data = {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
+    state_store.update_usage_summary(workflow_id, "stage1", initial_data, actor="system")
+
+    workflow_before = state_store.get_workflow(workflow_id)
+    usage_before = workflow_before.get("usage_summary", {})
+
+    # Corrupt database
+    try:
+        conn = get_connection()
+        conn.execute("DROP TABLE audit_log")
+        conn.commit()
+        conn.close()
+    except sqlite3.OperationalError:
+        pass
+
+    # Attempt to add another stage
+    new_data = {"prompt_tokens": 200, "completion_tokens": 100, "total_tokens": 300}
+    try:
+        state_store.update_usage_summary(workflow_id, "stage2", new_data, actor="test_actor")
+    except (sqlite3.OperationalError, Exception):
+        pass
+
+    # Restore
+    state_store.run_migrations()
+
+    # Verify usage_summary was NOT updated
+    workflow_after = state_store.get_workflow(workflow_id)
+    usage_after = workflow_after.get("usage_summary", {})
+    assert usage_after == usage_before
+
+
+def test_retry_count_rollback_on_audit_failure(test_db):
+    """Test that retry count increment is rolled back if audit creation fails.
+
+    Verifies that if an audit log creation fails, the retry_count
+    increment is also rolled back (not partially committed).
+    """
+    workflow_id = state_store.create_workflow(ticket_key="AOS-113")
+
+    # Increment once to ensure it works
+    state_store.increment_retry_count(workflow_id, actor="system")
+
+    workflow_before = state_store.get_workflow(workflow_id)
+    retry_count_before = workflow_before["retry_count"]
+
+    # Corrupt database
+    try:
+        conn = get_connection()
+        conn.execute("DROP TABLE audit_log")
+        conn.commit()
+        conn.close()
+    except sqlite3.OperationalError:
+        pass
+
+    # Attempt increment — should fail
+    try:
+        state_store.increment_retry_count(workflow_id, actor="test_actor")
+    except (sqlite3.OperationalError, Exception):
+        pass
+
+    # Restore
+    state_store.run_migrations()
+
+    # Verify retry_count was NOT incremented
+    workflow_after = state_store.get_workflow(workflow_id)
+    assert workflow_after["retry_count"] == retry_count_before
+
+
+def test_multiple_workflows_isolation_after_rollback(test_db):
+    """Test that a failed transaction in one workflow doesn't affect others.
+
+    Verifies that when transaction rollback occurs, it only affects the
+    target workflow, not other workflows in the database.
+    """
+    workflow_id_1 = state_store.create_workflow(ticket_key="AOS-113a")
+    workflow_id_2 = state_store.create_workflow(ticket_key="AOS-113b")
+
+    # Set distinct status for each
+    state_store.update_status(workflow_id_1, WorkflowStatus.IN_PROGRESS, actor="system")
+    state_store.update_status(workflow_id_2, WorkflowStatus.COMPLETED, actor="system")
+
+    wf1_before = state_store.get_workflow(workflow_id_1)
+    wf2_before = state_store.get_workflow(workflow_id_2)
+
+    assert wf1_before["status"] == WorkflowStatus.IN_PROGRESS
+    assert wf2_before["status"] == WorkflowStatus.COMPLETED
+
+    # Corrupt database
+    try:
+        conn = get_connection()
+        conn.execute("DROP TABLE audit_log")
+        conn.commit()
+        conn.close()
+    except sqlite3.OperationalError:
+        pass
+
+    # Attempt to update workflow_id_1 — should fail
+    try:
+        state_store.update_status(workflow_id_1, WorkflowStatus.FAILED, actor="test")
+    except (sqlite3.OperationalError, Exception):
+        pass
+
+    # Restore
+    state_store.run_migrations()
+
+    # Verify workflow_id_1 unchanged
+    wf1_after = state_store.get_workflow(workflow_id_1)
+    assert wf1_after["status"] == WorkflowStatus.IN_PROGRESS
+
+    # Verify workflow_id_2 unchanged (isolation)
+    wf2_after = state_store.get_workflow(workflow_id_2)
+    assert wf2_after["status"] == WorkflowStatus.COMPLETED
+
+
+def test_audit_log_consistency_across_multiple_operations(test_db):
+    """Test that audit log remains consistent across multiple operations.
+
+    Verifies that the audit log is maintained correctly even after multiple
+    transactions, with no gaps or missing entries.
+    """
+    workflow_id = state_store.create_workflow(ticket_key="AOS-113")
+
+    # Perform multiple successful updates in sequence
+    state_store.update_status(workflow_id, WorkflowStatus.IN_PROGRESS, actor="user1")
+    count_after_1st = len(state_store.get_audit_log(workflow_id))
+
+    state_store.update_status(workflow_id, WorkflowStatus.COMPLETED, actor="user2")
+    count_after_2nd = len(state_store.get_audit_log(workflow_id))
+
+    state_store.update_status(workflow_id, WorkflowStatus.FAILED, actor="user3")
+    count_after_3rd = len(state_store.get_audit_log(workflow_id))
+
+    # Verify each update added exactly one audit entry
+    assert count_after_2nd == count_after_1st + 1
+    assert count_after_3rd == count_after_2nd + 1
+
+    # Verify all entries are present and in order
+    audit_log = state_store.get_audit_log(workflow_id)
+    assert len(audit_log) == count_after_3rd
+
+    # Verify the actors are recorded in correct order
+    status_changes = [e for e in audit_log if e["action"] == "status_change"]
+    assert len(status_changes) == 3
+    assert status_changes[0]["actor"] == "user1"
+    assert status_changes[1]["actor"] == "user2"
+    assert status_changes[2]["actor"] == "user3"
