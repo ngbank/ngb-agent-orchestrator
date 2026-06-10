@@ -465,8 +465,6 @@ def test_update_status_rejected_creates_audit_log(test_db):
 
 def test_update_usage_summary_stores_stage(test_db):
     """Test that usage summary is persisted for a given stage."""
-    import json
-
     workflow_id = state_store.create_workflow(ticket_key="AOS-85")
     data = {
         "stage": "plan",
@@ -480,7 +478,7 @@ def test_update_usage_summary_stores_stage(test_db):
     state_store.update_usage_summary(workflow_id, "plan", data)
 
     workflow = state_store.get_workflow(workflow_id)
-    usage_summary = json.loads(workflow["usage_summary"])
+    usage_summary = workflow["usage_summary"]
     assert "plan" in usage_summary
     assert usage_summary["plan"]["turns"] == 12
     assert usage_summary["plan"]["total_tokens"] == 3800
@@ -489,8 +487,6 @@ def test_update_usage_summary_stores_stage(test_db):
 
 def test_update_usage_summary_merges_multiple_stages(test_db):
     """Test that calling update_usage_summary for two stages keeps both."""
-    import json
-
     workflow_id = state_store.create_workflow(ticket_key="AOS-85")
     plan_data = {
         "stage": "plan",
@@ -513,7 +509,7 @@ def test_update_usage_summary_merges_multiple_stages(test_db):
     state_store.update_usage_summary(workflow_id, "execute", execute_data)
 
     workflow = state_store.get_workflow(workflow_id)
-    usage_summary = json.loads(workflow["usage_summary"])
+    usage_summary = workflow["usage_summary"]
     assert "plan" in usage_summary
     assert "execute" in usage_summary
     assert usage_summary["plan"]["turns"] == 10
@@ -522,8 +518,6 @@ def test_update_usage_summary_merges_multiple_stages(test_db):
 
 def test_update_usage_summary_overwrites_same_stage(test_db):
     """Test that re-calling for the same stage replaces the previous data."""
-    import json
-
     workflow_id = state_store.create_workflow(ticket_key="AOS-85")
     state_store.update_usage_summary(
         workflow_id,
@@ -551,7 +545,7 @@ def test_update_usage_summary_overwrites_same_stage(test_db):
     )
 
     workflow = state_store.get_workflow(workflow_id)
-    usage_summary = json.loads(workflow["usage_summary"])
+    usage_summary = workflow["usage_summary"]
     assert usage_summary["plan"]["turns"] == 8
 
 
@@ -804,3 +798,126 @@ def test_fake_repository_can_be_injected_without_database():
     # Query by ticket
     workflows = repo.get_workflow_by_ticket("AOS-96")
     assert len(workflows) == 1
+
+
+# =====================================================================
+# Atomic Transaction Tests (AOS-113: Audit Log Durability)
+# =====================================================================
+
+
+def test_status_update_atomicity(test_db):
+    """Test that status update and audit entry are written atomically.
+
+    This verifies the fix for review finding F1: workflow mutations
+    and audit entries must commit atomically.
+    """
+    workflow_id = state_store.create_workflow(ticket_key="AOS-113")
+
+    # Get audit log count after creation
+    audit_log_after_create = state_store.get_audit_log(workflow_id)
+    initial_audit_count = len(audit_log_after_create)
+    assert initial_audit_count >= 1  # At least workflow_created
+
+    # Update status
+    state_store.update_status(
+        workflow_id=workflow_id,
+        status=WorkflowStatus.IN_PROGRESS,
+        actor="test_actor",
+        reason="Test reason",
+    )
+
+    # Verify both workflow state and audit entry exist
+    workflow = state_store.get_workflow(workflow_id)
+    assert workflow["status"] == WorkflowStatus.IN_PROGRESS
+
+    audit_log = state_store.get_audit_log(workflow_id)
+    assert len(audit_log) == initial_audit_count + 1
+
+    # Verify the new audit entry matches the status update
+    last_entry = audit_log[-1]
+    assert last_entry["action"] == "status_change"
+    assert last_entry["actor"] == "test_actor"
+    assert last_entry["reason"] == "Test reason"
+
+
+def test_work_plan_update_atomicity(test_db):
+    """Test that work plan update and audit entry are written atomically."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-113")
+
+    work_plan = {"tasks": ["task1", "task2"], "priority": "high"}
+
+    # Update work plan
+    state_store.update_work_plan(
+        workflow_id=workflow_id,
+        work_plan=work_plan,
+        actor="test_actor",
+        reason="Updated plan",
+    )
+
+    # Verify both workflow state and audit entry exist
+    workflow = state_store.get_workflow(workflow_id)
+    assert workflow["work_plan"] == work_plan
+
+    audit_log = state_store.get_audit_log(workflow_id)
+    # Should have creation + work_plan_updated entries
+    assert any(entry["action"] == "work_plan_updated" for entry in audit_log)
+
+
+def test_execution_summary_atomicity(test_db):
+    """Test that execution summary update and audit entry are written atomically."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-113")
+
+    summary = {"status": "completed", "output": "results"}
+
+    # Update execution summary
+    state_store.update_execution_summary(
+        workflow_id=workflow_id,
+        execution_summary=summary,
+        actor="test_actor",
+    )
+
+    # Verify both workflow state and audit entry exist
+    workflow = state_store.get_workflow(workflow_id)
+    assert workflow["execution_summary"] == summary
+
+    audit_log = state_store.get_audit_log(workflow_id)
+    assert any(entry["action"] == "execution_summary_stored" for entry in audit_log)
+
+
+def test_usage_summary_atomicity(test_db):
+    """Test that usage summary update and audit entry are written atomically."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-113")
+
+    usage_data = {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
+
+    # Update usage summary
+    state_store.update_usage_summary(
+        workflow_id=workflow_id,
+        stage="work_planner",
+        data=usage_data,
+        actor="test_actor",
+    )
+
+    # Verify both workflow state and audit entry exist
+    workflow = state_store.get_workflow(workflow_id)
+    assert workflow["usage_summary"]["work_planner"] == usage_data
+
+    audit_log = state_store.get_audit_log(workflow_id)
+    assert any(entry["action"] == "usage_summary_stored" for entry in audit_log)
+
+
+def test_retry_count_atomicity(test_db):
+    """Test that retry count increment and audit entry are written atomically."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-113")
+
+    # Increment retry count
+    new_count = state_store.increment_retry_count(workflow_id, actor="test_actor")
+
+    assert new_count == 1
+
+    # Verify both workflow state and audit entry exist
+    workflow = state_store.get_workflow(workflow_id)
+    assert workflow["retry_count"] == 1
+
+    audit_log = state_store.get_audit_log(workflow_id)
+    assert any(entry["action"] == "workflow_retried" for entry in audit_log)
