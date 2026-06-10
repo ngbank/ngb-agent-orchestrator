@@ -1,18 +1,27 @@
 """OTel span exporter factory.
 
-Selects the appropriate exporter based on ``OTEL_EXPORTER_TYPE`` env var:
+File logging (``LocalJsonFileExporter``) is always on -- spans are written
+as JSON lines to ``LOGS_DIR/<workflow_id>/otel.json`` regardless of any other
+exporter configuration.
 
-  - ``console``  (default) — prints spans to stdout for Day-0 debugging.
-  - ``otlp``     — sends spans to a local OTel Collector via gRPC.
-                   Requires ``OTEL_EXPORTER_OTLP_ENDPOINT`` (default:
-                   ``http://localhost:4317``).
-  - ``multi``    — emits to multiple sinks (local JSON file + console/OTLP).
+Additional exporters are controlled by the ``OTEL_EXPORTERS`` env var, a
+comma-separated list of zero or more of:
 
-Switching exporters requires only a config/env change — no code changes.
+    - ``console``  -- prints spans to stdout.
+    - ``otlp``     -- sends spans to a local OTel Collector via gRPC.
+                                     Requires ``OTEL_EXPORTER_OTLP_ENDPOINT`` (default:
+                                     ``http://localhost:4317``).
+
+Supported combinations::
+
+    OTEL_EXPORTERS=console        -- file + stdout
+    OTEL_EXPORTERS=otlp           -- file + remote collector
+    OTEL_EXPORTERS=console,otlp   -- file + stdout + remote collector
+    OTEL_EXPORTERS=               -- file only (no forwarding)
 
 Redaction can be controlled via:
-  - OTEL_REDACT_PAYLOADS: explicitly enable/disable redaction
-  - OTEL_DEBUG_LOCAL: disable redaction for local debugging (see graph/otel/redaction.py)
+    - OTEL_REDACT_PAYLOADS: explicitly enable/disable redaction (default: true)
+    - OTEL_DEBUG_LOCAL: disable redaction for local debugging (see graph/otel/redaction.py)
 """
 
 from __future__ import annotations
@@ -172,45 +181,45 @@ class MultiExporter(SpanExporter):
 def create_exporter() -> SpanExporter:
     """Instantiate and return the configured span exporter.
 
-    Controlled by ``OTEL_EXPORTER_TYPE`` environment variable.
+    ``LocalJsonFileExporter`` is always included -- file logging is unconditional.
+    Additional exporters are read from the ``OTEL_EXPORTERS`` environment variable
+    (comma-separated list of ``console`` and/or ``otlp``).
 
     Returns:
         A ``SpanExporter`` instance ready to attach to a tracer provider.
+        Returns a ``MultiExporter`` when more than one exporter is active.
 
     Raises:
-        ValueError: If ``OTEL_EXPORTER_TYPE`` is set to an unknown value.
+        ValueError: If ``OTEL_EXPORTERS`` contains an unknown exporter name.
+        ImportError: If ``otlp`` is requested but the gRPC package is not installed.
     """
-    exporter_type = os.getenv("OTEL_EXPORTER_TYPE", "console").lower().strip()
+    exporters: list[SpanExporter] = [LocalJsonFileExporter()]
 
-    if exporter_type == "console":
-        return ConsoleSpanExporter()
+    raw = os.getenv("OTEL_EXPORTERS", "").strip()
+    names = [n.strip().lower() for n in raw.split(",") if n.strip()]
 
-    if exporter_type == "otlp":
-        # Lazily imported so the OTLP gRPC dependency is only required when
-        # explicitly configured — keeps the console-only path dependency-free.
-        try:
-            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
-                OTLPSpanExporter,
+    for name in names:
+        if name == "console":
+            exporters.append(ConsoleSpanExporter())
+        elif name == "otlp":
+            # Lazily imported so the OTLP gRPC dependency is only required when
+            # explicitly configured — keeps the file-only path dependency-free.
+            try:
+                from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
+                    OTLPSpanExporter,
+                )
+            except ImportError as exc:
+                raise ImportError(
+                    "OTLP exporter requires 'opentelemetry-exporter-otlp-proto-grpc'. "
+                    "Install it with: pip install opentelemetry-exporter-otlp-proto-grpc"
+                ) from exc
+            exporters.append(OTLPSpanExporter(endpoint=_otlp_endpoint(), insecure=True))
+        else:
+            raise ValueError(
+                f"Unknown exporter {name!r} in OTEL_EXPORTERS. "
+                "Valid values: 'console', 'otlp'."
             )
-        except ImportError as exc:
-            raise ImportError(
-                "OTLP exporter requires 'opentelemetry-exporter-otlp-proto-grpc'. "
-                "Install it with: pip install opentelemetry-exporter-otlp-proto-grpc"
-            ) from exc
 
-        endpoint = _otlp_endpoint()
-        return OTLPSpanExporter(endpoint=endpoint, insecure=True)
-
-    if exporter_type == "multi":
-        # Multi-export: local JSON file + console output
-        return MultiExporter(
-            [
-                LocalJsonFileExporter(),
-                ConsoleSpanExporter(),
-            ]
-        )
-
-    raise ValueError(
-        f"Unknown OTEL_EXPORTER_TYPE={exporter_type!r}. "
-        "Valid values: 'console', 'otlp', 'multi'."
-    )
+    if len(exporters) == 1:
+        return exporters[0]
+    return MultiExporter(exporters)

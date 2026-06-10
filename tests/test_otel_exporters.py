@@ -196,30 +196,15 @@ class TestRedaction:
                 del os.environ["OTEL_DEBUG_LOCAL"]
 
     def test_should_redact_otlp_exporter_defaults_true(self):
-        """Test that OTLP exporter defaults to redaction enabled."""
-        original_type = os.environ.get("OTEL_EXPORTER_TYPE")
-        original_redact = os.environ.get("OTEL_REDACT_PAYLOADS")
-        original_debug = os.environ.get("OTEL_DEBUG_LOCAL")
+        """Test that redaction defaults to True regardless of exporter type."""
+        for key in ["OTEL_REDACT_PAYLOADS", "OTEL_DEBUG_LOCAL", "OTEL_EXPORTERS"]:
+            os.environ.pop(key, None)
 
         try:
-            # Clear override
-            for key in ["OTEL_REDACT_PAYLOADS", "OTEL_DEBUG_LOCAL"]:
-                if key in os.environ:
-                    del os.environ[key]
-
-            os.environ["OTEL_EXPORTER_TYPE"] = "otlp"
+            # Default: redact is True (secure by default)
             assert should_redact() is True
-
-            # Console exporter should not redact by default
-            os.environ["OTEL_EXPORTER_TYPE"] = "console"
-            assert should_redact() is False
         finally:
-            # Restore
-            for key in ["OTEL_EXPORTER_TYPE", "OTEL_REDACT_PAYLOADS", "OTEL_DEBUG_LOCAL"]:
-                if locals().get(f"original_{key.lower()}"):
-                    os.environ[key] = locals()[f"original_{key.lower()}"]
-                elif key in os.environ:
-                    del os.environ[key]
+            pass
 
     def test_redact_attributes_removes_sensitive_fields(self):
         """Test that redaction removes sensitive LLM fields."""

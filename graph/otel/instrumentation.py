@@ -52,7 +52,8 @@ def setup_tracing() -> None:
     Environment variables:
         OTEL_SERVICE_NAME       Service name attached to all spans.
                                 Default: ``ngb-agent-orchestrator``
-        OTEL_EXPORTER_TYPE      ``console`` (default) or ``otlp``.
+        OTEL_EXPORTERS          Comma-separated list of ``console`` and/or ``otlp``.
+                                File logging is always on regardless of this setting.
         OTEL_EXPORTER_OTLP_ENDPOINT  gRPC endpoint for OTLP exporter.
                                      Default: ``http://localhost:4317``
     """
