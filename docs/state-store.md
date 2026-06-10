@@ -17,6 +17,34 @@ The `state/` directory and `.db` files are gitignored.
 
 ---
 
+## Audit Log Durability
+
+All workflow state mutations are persisted atomically with their corresponding audit log entries. This ensures that:
+
+- **No orphaned audit entries**: If a workflow update fails, the audit entry is also rolled back.
+- **No missing audit entries**: If an audit entry fails to create, the entire transaction is rolled back and the workflow state is unchanged.
+- **Transaction safety**: Each mutation (status change, work plan update, etc.) and its audit entry are committed in a single `BEGIN IMMEDIATE ... COMMIT` transaction.
+
+This is enforced in `SQLiteWorkflowRepository` — all write methods (`create_workflow`, `update_status`, `update_work_plan`, `update_execution_summary`, etc.) perform both the state update and audit log creation in one atomic block.
+
+Example transaction for `update_status()`:
+```python
+conn.execute("BEGIN IMMEDIATE")
+try:
+    # Update workflow state
+    conn.execute("UPDATE workflows SET status = ?, ... WHERE id = ?", ...)
+    # Create audit entry
+    _create_audit_log(conn, workflow_id, actor, action, reason)
+    # Commit atomically
+    conn.commit()
+except Exception:
+    # Rollback on any error — neither update nor audit entry is persisted
+    conn.rollback()
+    raise
+```
+
+---
+
 ## Schema
 
 For the current column definitions and status values, refer to the latest migration file in [`state/migrations/`](../state/migrations/).

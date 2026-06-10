@@ -24,7 +24,12 @@ import sys
 import click
 from dotenv import load_dotenv
 
+from graph.logging_setup import setup_logging
+
 load_dotenv()
+
+# Initialize logging based on LOG_LEVEL environment variable
+setup_logging()
 
 
 @click.command()
