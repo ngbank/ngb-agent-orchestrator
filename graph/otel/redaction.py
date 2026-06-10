@@ -21,8 +21,8 @@ def should_redact() -> bool:
     """Check if redaction should be enabled.
 
     Returns True if:
-      - OTEL_REDACT_PAYLOADS=true (explicit enable), OR
-      - OTEL_EXPORTER_TYPE is "otlp" (remote export)
+            - OTEL_REDACT_PAYLOADS=true (explicit enable), OR
+            - OTEL_REDACT_PAYLOADS is unset (secure default)
 
     Returns False if:
       - OTEL_DEBUG_LOCAL=true (debug mode disables redaction), OR
@@ -39,9 +39,8 @@ def should_redact() -> bool:
     if redact_payloads in ("false", "0", "no"):
         return False
 
-    # Default: enable redaction for OTLP (remote) exporter, disable for others
-    exporter_type = os.getenv("OTEL_EXPORTER_TYPE", "console").lower()
-    return exporter_type in ("otlp", "multi")
+    # Default: redact (secure by default -- OTEL_REDACT_PAYLOADS is independent of exporter)
+    return True
 
 
 def redact_attributes(attributes: dict[str, Any]) -> dict[str, Any]:

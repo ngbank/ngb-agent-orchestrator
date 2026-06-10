@@ -109,27 +109,55 @@ class TestOtelContext:
 
 
 class TestCreateExporter:
-    def test_console_exporter_is_default(self, monkeypatch):
-        monkeypatch.delenv("OTEL_EXPORTER_TYPE", raising=False)
+    def test_file_only_when_exporters_unset(self, monkeypatch):
+        """Default (OTEL_EXPORTERS unset) returns only LocalJsonFileExporter."""
+        monkeypatch.delenv("OTEL_EXPORTERS", raising=False)
+        from graph.otel.exporters import LocalJsonFileExporter
+
+        exporter = create_exporter()
+        assert isinstance(exporter, LocalJsonFileExporter)
+
+    def test_file_only_when_exporters_empty(self, monkeypatch):
+        """Empty OTEL_EXPORTERS returns only LocalJsonFileExporter."""
+        monkeypatch.setenv("OTEL_EXPORTERS", "")
+        from graph.otel.exporters import LocalJsonFileExporter
+
+        exporter = create_exporter()
+        assert isinstance(exporter, LocalJsonFileExporter)
+
+    def test_console_exporter_includes_file_and_console(self, monkeypatch):
+        """OTEL_EXPORTERS=console returns MultiExporter with file + console."""
+        monkeypatch.setenv("OTEL_EXPORTERS", "console")
+        from graph.otel.exporters import LocalJsonFileExporter, MultiExporter
         from opentelemetry.sdk.trace.export import ConsoleSpanExporter
 
         exporter = create_exporter()
-        assert isinstance(exporter, ConsoleSpanExporter)
+        assert isinstance(exporter, MultiExporter)
+        assert any(isinstance(e, LocalJsonFileExporter) for e in exporter.exporters)
+        assert any(isinstance(e, ConsoleSpanExporter) for e in exporter.exporters)
 
-    def test_console_exporter_explicit(self, monkeypatch):
-        monkeypatch.setenv("OTEL_EXPORTER_TYPE", "console")
+    def test_multi_exporter_console_and_otlp(self, monkeypatch):
+        """OTEL_EXPORTERS=console,otlp returns MultiExporter with file + console + otlp."""
+        pytest.importorskip("opentelemetry.exporter.otlp.proto.grpc.trace_exporter")
+        monkeypatch.setenv("OTEL_EXPORTERS", "console,otlp")
+        from graph.otel.exporters import LocalJsonFileExporter, MultiExporter
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
         from opentelemetry.sdk.trace.export import ConsoleSpanExporter
 
         exporter = create_exporter()
-        assert isinstance(exporter, ConsoleSpanExporter)
+        assert isinstance(exporter, MultiExporter)
+        types = [type(e) for e in exporter.exporters]
+        assert LocalJsonFileExporter in types
+        assert ConsoleSpanExporter in types
+        assert OTLPSpanExporter in types
 
     def test_unknown_exporter_raises(self, monkeypatch):
-        monkeypatch.setenv("OTEL_EXPORTER_TYPE", "unknown_backend")
-        with pytest.raises(ValueError, match="Unknown OTEL_EXPORTER_TYPE"):
+        monkeypatch.setenv("OTEL_EXPORTERS", "unknown_backend")
+        with pytest.raises(ValueError, match="Unknown exporter"):
             create_exporter()
 
     def test_otlp_without_package_raises_import_error(self, monkeypatch):
-        monkeypatch.setenv("OTEL_EXPORTER_TYPE", "otlp")
+        monkeypatch.setenv("OTEL_EXPORTERS", "otlp")
         with patch.dict(
             "sys.modules", {"opentelemetry.exporter.otlp.proto.grpc.trace_exporter": None}
         ):

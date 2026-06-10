@@ -59,11 +59,11 @@ Tracing is always enabled. Configure the exporter via environment variables — 
 
 | Variable | Default | Description |
 |---|---|---|
-| `OTEL_EXPORTER_TYPE` | `console` | Exporter type: `console` (stdout), `otlp` (local OTel Collector), or `multi` (local JSON file + console) |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | gRPC endpoint for OTLP exporter (only used when `OTEL_EXPORTER_TYPE=otlp`) |
+| `OTEL_EXPORTERS` | *(empty)* | Comma-separated list of additional exporters: `console` (stdout) and/or `otlp` (remote collector). File logging is **always on** regardless of this value. Leave empty for file-only export. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | gRPC endpoint for OTLP exporter (only used when `OTEL_EXPORTERS` includes `otlp`) |
 | `OTEL_SERVICE_NAME` | `ngb-agent-orchestrator` | Service name attached to all spans |
 | `OTEL_DEBUG_LOCAL` | `false` | When `true`, disables redaction in local artifacts for troubleshooting (never enable in production) |
-| `OTEL_REDACT_PAYLOADS` | Inferred | Explicitly control redaction: `true` to enable, `false` to disable. When unset, defaults to `true` for `otlp` exporter |
+| `OTEL_REDACT_PAYLOADS` | `true` | Control redaction: `true` to enable, `false` to disable. Defaults to `true` (secure by default) — independent of exporter type. |
 
 #### Day-0 Console Export (default)
 
@@ -71,18 +71,12 @@ No extra setup needed. Spans are printed to stdout alongside normal logs:
 
 ```bash
 # Default — spans print to stdout
-OTEL_EXPORTER_TYPE=console dispatcher --ticket AOS-109
+OTEL_EXPORTERS=console dispatcher --ticket AOS-109
 ```
 
-#### Multi-Export (local JSON + console)
+#### Local JSON File Export (always on)
 
-Write OTel spans to a local JSON file alongside console output. Useful for capturing detailed telemetry for local analysis while also seeing real-time console output:
-
-```bash
-OTEL_EXPORTER_TYPE=multi dispatcher --ticket AOS-109
-```
-
-Spans are written as JSON lines to `LOGS_DIR/<workflow_id>/otel.json`. Each line is a valid JSON span object:
+Spans are **always** written as JSON lines to `LOGS_DIR/<workflow_id>/otel.json` — no environment variable is needed to enable this. Each line is a valid JSON span object:
 
 ```json
 {
@@ -118,7 +112,7 @@ docker run -p 4317:4317 otel/opentelemetry-collector-contrib:latest
 
 Then set:
 ```bash
-OTEL_EXPORTER_TYPE=otlp
+OTEL_EXPORTERS=otlp
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 ```
 
@@ -128,7 +122,7 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 |---|---|---|
 | `DEFAULT_PROJECT_KEY` | `AOS` | Default JIRA project for commands that accept a project |
 | `LOG_LEVEL` | `INFO` | Python logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Affects all application and third-party logs |
-| `LOGS_DIR` | `{system_tmp}/ngb-agent-orchestrator` | Base directory for run logs. Each workflow writes into a `{workflow_id}/` subdirectory containing stage logs, `llm_token_usage.jsonl`, and (when `OTEL_EXPORTER_TYPE=multi`) `otel.json` |
+| `LOGS_DIR` | `{system_tmp}/ngb-agent-orchestrator` | Base directory for run logs. Each workflow writes into a `{workflow_id}/` subdirectory containing stage logs, `llm_token_usage.jsonl`, and `otel.json` (always written) |
 
 ---
 
