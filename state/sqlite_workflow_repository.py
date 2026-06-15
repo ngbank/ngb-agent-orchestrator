@@ -51,6 +51,16 @@ class SQLiteWorkflowRepository:
                     )
                 except (json.JSONDecodeError, TypeError):
                     workflow["clarification_history"] = []
+            if workflow.get("execution_summary"):
+                try:
+                    workflow["execution_summary"] = json.loads(workflow["execution_summary"])
+                except (json.JSONDecodeError, TypeError):
+                    workflow["execution_summary"] = None
+            if workflow.get("usage_summary"):
+                try:
+                    workflow["usage_summary"] = json.loads(workflow["usage_summary"])
+                except (json.JSONDecodeError, TypeError):
+                    workflow["usage_summary"] = None
             workflow["status"] = WorkflowStatus(workflow["status"])
             return workflow
         finally:
@@ -166,29 +176,48 @@ class SQLiteWorkflowRepository:
         status: WorkflowStatus = WorkflowStatus.PENDING,
         workflow_id: Optional[str] = None,
     ) -> str:
-        """Create a new workflow record and return its UUID."""
+        """Create a new workflow record and return its UUID.
+
+        The workflow creation and initial audit log entry are written atomically
+        in a single transaction. If either fails, both are rolled back.
+        """
         workflow_id = workflow_id or str(uuid.uuid4())
         now = datetime.now(UTC).isoformat()
         work_plan_json = json.dumps(work_plan) if work_plan else None
 
         conn = get_connection()
         try:
-            conn.execute(
-                """
-                INSERT INTO workflows (id, ticket_key, status, work_plan, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (workflow_id, ticket_key, status.value, work_plan_json, now, now),
-            )
-            conn.commit()
-            _create_audit_log(
-                conn,
-                workflow_id=workflow_id,
-                actor="system",
-                action="workflow_created",
-                reason=f"Created workflow for {ticket_key}",
-            )
-            conn.commit()
+            # Start explicit transaction
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO workflows
+                        (id, ticket_key, status, work_plan, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        workflow_id,
+                        ticket_key,
+                        status.value,
+                        work_plan_json,
+                        now,
+                        now,
+                    ),
+                )
+                _create_audit_log(
+                    conn,
+                    workflow_id=workflow_id,
+                    actor="system",
+                    action="workflow_created",
+                    reason=f"Created workflow for {ticket_key}",
+                )
+                # Commit both operations atomically
+                conn.commit()
+            except Exception:
+                # Rollback on any error during the transaction
+                conn.rollback()
+                raise
         finally:
             conn.close()
 
@@ -202,37 +231,48 @@ class SQLiteWorkflowRepository:
         actor: str = "system",
         reason: Optional[str] = None,
     ) -> None:
-        """Update workflow status and optionally PR URL."""
+        """Update workflow status and optionally PR URL.
+
+        The workflow status update and corresponding audit log entry are written
+        atomically in a single transaction. If either fails, both are rolled back.
+        """
         now = datetime.now(UTC).isoformat()
         conn = get_connection()
         try:
-            if pr_url:
-                conn.execute(
-                    """
-                    UPDATE workflows
-                    SET status = ?, pr_url = ?, updated_at = ?
-                    WHERE id = ?
-                    """,
-                    (status.value, pr_url, now, workflow_id),
+            # Start explicit transaction
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                if pr_url:
+                    conn.execute(
+                        """
+                        UPDATE workflows
+                        SET status = ?, pr_url = ?, updated_at = ?
+                        WHERE id = ?
+                        """,
+                        (status.value, pr_url, now, workflow_id),
+                    )
+                else:
+                    conn.execute(
+                        """
+                        UPDATE workflows
+                        SET status = ?, updated_at = ?
+                        WHERE id = ?
+                        """,
+                        (status.value, now, workflow_id),
+                    )
+                _create_audit_log(
+                    conn,
+                    workflow_id=workflow_id,
+                    actor=actor,
+                    action="status_change",
+                    reason=reason or f"Status changed to {status.value}",
                 )
-            else:
-                conn.execute(
-                    """
-                    UPDATE workflows
-                    SET status = ?, updated_at = ?
-                    WHERE id = ?
-                    """,
-                    (status.value, now, workflow_id),
-                )
-            conn.commit()
-            _create_audit_log(
-                conn,
-                workflow_id=workflow_id,
-                actor=actor,
-                action="status_change",
-                reason=reason or f"Status changed to {status.value}",
-            )
-            conn.commit()
+                # Commit both operations atomically
+                conn.commit()
+            except Exception:
+                # Rollback on any error during the transaction
+                conn.rollback()
+                raise
         finally:
             conn.close()
 
@@ -243,29 +283,40 @@ class SQLiteWorkflowRepository:
         actor: str = "system",
         reason: Optional[str] = None,
     ) -> None:
-        """Persist a new work plan for *workflow_id*."""
+        """Persist a new work plan for *workflow_id*.
+
+        The work plan update and corresponding audit log entry are written
+        atomically in a single transaction. If either fails, both are rolled back.
+        """
         now = datetime.now(UTC).isoformat()
         work_plan_json = json.dumps(work_plan)
 
         conn = get_connection()
         try:
-            conn.execute(
-                """
-                UPDATE workflows
-                SET work_plan = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (work_plan_json, now, workflow_id),
-            )
-            conn.commit()
-            _create_audit_log(
-                conn,
-                workflow_id=workflow_id,
-                actor=actor,
-                action="work_plan_updated",
-                reason=reason or "WorkPlan stored",
-            )
-            conn.commit()
+            # Start explicit transaction
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                conn.execute(
+                    """
+                    UPDATE workflows
+                    SET work_plan = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (work_plan_json, now, workflow_id),
+                )
+                _create_audit_log(
+                    conn,
+                    workflow_id=workflow_id,
+                    actor=actor,
+                    action="work_plan_updated",
+                    reason=reason or "WorkPlan stored",
+                )
+                # Commit both operations atomically
+                conn.commit()
+            except Exception:
+                # Rollback on any error during the transaction
+                conn.rollback()
+                raise
         finally:
             conn.close()
 
@@ -275,29 +326,40 @@ class SQLiteWorkflowRepository:
         execution_summary: Dict,
         actor: str = "system",
     ) -> None:
-        """Persist the execution summary for *workflow_id*."""
+        """Persist the execution summary for *workflow_id*.
+
+        The execution summary update and corresponding audit log entry are written
+        atomically in a single transaction. If either fails, both are rolled back.
+        """
         now = datetime.now(UTC).isoformat()
         summary_json = json.dumps(execution_summary)
 
         conn = get_connection()
         try:
-            conn.execute(
-                """
-                UPDATE workflows
-                SET execution_summary = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (summary_json, now, workflow_id),
-            )
-            conn.commit()
-            _create_audit_log(
-                conn,
-                workflow_id=workflow_id,
-                actor=actor,
-                action="execution_summary_stored",
-                reason="Execution summary saved from execute recipe",
-            )
-            conn.commit()
+            # Start explicit transaction
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                conn.execute(
+                    """
+                    UPDATE workflows
+                    SET execution_summary = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (summary_json, now, workflow_id),
+                )
+                _create_audit_log(
+                    conn,
+                    workflow_id=workflow_id,
+                    actor=actor,
+                    action="execution_summary_stored",
+                    reason="Execution summary saved from execute recipe",
+                )
+                # Commit both operations atomically
+                conn.commit()
+            except Exception:
+                # Rollback on any error during the transaction
+                conn.rollback()
+                raise
         finally:
             conn.close()
 
@@ -307,50 +369,62 @@ class SQLiteWorkflowRepository:
         round_entry: Dict,
         actor: str = "system",
     ) -> None:
-        """Append a clarification round entry to *workflow_id*."""
+        """Append a clarification round entry to *workflow_id*.
+
+        The clarification history update and corresponding audit log entry are written
+        atomically in a single transaction. If either fails, both are rolled back.
+        """
         now = datetime.now(UTC).isoformat()
 
         conn = get_connection()
         try:
-            row = conn.execute(
-                "SELECT clarification_history FROM workflows WHERE id = ?",
-                (workflow_id,),
-            ).fetchone()
-            if row is None:
-                return
+            # Start explicit transaction
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                row = conn.execute(
+                    "SELECT clarification_history FROM workflows WHERE id = ?",
+                    (workflow_id,),
+                ).fetchone()
+                if row is None:
+                    conn.rollback()
+                    return
 
-            history: List[Dict] = []
-            if row["clarification_history"]:
-                try:
-                    history = json.loads(row["clarification_history"])
-                    if not isinstance(history, list):
+                history: List[Dict] = []
+                if row["clarification_history"]:
+                    try:
+                        history = json.loads(row["clarification_history"])
+                        if not isinstance(history, list):
+                            history = []
+                    except (json.JSONDecodeError, TypeError):
                         history = []
-                except (json.JSONDecodeError, TypeError):
-                    history = []
 
-            enriched = dict(round_entry)
-            enriched.setdefault("actor", actor)
-            enriched.setdefault("timestamp", now)
-            history.append(enriched)
+                enriched = dict(round_entry)
+                enriched.setdefault("actor", actor)
+                enriched.setdefault("timestamp", now)
+                history.append(enriched)
 
-            history_json = json.dumps(history)
-            conn.execute(
-                """
-                UPDATE workflows
-                SET clarification_history = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (history_json, now, workflow_id),
-            )
-            conn.commit()
-            _create_audit_log(
-                conn,
-                workflow_id=workflow_id,
-                actor=actor,
-                action="clarification_history_updated",
-                reason=f"Clarification round {enriched.get('round', '?')} appended",
-            )
-            conn.commit()
+                history_json = json.dumps(history)
+                conn.execute(
+                    """
+                    UPDATE workflows
+                    SET clarification_history = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (history_json, now, workflow_id),
+                )
+                _create_audit_log(
+                    conn,
+                    workflow_id=workflow_id,
+                    actor=actor,
+                    action="clarification_history_updated",
+                    reason=f"Clarification round {enriched.get('round', '?')} appended",
+                )
+                # Commit both operations atomically
+                conn.commit()
+            except Exception:
+                # Rollback on any error during the transaction
+                conn.rollback()
+                raise
         finally:
             conn.close()
 
@@ -360,39 +434,51 @@ class SQLiteWorkflowRepository:
         comments: str,
         actor: str = "system",
     ) -> None:
-        """Append PR review comments to *workflow_id*, preserving previous rounds."""
+        """Append PR review comments to *workflow_id*, preserving previous rounds.
+
+        The PR comments update and corresponding audit log entry are written
+        atomically in a single transaction. If either fails, both are rolled back.
+        """
         now = datetime.now(UTC).isoformat()
 
         conn = get_connection()
         try:
-            row = conn.execute(
-                "SELECT pr_comments FROM workflows WHERE id = ?",
-                (workflow_id,),
-            ).fetchone()
-            if row is None:
-                return
+            # Start explicit transaction
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                row = conn.execute(
+                    "SELECT pr_comments FROM workflows WHERE id = ?",
+                    (workflow_id,),
+                ).fetchone()
+                if row is None:
+                    conn.rollback()
+                    return
 
-            existing = row["pr_comments"] or ""
-            separator = f"\n\n--- Review round {now} ---\n"
-            updated = (existing + separator + comments).strip()
+                existing = row["pr_comments"] or ""
+                separator = f"\n\n--- Review round {now} ---\n"
+                updated = (existing + separator + comments).strip()
 
-            conn.execute(
-                """
-                UPDATE workflows
-                SET pr_comments = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (updated, now, workflow_id),
-            )
-            conn.commit()
-            _create_audit_log(
-                conn,
-                workflow_id=workflow_id,
-                actor=actor,
-                action="pr_comments_updated",
-                reason="PR review comments appended",
-            )
-            conn.commit()
+                conn.execute(
+                    """
+                    UPDATE workflows
+                    SET pr_comments = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (updated, now, workflow_id),
+                )
+                _create_audit_log(
+                    conn,
+                    workflow_id=workflow_id,
+                    actor=actor,
+                    action="pr_comments_updated",
+                    reason="PR review comments appended",
+                )
+                # Commit both operations atomically
+                conn.commit()
+            except Exception:
+                # Rollback on any error during the transaction
+                conn.rollback()
+                raise
         finally:
             conn.close()
 
@@ -403,77 +489,101 @@ class SQLiteWorkflowRepository:
         data: Dict,
         actor: str = "system",
     ) -> None:
-        """Merge per-stage LLM token usage data into *workflow_id*."""
+        """Merge per-stage LLM token usage data into *workflow_id*.
+
+        The usage summary update and corresponding audit log entry are written
+        atomically in a single transaction. If either fails, both are rolled back.
+        """
         now = datetime.now(UTC).isoformat()
 
         conn = get_connection()
         try:
-            row = conn.execute(
-                "SELECT usage_summary FROM workflows WHERE id = ?",
-                (workflow_id,),
-            ).fetchone()
-            if row is None:
-                return
+            # Start explicit transaction
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                row = conn.execute(
+                    "SELECT usage_summary FROM workflows WHERE id = ?",
+                    (workflow_id,),
+                ).fetchone()
+                if row is None:
+                    conn.rollback()
+                    return
 
-            existing: Dict = {}
-            if row["usage_summary"]:
-                try:
-                    existing = json.loads(row["usage_summary"])
-                except (json.JSONDecodeError, TypeError):
-                    existing = {}
+                existing: Dict = {}
+                if row["usage_summary"]:
+                    try:
+                        existing = json.loads(row["usage_summary"])
+                    except (json.JSONDecodeError, TypeError):
+                        existing = {}
 
-            existing[stage] = data
-            summary_json = json.dumps(existing)
+                existing[stage] = data
+                summary_json = json.dumps(existing)
 
-            conn.execute(
-                """
-                UPDATE workflows
-                SET usage_summary = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (summary_json, now, workflow_id),
-            )
-            conn.commit()
-            _create_audit_log(
-                conn,
-                workflow_id=workflow_id,
-                actor=actor,
-                action="usage_summary_stored",
-                reason=f"Token usage summary saved for stage '{stage}'",
-            )
-            conn.commit()
+                conn.execute(
+                    """
+                    UPDATE workflows
+                    SET usage_summary = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (summary_json, now, workflow_id),
+                )
+                _create_audit_log(
+                    conn,
+                    workflow_id=workflow_id,
+                    actor=actor,
+                    action="usage_summary_stored",
+                    reason=f"Token usage summary saved for stage '{stage}'",
+                )
+                # Commit both operations atomically
+                conn.commit()
+            except Exception:
+                # Rollback on any error during the transaction
+                conn.rollback()
+                raise
         finally:
             conn.close()
 
     def increment_retry_count(self, workflow_id: str, actor: str = "system") -> int:
-        """Increment the retry counter for *workflow_id* and return the new value."""
+        """Increment the retry counter for *workflow_id* and return the new value.
+
+        The retry count update and corresponding audit log entry are written
+        atomically in a single transaction. If either fails, both are rolled back.
+        """
         now = datetime.now(UTC).isoformat()
         conn = get_connection()
         try:
-            row = conn.execute(
-                "SELECT retry_count FROM workflows WHERE id = ?", (workflow_id,)
-            ).fetchone()
-            if row is None:
-                return 0
-            new_count = int(row["retry_count"] or 0) + 1
-            conn.execute(
-                """
-                UPDATE workflows
-                SET retry_count = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (new_count, now, workflow_id),
-            )
-            conn.commit()
-            _create_audit_log(
-                conn,
-                workflow_id=workflow_id,
-                actor=actor,
-                action="workflow_retried",
-                reason=f"Retry attempt #{new_count}",
-            )
-            conn.commit()
-            return new_count
+            # Start explicit transaction
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                row = conn.execute(
+                    "SELECT retry_count FROM workflows WHERE id = ?", (workflow_id,)
+                ).fetchone()
+                if row is None:
+                    conn.rollback()
+                    return 0
+                new_count = int(row["retry_count"] or 0) + 1
+                conn.execute(
+                    """
+                    UPDATE workflows
+                    SET retry_count = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (new_count, now, workflow_id),
+                )
+                _create_audit_log(
+                    conn,
+                    workflow_id=workflow_id,
+                    actor=actor,
+                    action="workflow_retried",
+                    reason=f"Retry attempt #{new_count}",
+                )
+                # Commit both operations atomically
+                conn.commit()
+                return new_count
+            except Exception:
+                # Rollback on any error during the transaction
+                conn.rollback()
+                raise
         finally:
             conn.close()
 

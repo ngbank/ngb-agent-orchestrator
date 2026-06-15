@@ -293,7 +293,6 @@ def run_and_tee(
             if process.stdout is not None:
                 for raw_line in process.stdout:
                     line = raw_line.decode(errors="replace")
-                    print(line, end="", flush=True)
                     log_file.write(line)
                     log_file.flush()
             process.wait()
@@ -314,7 +313,6 @@ def run_and_tee(
 
     for raw_line in process.stdout:
         line = raw_line.decode(errors="replace")
-        print(line, end="", flush=True)
         log_file.write(line)
         log_file.flush()
 

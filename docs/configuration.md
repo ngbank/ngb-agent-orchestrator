@@ -59,9 +59,11 @@ Tracing is always enabled. Configure the exporter via environment variables — 
 
 | Variable | Default | Description |
 |---|---|---|
-| `OTEL_EXPORTER_TYPE` | `console` | Exporter type: `console` (stdout) or `otlp` (local OTel Collector) |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | gRPC endpoint for OTLP exporter (only used when `OTEL_EXPORTER_TYPE=otlp`) |
+| `OTEL_EXPORTERS` | *(empty)* | Comma-separated list of additional exporters: `console` (stdout) and/or `otlp` (remote collector). File logging is **always on** regardless of this value. Leave empty for file-only export. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | gRPC endpoint for OTLP exporter (only used when `OTEL_EXPORTERS` includes `otlp`) |
 | `OTEL_SERVICE_NAME` | `ngb-agent-orchestrator` | Service name attached to all spans |
+| `OTEL_DEBUG_LOCAL` | `false` | When `true`, disables redaction in local artifacts for troubleshooting (never enable in production) |
+| `OTEL_REDACT_PAYLOADS` | `true` | Control redaction: `true` to enable, `false` to disable. Defaults to `true` (secure by default) — independent of exporter type. |
 
 #### Day-0 Console Export (default)
 
@@ -69,22 +71,32 @@ No extra setup needed. Spans are printed to stdout alongside normal logs:
 
 ```bash
 # Default — spans print to stdout
-OTEL_EXPORTER_TYPE=console dispatcher --ticket AOS-109
+OTEL_EXPORTERS=console dispatcher --ticket AOS-109
 ```
 
-Sample span output:
-```
+#### Local JSON File Export (always on)
+
+Spans are **always** written as JSON lines to `LOGS_DIR/<workflow_id>/otel.json` — no environment variable is needed to enable this. Each line is a valid JSON span object:
+
+```json
 {
     "name": "graph.node.work_planner",
-    "context": {"trace_id": "0x...", "span_id": "0x..."},
+    "trace_id": "0x123abc...",
+    "span_id": "0x456def...",
+    "start_time": 1234567890000000000,
+    "end_time": 1234567891000000000,
+    "duration_ms": 1000,
     "attributes": {
         "workflow.id": "abc-123",
         "jira.ticket_key": "AOS-109",
         "graph.node_name": "work_planner"
     },
-    "status": {"status_code": "OK"}
+    "events": [],
+    "status": {"status_code": "OK", "description": null}
 }
 ```
+
+This JSON format is machine-parseable for downstream analysis, dashboards, and debugging tools.
 
 #### Local OTLP Export (optional)
 
@@ -100,7 +112,7 @@ docker run -p 4317:4317 otel/opentelemetry-collector-contrib:latest
 
 Then set:
 ```bash
-OTEL_EXPORTER_TYPE=otlp
+OTEL_EXPORTERS=otlp
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 ```
 
@@ -109,8 +121,8 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 | Variable | Default | Description |
 |---|---|---|
 | `DEFAULT_PROJECT_KEY` | `AOS` | Default JIRA project for commands that accept a project |
-| `LOG_LEVEL` | `INFO` | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
-| `LOGS_DIR` | `{system_tmp}/ngb-agent-orchestrator` | Base directory for run logs. Each workflow writes into a `{workflow_id}/` subdirectory containing stage logs and `llm_token_usage.jsonl` |
+| `LOG_LEVEL` | `INFO` | Python logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Affects all application and third-party logs |
+| `LOGS_DIR` | `{system_tmp}/ngb-agent-orchestrator` | Base directory for run logs. Each workflow writes into a `{workflow_id}/` subdirectory containing stage logs, `llm_token_usage.jsonl`, and `otel.json` (always written) |
 
 ---
 

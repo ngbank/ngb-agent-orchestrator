@@ -210,6 +210,9 @@ if $DO_ENV; then
     }
 
     upsert_env_var "OTEL_EXPORTER_TYPE" "console"
+    upsert_env_var "OTEL_EXPORTERS" "console"
+    upsert_env_var "OTEL_DEBUG_LOCAL" "false"
+    upsert_env_var "LOG_LEVEL" "INFO"
 
     info "Allowing direnv to load .env..."
     direnv allow .
