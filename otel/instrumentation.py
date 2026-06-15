@@ -28,14 +28,15 @@ import os
 from typing import Any, Generator
 
 import litellm
+from langchain_core.runnables import RunnableConfig
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.trace import Span, Status, StatusCode
 
-from graph.otel.context import OtelContext, set_node_context
-from graph.otel.exporters import create_exporter
+from otel.context import OtelContext, set_node_context
+from otel.exporters import create_exporter
 
 _SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "ngb-agent-orchestrator")
 _TRACER_NAME = "graph.orchestrator"
@@ -47,7 +48,7 @@ def setup_tracing() -> None:
     """Initialise the global OTel tracer provider.
 
     Safe to call multiple times (idempotent after first call).  Reads
-    exporter config from environment — see ``graph/otel/exporters.py``.
+    exporter config from environment — see ``otel/exporters.py``.
 
     Environment variables:
         OTEL_SERVICE_NAME       Service name attached to all spans.
@@ -73,7 +74,7 @@ def setup_tracing() -> None:
     _tracer = trace.get_tracer(_TRACER_NAME)
 
     # Register OTel LiteLLM callback so LLM calls emit child spans.
-    from graph.otel.litellm_callback import otel_callback_instance
+    from otel.litellm_callback import otel_callback_instance
 
     if otel_callback_instance not in litellm.callbacks:
         litellm.callbacks.append(otel_callback_instance)
@@ -95,7 +96,7 @@ def get_tracer() -> trace.Tracer:
 def instrument_graph_stream(
     graph: Any,
     initial_state: Any,
-    config: dict[str, Any],
+    config: RunnableConfig,
     *,
     stream_mode: str = "updates",
 ) -> Generator[dict[str, Any], None, None]:
@@ -142,7 +143,7 @@ def instrument_graph_stream(
 def _stream_with_node_spans(
     graph: Any,
     initial_state: dict[str, Any],
-    config: dict[str, Any],
+    config: RunnableConfig,
     stream_mode: str,
     tracer: trace.Tracer,
     root_span: Span,

@@ -44,6 +44,7 @@ See [docs/architecture.md](docs/architecture.md) for a full sequence diagram and
 |---|-----------|
 | `dispatcher/run.py` | CLI entry point — orchestrates the full lifecycle |
 | `graph/` | LangGraph state machine — nodes, edges, approval interrupt |
+| `otel/` | OpenTelemetry instrumentation — tracing, exporters, LiteLLM callback |
 | `recipes/plan.yaml` | Goose recipe: JIRA ticket → WorkPlan JSON |
 | `recipes/execute.yaml` | Goose recipe: WorkPlan → feature branch + commit |
 | `state/` | SQLite persistence — workflows, audit log, migrations |

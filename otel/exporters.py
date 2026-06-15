@@ -21,7 +21,7 @@ Supported combinations::
 
 Redaction can be controlled via:
     - OTEL_REDACT_PAYLOADS: explicitly enable/disable redaction (default: true)
-    - OTEL_DEBUG_LOCAL: disable redaction for local debugging (see graph/otel/redaction.py)
+    - OTEL_DEBUG_LOCAL: disable redaction for local debugging (see otel/redaction.py)
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ from typing import Sequence
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import ConsoleSpanExporter, SpanExporter, SpanExportResult
 
-from graph.otel.redaction import redact_attributes, redact_events
+from otel.redaction import redact_attributes, redact_events
 
 _JSON_EXPORT_LOCK = Lock()
 
@@ -121,12 +121,16 @@ def _span_to_dict(span: ReadableSpan, apply_redaction: bool = True) -> dict:
 
     return {
         "name": span.name,
-        "span_id": span.context.span_id,
-        "trace_id": span.context.trace_id,
+        "span_id": span.context.span_id if span.context else None,
+        "trace_id": span.context.trace_id if span.context else None,
         "parent_span_id": span.parent.span_id if span.parent else None,
         "start_time": span.start_time,
         "end_time": span.end_time,
-        "duration_ms": (span.end_time - span.start_time) / 1_000_000 if span.end_time else None,
+        "duration_ms": (
+            (span.end_time - span.start_time) / 1_000_000
+            if span.end_time is not None and span.start_time is not None
+            else None
+        ),
         "status": {
             "status_code": span.status.status_code.name if span.status else None,
             "description": span.status.description if span.status else None,

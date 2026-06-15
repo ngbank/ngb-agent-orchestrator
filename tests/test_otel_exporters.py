@@ -9,8 +9,8 @@ from unittest.mock import MagicMock
 import pytest
 from opentelemetry.sdk.trace.export import SpanExportResult
 
-from graph.otel.exporters import LocalJsonFileExporter, MultiExporter
-from graph.otel.redaction import redact_attributes, should_redact
+from otel.exporters import LocalJsonFileExporter, MultiExporter
+from otel.redaction import redact_attributes, should_redact
 
 
 @pytest.fixture

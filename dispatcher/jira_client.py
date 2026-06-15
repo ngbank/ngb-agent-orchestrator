@@ -103,6 +103,7 @@ class JiraClient:
             )
 
         try:
+            assert self.jira_email is not None and self.jira_api_token is not None
             self.client = JIRA(
                 server=self.jira_url, basic_auth=(self.jira_email, self.jira_api_token)
             )

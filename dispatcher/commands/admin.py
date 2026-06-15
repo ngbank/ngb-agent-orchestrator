@@ -107,7 +107,7 @@ def _handle_history(
     click.echo(f"Status: {emoji} {label}")
     click.echo()
 
-    thread_config = {"configurable": {"thread_id": resolved_id}}
+    thread_config = common.make_thread_config(resolved_id)
     try:
         graph = common.build_orchestrator()
         # get_state_history returns newest-first; reverse for chronological order
@@ -122,7 +122,7 @@ def _handle_history(
         click.echo(f"  {'-'*5} {'-'*19} {'-'*30}")
 
         for state in history:
-            step = state.metadata.get("step", "?")
+            step = (state.metadata or {}).get("step", "?")
             if step == -1:
                 # input step — skip internal detail
                 continue

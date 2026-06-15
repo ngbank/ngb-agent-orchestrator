@@ -13,6 +13,8 @@ validate_plan, store_plan, post_to_jira) is rewound to the top-level
 
 from typing import Optional
 
+from langchain_core.runnables import RunnableConfig
+
 WORK_PLANNER_NODES = {
     "validate_input",
     "check_duplicate",
@@ -38,7 +40,9 @@ def resolve_parent_node(failed_node: str) -> str:
     return failed_node
 
 
-def find_rewind_config(graph, thread_config: dict, parent_node: str) -> Optional[dict]:
+def find_rewind_config(
+    graph, thread_config: RunnableConfig, parent_node: str
+) -> Optional[RunnableConfig]:
     """Walk checkpoint history to find the snapshot where ``parent_node`` was next.
 
     Returns the LangGraph ``config`` (with checkpoint_id) for the snapshot
@@ -52,7 +56,7 @@ def find_rewind_config(graph, thread_config: dict, parent_node: str) -> Optional
     return None
 
 
-def prepare_retry(graph, thread_config: dict, failed_node: str) -> dict:
+def prepare_retry(graph, thread_config: RunnableConfig, failed_node: str) -> RunnableConfig:
     """Rewind graph state so a re-invocation will re-run ``failed_node``.
 
     Clears ``error`` and ``failed_node`` from the checkpointed state at the

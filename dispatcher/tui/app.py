@@ -92,7 +92,9 @@ class WorkflowTUI(App[None]):
         return self.query_one(WorkflowList).get_selected_workflow()
 
     def _notify(self, message: str, severity: str = "information") -> None:
-        self.notify(message, severity=severity, timeout=4)
+        # Textual's `severity` parameter uses Literal types; we accept str at the
+        # boundary for caller convenience and trust the documented values.
+        self.notify(message, severity=severity, timeout=4)  # pyright: ignore[reportArgumentType]
 
     def action_refresh(self) -> None:
         self._refresh_workflows()
@@ -264,9 +266,9 @@ class WorkflowTUI(App[None]):
                 self._notify(str(e), "error")
             self._refresh_workflows()
 
-        self.push_screen(
+        self.push_screen(  # pyright: ignore[reportCallIssue]
             ConfirmModal("Are you sure you want to clear ALL workflows and checkpoints?"),
-            on_confirm,
+            on_confirm,  # pyright: ignore[reportArgumentType]
         )
 
     def on_data_table_row_highlighted(self, event) -> None:

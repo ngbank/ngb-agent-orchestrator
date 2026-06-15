@@ -1,4 +1,4 @@
-"""Tests for graph/otel — context, exporters, stream instrumentation, and LLM callback."""
+"""Tests for otel package — context, exporters, stream instrumentation, and LLM callback."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from graph.otel.context import (
+from otel.context import (
     OtelContext,
     _node_name,
     _ticket_key,
@@ -22,8 +22,8 @@ from graph.otel.context import (
     set_node_context,
     set_workflow_context,
 )
-from graph.otel.exporters import create_exporter
-from graph.otel.instrumentation import (
+from otel.exporters import create_exporter
+from otel.instrumentation import (
     _record_node_output,
 )
 
@@ -112,7 +112,7 @@ class TestCreateExporter:
     def test_file_only_when_exporters_unset(self, monkeypatch):
         """Default (OTEL_EXPORTERS unset) returns only LocalJsonFileExporter."""
         monkeypatch.delenv("OTEL_EXPORTERS", raising=False)
-        from graph.otel.exporters import LocalJsonFileExporter
+        from otel.exporters import LocalJsonFileExporter
 
         exporter = create_exporter()
         assert isinstance(exporter, LocalJsonFileExporter)
@@ -120,7 +120,7 @@ class TestCreateExporter:
     def test_file_only_when_exporters_empty(self, monkeypatch):
         """Empty OTEL_EXPORTERS returns only LocalJsonFileExporter."""
         monkeypatch.setenv("OTEL_EXPORTERS", "")
-        from graph.otel.exporters import LocalJsonFileExporter
+        from otel.exporters import LocalJsonFileExporter
 
         exporter = create_exporter()
         assert isinstance(exporter, LocalJsonFileExporter)
@@ -130,7 +130,7 @@ class TestCreateExporter:
         monkeypatch.setenv("OTEL_EXPORTERS", "console")
         from opentelemetry.sdk.trace.export import ConsoleSpanExporter
 
-        from graph.otel.exporters import LocalJsonFileExporter, MultiExporter
+        from otel.exporters import LocalJsonFileExporter, MultiExporter
 
         exporter = create_exporter()
         assert isinstance(exporter, MultiExporter)
@@ -144,7 +144,7 @@ class TestCreateExporter:
         from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
         from opentelemetry.sdk.trace.export import ConsoleSpanExporter
 
-        from graph.otel.exporters import LocalJsonFileExporter, MultiExporter
+        from otel.exporters import LocalJsonFileExporter, MultiExporter
 
         exporter = create_exporter()
         assert isinstance(exporter, MultiExporter)
@@ -237,7 +237,7 @@ class TestInstrumentGraphStream:
         return graph
 
     def test_yields_all_events(self, monkeypatch):
-        import graph.otel.instrumentation as instr
+        import otel.instrumentation as instr
 
         provider, exporter = _make_in_memory_provider()
         monkeypatch.setattr(instr, "_tracer", provider.get_tracer("test"))
@@ -251,7 +251,7 @@ class TestInstrumentGraphStream:
         assert result == events
 
     def test_creates_root_and_node_spans(self, monkeypatch):
-        import graph.otel.instrumentation as instr
+        import otel.instrumentation as instr
 
         provider, exporter = _make_in_memory_provider()
         monkeypatch.setattr(instr, "_tracer", provider.get_tracer("test"))
@@ -271,7 +271,7 @@ class TestInstrumentGraphStream:
         assert "graph.node.execute_plan" in span_names
 
     def test_root_span_has_correlation_attributes(self, monkeypatch):
-        import graph.otel.instrumentation as instr
+        import otel.instrumentation as instr
 
         provider, exporter = _make_in_memory_provider()
         monkeypatch.setattr(instr, "_tracer", provider.get_tracer("test"))
@@ -288,7 +288,7 @@ class TestInstrumentGraphStream:
     def test_exception_recorded_on_root_span(self, monkeypatch):
         from opentelemetry.trace import StatusCode
 
-        import graph.otel.instrumentation as instr
+        import otel.instrumentation as instr
 
         provider, exporter = _make_in_memory_provider()
         monkeypatch.setattr(instr, "_tracer", provider.get_tracer("test"))
@@ -303,7 +303,7 @@ class TestInstrumentGraphStream:
         assert root.status.status_code == StatusCode.ERROR
 
     def test_node_name_context_reset_after_stream(self, monkeypatch):
-        import graph.otel.instrumentation as instr
+        import otel.instrumentation as instr
 
         provider, _ = _make_in_memory_provider()
         monkeypatch.setattr(instr, "_tracer", provider.get_tracer("test"))
@@ -316,11 +316,11 @@ class TestInstrumentGraphStream:
 
 
 # ---------------------------------------------------------------------------
-# graph/otel/litellm_callback.py — OtelLiteLLMCallback
+# otel/litellm_callback.py — OtelLiteLLMCallback
 # ---------------------------------------------------------------------------
 
 
-from graph.otel.litellm_callback import OtelLiteLLMCallback  # noqa: E402
+from otel.litellm_callback import OtelLiteLLMCallback  # noqa: E402
 
 
 def _make_response(prompt_tokens=10, completion_tokens=20):
@@ -353,7 +353,7 @@ class TestOtelLiteLLMCallback:
 
     def _patched_cb(self, monkeypatch, provider):
         """Return an OtelLiteLLMCallback whose tracer writes to *provider*."""
-        import graph.otel.litellm_callback as cb_module
+        import otel.litellm_callback as cb_module
 
         tracer = provider.get_tracer("test")
         monkeypatch.setattr(cb_module.trace, "get_tracer", lambda *_: tracer)

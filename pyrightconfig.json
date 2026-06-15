@@ -1,0 +1,24 @@
+{
+  "include": [
+    "dispatcher",
+    "graph",
+    "otel",
+    "state",
+    "mcp_server"
+  ],
+  "exclude": [
+    "venv",
+    ".venv",
+    "**/__pycache__",
+    "state/migrations",
+    "ngb_agent_orchestrator.egg-info"
+  ],
+  "ignore": [
+    "tests"
+  ],
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic",
+  "useLibraryCodeForTypes": true,
+  "reportMissingImports": "warning",
+  "reportMissingTypeStubs": "none"
+}

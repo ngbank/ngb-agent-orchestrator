@@ -43,7 +43,7 @@ def _handle_approve(ticket_key: str, workflow_id: Optional[str] = None) -> None:
         )
         sys.exit(1)
 
-    thread_config = {"configurable": {"thread_id": resolved_id}}
+    thread_config = common.make_thread_config(resolved_id)
     actor = common._get_actor()
 
     try:
@@ -129,7 +129,7 @@ def _handle_reject(ticket_key: str, reason: str, workflow_id: Optional[str] = No
         )
         sys.exit(1)
 
-    thread_config = {"configurable": {"thread_id": resolved_id}}
+    thread_config = common.make_thread_config(resolved_id)
 
     try:
         graph = common.build_orchestrator()

@@ -116,7 +116,7 @@ def _handle_clarify(ticket_key: Optional[str], workflow_id: Optional[str] = None
             answers.append({"concern": current_concern, "answer": answer})
             current_concern = None
 
-    thread_config = {"configurable": {"thread_id": resolved_id}}
+    thread_config = common.make_thread_config(resolved_id)
 
     try:
         graph = common.build_orchestrator()

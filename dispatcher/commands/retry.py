@@ -60,7 +60,7 @@ def _handle_retry(ticket_key: Optional[str], workflow_id: Optional[str] = None) 
             err=True,
         )
 
-    thread_config = {"configurable": {"thread_id": resolved_id}}
+    thread_config = common.make_thread_config(resolved_id)
     actor = common._get_actor()
 
     graph = common.build_orchestrator()

@@ -18,11 +18,13 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
+from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.base import ChannelVersions, Checkpoint, CheckpointMetadata
 from langgraph.checkpoint.sqlite import SqliteSaver
 from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
 
-from graph.otel.context import OtelContext
+from otel.context import OtelContext
 
 
 class ObservableSqliteSaver(SqliteSaver):
@@ -42,16 +44,16 @@ class ObservableSqliteSaver(SqliteSaver):
 
     def put(
         self,
-        config: dict[str, Any],
-        checkpoint: dict[str, Any],
-        metadata: dict[str, Any],
-        new_versions: dict[str, Any],
-    ) -> dict[str, Any]:
+        config: RunnableConfig,
+        checkpoint: Checkpoint,
+        metadata: CheckpointMetadata,
+        new_versions: ChannelVersions,
+    ) -> RunnableConfig:
         """Write checkpoint and emit a ``graph.checkpoint`` OTel span."""
         tracer = trace.get_tracer("graph.orchestrator")
         ctx = OtelContext.capture()
 
-        channel_versions = checkpoint.get("channel_versions", {})
+        channel_versions: dict[str, Any] = dict(checkpoint.get("channel_versions", {}))
         step = metadata.get("step", -1)
 
         attributes = {
@@ -60,7 +62,8 @@ class ObservableSqliteSaver(SqliteSaver):
             "checkpoint.channel_count": len(channel_versions),
         }
 
-        thread_id = config.get("configurable", {}).get("thread_id")
+        configurable = config.get("configurable") or {}
+        thread_id = configurable.get("thread_id")
         if thread_id:
             attributes["graph.thread_id"] = str(thread_id)
 

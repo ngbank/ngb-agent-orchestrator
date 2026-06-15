@@ -173,6 +173,7 @@ def goose_session(
         suffix="_litellm.yaml", prefix="goose_proxy_", dir=str(repo_root)
     )
     os.close(config_fd)
+    proxy_log_fh: Optional[IO[str]] = None
     try:
         with open(config_path, "w") as f:
             f.write(config_yaml)
@@ -230,7 +231,8 @@ def goose_session(
                 proc.kill()
                 proc.wait()
     finally:
-        proxy_log_fh.close()
+        if proxy_log_fh is not None:
+            proxy_log_fh.close()
         try:
             os.unlink(config_path)
         except FileNotFoundError:
@@ -254,17 +256,6 @@ def run_and_tee(
       - ``goose.recipe``     — --recipe param value when present
       - correlation attributes from the current OTel context
     """
-    try:
-        from opentelemetry import trace as _trace
-        from opentelemetry.trace import Status as _Status
-        from opentelemetry.trace import StatusCode as _StatusCode
-
-        from graph.otel.context import OtelContext as _OtelContext
-
-        _otel_available = True
-    except ImportError:
-        _otel_available = False
-
     is_goose = bool(cmd and cmd[0] == "goose")
 
     def _goose_recipe(cmd: List[str]) -> str:
@@ -275,35 +266,49 @@ def run_and_tee(
         except (ValueError, IndexError):
             return ""
 
-    if _otel_available and is_goose:
-        tracer = _trace.get_tracer("graph.orchestrator")
-        ctx = _OtelContext.capture()
-        attributes = {
-            **ctx.as_attributes(),
-            "process.command": cmd[0],
-        }
-        recipe = _goose_recipe(cmd)
-        if recipe:
-            attributes["goose.recipe"] = recipe
+    if is_goose:
+        try:
+            from opentelemetry import trace as _trace
+            from opentelemetry.trace import Status as _Status
+            from opentelemetry.trace import StatusCode as _StatusCode
 
-        with tracer.start_as_current_span("goose.run", attributes=attributes) as span:
-            kwargs.setdefault("stdout", subprocess.PIPE)
-            kwargs.setdefault("stderr", subprocess.STDOUT)
-            process = subprocess.Popen(cmd, **kwargs)
-            if process.stdout is not None:
-                for raw_line in process.stdout:
-                    line = raw_line.decode(errors="replace")
-                    log_file.write(line)
-                    log_file.flush()
-            process.wait()
-            span.set_attribute("process.exit_code", process.returncode)
-            if process.returncode != 0:
-                span.set_status(
-                    _Status(_StatusCode.ERROR, f"goose exited with code {process.returncode}")
-                )
-            else:
-                span.set_status(_Status(_StatusCode.OK))
-            return subprocess.CompletedProcess(cmd, process.returncode)
+            from otel.context import OtelContext as _OtelContext
+
+            tracer = _trace.get_tracer("graph.orchestrator")
+            ctx = _OtelContext.capture()
+            attributes = {
+                **ctx.as_attributes(),
+                "process.command": cmd[0],
+            }
+            recipe = _goose_recipe(cmd)
+            if recipe:
+                attributes["goose.recipe"] = recipe
+
+            with tracer.start_as_current_span("goose.run", attributes=attributes) as span:
+                kwargs.setdefault("stdout", subprocess.PIPE)
+                kwargs.setdefault("stderr", subprocess.STDOUT)
+                process = subprocess.Popen(cmd, **kwargs)
+                if process.stdout is not None:
+                    for raw_line in process.stdout:
+                        line = (
+                            raw_line.decode(errors="replace")
+                            if isinstance(raw_line, bytes)
+                            else raw_line
+                        )
+                        log_file.write(line)
+                        log_file.flush()
+                process.wait()
+                span.set_attribute("process.exit_code", process.returncode)
+                if process.returncode != 0:
+                    span.set_status(
+                        _Status(_StatusCode.ERROR, f"goose exited with code {process.returncode}")
+                    )
+                else:
+                    span.set_status(_Status(_StatusCode.OK))
+                return subprocess.CompletedProcess(cmd, process.returncode)
+        except ImportError:
+            # OTel not installed — fall through to plain execution.
+            pass
 
     kwargs.setdefault("stdout", subprocess.PIPE)
     kwargs.setdefault("stderr", subprocess.STDOUT)
@@ -312,7 +317,7 @@ def run_and_tee(
     assert process.stdout is not None
 
     for raw_line in process.stdout:
-        line = raw_line.decode(errors="replace")
+        line = raw_line.decode(errors="replace") if isinstance(raw_line, bytes) else raw_line
         log_file.write(line)
         log_file.flush()
 

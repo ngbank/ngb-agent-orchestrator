@@ -47,7 +47,7 @@ def _handle_approve_pr(ticket_key: Optional[str], workflow_id: Optional[str] = N
         )
         sys.exit(1)
 
-    thread_config = {"configurable": {"thread_id": resolved_id}}
+    thread_config = common.make_thread_config(resolved_id)
     actor = common._get_actor()
 
     try:
@@ -153,7 +153,7 @@ def _handle_comment_pr(ticket_key: Optional[str], workflow_id: Optional[str] = N
         click.echo("⚠️  No comments provided. Aborting.", err=True)
         sys.exit(1)
 
-    thread_config = {"configurable": {"thread_id": resolved_id}}
+    thread_config = common.make_thread_config(resolved_id)
 
     try:
         graph = common.build_orchestrator()
@@ -233,7 +233,7 @@ def _handle_reject_pr(
         )
         sys.exit(1)
 
-    thread_config = {"configurable": {"thread_id": resolved_id}}
+    thread_config = common.make_thread_config(resolved_id)
     actor = common._get_actor()
 
     try:

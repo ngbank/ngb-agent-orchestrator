@@ -27,7 +27,7 @@ def _handle_run(ticket: str, dry_run: bool) -> None:
     # Pre-generate a UUID that acts as both the workflow DB ID and the
     # LangGraph thread_id, keeping the two systems in sync.
     workflow_id = str(uuid.uuid4())
-    thread_config = {"configurable": {"thread_id": workflow_id}}
+    thread_config = common.make_thread_config(workflow_id)
     graph = None
 
     try:

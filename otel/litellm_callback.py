@@ -8,7 +8,7 @@ it automatically nests under the enclosing ``graph.node.*`` span:
     └── llm.call   (model, input_tokens, output_tokens, latency_ms)
 
 No node code modifications are required — registration happens once via
-``register_otel_callback()`` called from ``graph/otel/instrumentation.py``.
+``register_otel_callback()`` called from ``otel/instrumentation.py``.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from litellm.integrations.custom_logger import CustomLogger
 from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
 
-from graph.otel.context import OtelContext
+from otel.context import OtelContext
 
 
 def _duration_ms(start: Any, end: Any) -> float | None:
@@ -132,7 +132,8 @@ class OtelLiteLLMCallback(CustomLogger):
         if callable(model_dump):
             try:
                 data = model_dump()
-                return data.get("usage") or {}
+                if isinstance(data, dict):
+                    return data.get("usage") or {}
             except Exception:
                 pass
 
@@ -143,7 +144,10 @@ class OtelLiteLLMCallback(CustomLogger):
             inner_dump = getattr(usage_attr, "model_dump", None)
             if callable(inner_dump):
                 try:
-                    return inner_dump() or {}
+                    dumped = inner_dump()
+                    if isinstance(dumped, dict):
+                        return dumped
+                    return {}
                 except Exception:
                     pass
             return vars(usage_attr) if hasattr(usage_attr, "__dict__") else {}

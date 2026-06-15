@@ -8,6 +8,7 @@ only consume lightweight helpers/constants do not pay graph/JIRA startup costs.
 from typing import Optional
 
 import click
+from langchain_core.runnables import RunnableConfig
 
 from dispatcher.constants import NODE_EMOJI, STATUS_DISPLAY
 from dispatcher.protocols import CommentPoster
@@ -33,6 +34,16 @@ format_execution_summary_comment = None
 # ---------------------------------------------------------------------------
 
 
+def make_thread_config(thread_id: str) -> RunnableConfig:
+    """Build a LangGraph thread config dict with the correct static type.
+
+    Using this helper keeps Pyright happy when passing the dict into
+    ``graph.get_state(...)`` / ``graph.stream(...)`` which expect
+    ``RunnableConfig`` rather than a generic ``dict``.
+    """
+    return {"configurable": {"thread_id": thread_id}}
+
+
 def build_orchestrator(*args, **kwargs):
     """Lazily import and construct the orchestrator graph.
 
@@ -40,7 +51,7 @@ def build_orchestrator(*args, **kwargs):
     work begins — keeping setup_tracing() out of every individual command.
     """
     from graph.builder import build_orchestrator as _build_orchestrator
-    from graph.otel import setup_tracing
+    from otel import setup_tracing
 
     setup_tracing()
     return _build_orchestrator(*args, **kwargs)
@@ -52,7 +63,7 @@ def run_graph_stream(
     *,
     workflow_id: str,
     ticket_key: str,
-    thread_config: dict,
+    thread_config: RunnableConfig,
 ):
     """Set OTel workflow context and drive the graph stream to completion.
 
@@ -61,7 +72,7 @@ def run_graph_stream(
 
     Returns the last stream event (or ``None`` if the stream emitted nothing).
     """
-    from graph.otel import instrument_graph_stream, set_workflow_context
+    from otel import instrument_graph_stream, set_workflow_context
 
     set_workflow_context(workflow_id=workflow_id, ticket_key=ticket_key)
     last_event = None
@@ -73,7 +84,7 @@ def run_graph_stream(
 def _mark_workflow_interrupted(
     workflow_id: str,
     graph=None,
-    thread_config: Optional[dict] = None,
+    thread_config: Optional[RunnableConfig] = None,
     actor: str = "dispatcher",
 ) -> None:
     """Mark a workflow as FAILED after a KeyboardInterrupt / Ctrl-C.

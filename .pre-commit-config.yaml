@@ -41,6 +41,19 @@ repos:
         args: [--ignore-missing-imports, --no-error-summary, --python-version=3.12]
         exclude: ^(venv/|state/migrations/)
 
+  # Pyright runs Pylance's analysis engine — catches possibly-unbound symbols,
+  # narrowing failures, and signature mismatches that mypy misses. Scope and
+  # strictness are configured in pyrightconfig.json (tests are excluded).
+  # Runs via the project venv so library types resolve correctly.
+  - repo: local
+    hooks:
+      - id: pyright
+        name: pyright
+        entry: venv/bin/python -m pyright
+        language: system
+        pass_filenames: false
+        always_run: true
+
   # ── Tests ─────────────────────────────────────────────────────────────────
   - repo: local
     hooks:
