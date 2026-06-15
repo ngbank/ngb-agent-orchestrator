@@ -128,8 +128,9 @@ class TestCreateExporter:
     def test_console_exporter_includes_file_and_console(self, monkeypatch):
         """OTEL_EXPORTERS=console returns MultiExporter with file + console."""
         monkeypatch.setenv("OTEL_EXPORTERS", "console")
-        from graph.otel.exporters import LocalJsonFileExporter, MultiExporter
         from opentelemetry.sdk.trace.export import ConsoleSpanExporter
+
+        from graph.otel.exporters import LocalJsonFileExporter, MultiExporter
 
         exporter = create_exporter()
         assert isinstance(exporter, MultiExporter)
@@ -140,9 +141,10 @@ class TestCreateExporter:
         """OTEL_EXPORTERS=console,otlp returns MultiExporter with file + console + otlp."""
         pytest.importorskip("opentelemetry.exporter.otlp.proto.grpc.trace_exporter")
         monkeypatch.setenv("OTEL_EXPORTERS", "console,otlp")
-        from graph.otel.exporters import LocalJsonFileExporter, MultiExporter
         from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
         from opentelemetry.sdk.trace.export import ConsoleSpanExporter
+
+        from graph.otel.exporters import LocalJsonFileExporter, MultiExporter
 
         exporter = create_exporter()
         assert isinstance(exporter, MultiExporter)

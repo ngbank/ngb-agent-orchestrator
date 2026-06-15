@@ -39,8 +39,8 @@ def build_orchestrator(*args, **kwargs):
     Also ensures OTel tracing is initialised exactly once before any graph
     work begins — keeping setup_tracing() out of every individual command.
     """
-    from graph.otel import setup_tracing
     from graph.builder import build_orchestrator as _build_orchestrator
+    from graph.otel import setup_tracing
 
     setup_tracing()
     return _build_orchestrator(*args, **kwargs)

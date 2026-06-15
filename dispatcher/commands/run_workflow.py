@@ -8,7 +8,6 @@ from langgraph.errors import GraphInterrupt
 
 import dispatcher.commands.common as common
 from dispatcher.exceptions import TicketAuthError, TicketConfigError, TicketNotFoundError
-
 from state.workflow_repository import update_status
 from state.workflow_status import WorkflowStatus
 

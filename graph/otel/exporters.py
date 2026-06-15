@@ -216,8 +216,7 @@ def create_exporter() -> SpanExporter:
             exporters.append(OTLPSpanExporter(endpoint=_otlp_endpoint(), insecure=True))
         else:
             raise ValueError(
-                f"Unknown exporter {name!r} in OTEL_EXPORTERS. "
-                "Valid values: 'console', 'otlp'."
+                f"Unknown exporter {name!r} in OTEL_EXPORTERS. " "Valid values: 'console', 'otlp'."
             )
 
     if len(exporters) == 1:
