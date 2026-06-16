@@ -251,9 +251,12 @@ def run_and_tee(
     All subprocess kwargs (cwd, env, etc.) are forwarded.
 
     When OTel tracing is active, emits a ``goose.run`` child span with:
-      - ``process.command``  — first element of cmd (e.g. "goose")
+      - ``process.command``       — first element of cmd (e.g. "goose")
+      - ``process.command_line``  — full command joined as a string
       - ``process.exit_code``
-      - ``goose.recipe``     — --recipe param value when present
+      - ``goose.recipe``          — --recipe param value when present
+      - ``goose.stage``           — recipe basename without extension (e.g. "plan")
+      - ``goose.stdout_lines``    — number of stdout lines captured
       - correlation attributes from the current OTel context
     """
     is_goose = bool(cmd and cmd[0] == "goose")
@@ -276,18 +279,24 @@ def run_and_tee(
 
             tracer = _trace.get_tracer("graph.orchestrator")
             ctx = _OtelContext.capture()
-            attributes = {
+            attributes: dict = {
                 **ctx.as_attributes(),
                 "process.command": cmd[0],
+                "process.command_line": " ".join(cmd),
             }
             recipe = _goose_recipe(cmd)
             if recipe:
                 attributes["goose.recipe"] = recipe
+                # Derive a stable stage name (e.g. "recipes/plan.yaml" -> "plan").
+                stage = os.path.splitext(os.path.basename(recipe))[0]
+                if stage:
+                    attributes["goose.stage"] = stage
 
             with tracer.start_as_current_span("goose.run", attributes=attributes) as span:
                 kwargs.setdefault("stdout", subprocess.PIPE)
                 kwargs.setdefault("stderr", subprocess.STDOUT)
                 process = subprocess.Popen(cmd, **kwargs)
+                stdout_lines = 0
                 if process.stdout is not None:
                     for raw_line in process.stdout:
                         line = (
@@ -297,8 +306,10 @@ def run_and_tee(
                         )
                         log_file.write(line)
                         log_file.flush()
+                        stdout_lines += 1
                 process.wait()
                 span.set_attribute("process.exit_code", process.returncode)
+                span.set_attribute("goose.stdout_lines", stdout_lines)
                 if process.returncode != 0:
                     span.set_status(
                         _Status(_StatusCode.ERROR, f"goose exited with code {process.returncode}")

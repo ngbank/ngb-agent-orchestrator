@@ -130,14 +130,36 @@ def instrument_graph_stream(
             "graph.thread_id": config.get("configurable", {}).get("thread_id", ""),
         },
     ) as root_span:
+        # AOS-117: capture a rollup of what happened so the root span is
+        # self-describing (without grepping all child spans).
+        node_count = 0
+        last_node: str | None = None
+        exit_reason = "completed"
         try:
-            yield from _stream_with_node_spans(
+            for event in _stream_with_node_spans(
                 graph, initial_state, config, stream_mode, tracer, root_span
-            )
+            ):
+                if isinstance(event, dict):
+                    for node_name in event.keys():
+                        node_count += 1
+                        last_node = node_name
+                yield event
         except Exception as exc:
+            exit_reason = "error"
             root_span.record_exception(exc)
             root_span.set_status(Status(StatusCode.ERROR, str(exc)))
             raise
+        else:
+            # Detect interrupt by checking the last observed node name; LangGraph
+            # surfaces an "__interrupt__" pseudo-node when the graph pauses.
+            if last_node == "__interrupt__":
+                exit_reason = "interrupted"
+            root_span.set_status(Status(StatusCode.OK))
+        finally:
+            root_span.set_attribute("workflow.node_count", node_count)
+            root_span.set_attribute("workflow.exit_reason", exit_reason)
+            if last_node is not None:
+                root_span.set_attribute("workflow.last_node", last_node)
 
 
 def _stream_with_node_spans(
@@ -174,6 +196,20 @@ def _record_node_output(span: Span, node_name: str, output: Any) -> None:
     """Attach node output metadata to the span; record errors if present."""
     if not isinstance(output, dict):
         return
+
+    # AOS-117 enrichment: surface which state keys this node produced (no values,
+    # avoids any redaction concern) and a rough size signal.
+    keys = sorted(str(k) for k in output.keys())
+    if keys:
+        span.set_attribute("graph.node.state_keys_changed", keys)
+    try:
+        import json as _json
+
+        size_bytes = len(_json.dumps(output, default=str).encode("utf-8"))
+        span.set_attribute("graph.node.output_size_bytes", size_bytes)
+    except (TypeError, ValueError):
+        # Non-serialisable output is rare but should not break instrumentation.
+        pass
 
     error = output.get("error")
     if error:
