@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
 from collections import defaultdict
 from pathlib import Path
 from threading import Lock
@@ -39,6 +38,7 @@ from typing import Sequence
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import ConsoleSpanExporter, SpanExporter, SpanExportResult
 
+from graph.log_paths import logs_base_dir
 from otel.redaction import redact_attributes, redact_events
 
 _JSON_EXPORT_LOCK = Lock()
@@ -50,9 +50,8 @@ def _otlp_endpoint() -> str:
 
 
 def _logs_base_dir() -> Path:
-    """Return the base directory for run logs (``LOGS_DIR`` or system tmp fallback)."""
-    default = Path(tempfile.gettempdir()) / "ngb-agent-orchestrator"
-    return Path(os.getenv("LOGS_DIR", str(default)))
+    """Return the base directory for run logs."""
+    return logs_base_dir()
 
 
 def _otel_json_path_for(workflow_id: str) -> Path:

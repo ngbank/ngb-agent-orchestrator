@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
@@ -12,16 +11,14 @@ from typing import Any
 
 from litellm.integrations.custom_logger import CustomLogger
 
+from graph.log_paths import workflow_logs_dir
+
 _WRITE_LOCK = Lock()
 
 
 def _logs_dir() -> Path:
-    default = Path(tempfile.gettempdir()) / "ngb-agent-orchestrator"
-    base = Path(os.getenv("LOGS_DIR", str(default)))
     workflow_id = os.getenv("NGB_WORKFLOW_ID", "unknown")
-    path = base / workflow_id
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    return workflow_logs_dir(workflow_id)
 
 
 def _token_usage_path() -> Path:
@@ -190,9 +187,7 @@ def aggregate_token_usage(workflow_id: str, stage: str) -> dict:
     Returns a dict with keys: stage, turns, prompt_tokens, completion_tokens,
     total_tokens, stop_reasons.
     """
-    default = Path(tempfile.gettempdir()) / "ngb-agent-orchestrator"
-    base = Path(os.getenv("LOGS_DIR", str(default)))
-    jsonl_path = base / workflow_id / "llm_token_usage.jsonl"
+    jsonl_path = workflow_logs_dir(workflow_id, ensure_dir=False) / "llm_token_usage.jsonl"
 
     turns = 0
     prompt_tokens = 0

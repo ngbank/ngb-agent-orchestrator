@@ -13,6 +13,8 @@ import urllib.request
 from pathlib import Path
 from typing import IO, List, Optional
 
+from graph.log_paths import logs_base_dir, workflow_logs_dir
+
 
 def _get_actor() -> str:
     """Return the current OS username, or 'unknown' if it cannot be determined."""
@@ -23,45 +25,14 @@ def _get_actor() -> str:
 
 
 def _logs_dir() -> Path:
-    default = Path(tempfile.gettempdir()) / "ngb-agent-orchestrator"
-    return Path(os.getenv("LOGS_DIR", str(default)))
-
-
-def workflow_persisted_logs_dir(workflow_id: str) -> Optional[Path]:
-    """Return persisted logs_dir for a workflow, or None for legacy rows."""
-    # Import lazily to avoid introducing import-time coupling for callers that
-    # only need utility helpers.
-    from state.workflow_repository import get_workflow
-
-    workflow = get_workflow(workflow_id)
-    if workflow is None:
-        return None
-
-    logs_dir = workflow.get("logs_dir")
-    if not logs_dir:
-        return None
-
-    return Path(str(logs_dir))
-
-
-def workflow_log_path(
-    workflow_id: str,
-    stage: str,
-    ticket_key: Optional[str] = None,
-    ensure_dir: bool = True,
-) -> Path:
-    """Return a workflow log path pinned to persisted logs_dir when present."""
-    base_dir = workflow_persisted_logs_dir(workflow_id) or _logs_dir()
-    workflow_dir = base_dir / workflow_id
-    if ensure_dir:
-        workflow_dir.mkdir(parents=True, exist_ok=True)
-    prefix = f"{ticket_key}_" if ticket_key else ""
-    return workflow_dir / f"{prefix}{workflow_id}_{stage}.log"
+    return logs_base_dir()
 
 
 def log_path(workflow_id: str, stage: str, ticket_key: Optional[str] = None) -> Path:
     """Return the log file path for a given workflow and stage (e.g. 'plan', 'execute')."""
-    return workflow_log_path(workflow_id, stage, ticket_key=ticket_key, ensure_dir=True)
+    workflow_dir = workflow_logs_dir(workflow_id, ensure_dir=True)
+    prefix = f"{ticket_key}_" if ticket_key else ""
+    return workflow_dir / f"{prefix}{workflow_id}_{stage}.log"
 
 
 # Azure deployment name → API version.

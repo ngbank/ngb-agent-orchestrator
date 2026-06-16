@@ -256,6 +256,6 @@ dispatcher --workflow-id <uuid> --logs
 
 Log paths are workflow-pinned:
 
-- For new workflows, the active `LOGS_DIR` is persisted at workflow creation and reused later.
-- This means `--logs` and resume/retry writes continue using the original directory even when run from a later shell with a different `LOGS_DIR` value.
-- Legacy workflows with `logs_dir = NULL` fall back to the current process `LOGS_DIR`.
+- Default base directory is XDG state: `$XDG_STATE_HOME/ngb-agent-orchestrator/logs`.
+- If `XDG_STATE_HOME` is unset, fallback is `~/.local/state/ngb-agent-orchestrator/logs`.
+- `LOGS_DIR` can be set to override the base directory explicitly.

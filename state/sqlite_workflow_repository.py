@@ -9,11 +9,8 @@ need the ``WorkflowRepository`` Protocol for type annotations or testing.
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 import uuid
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Dict, List, Optional
 
 from .sqlite_state_store import (
@@ -21,12 +18,6 @@ from .sqlite_state_store import (
     get_connection,
 )
 from .workflow_status import WorkflowStatus
-
-
-def _current_logs_dir() -> Path:
-    """Return the process LOGS_DIR (or the default temp-backed location)."""
-    default = Path(tempfile.gettempdir()) / "ngb-agent-orchestrator"
-    return Path(os.getenv("LOGS_DIR", str(default)))
 
 
 class SQLiteWorkflowRepository:
@@ -193,7 +184,6 @@ class SQLiteWorkflowRepository:
         workflow_id = workflow_id or str(uuid.uuid4())
         now = datetime.now(UTC).isoformat()
         work_plan_json = json.dumps(work_plan) if work_plan else None
-        logs_dir = str(_current_logs_dir())
 
         conn = get_connection()
         try:
@@ -203,15 +193,14 @@ class SQLiteWorkflowRepository:
                 conn.execute(
                     """
                     INSERT INTO workflows
-                        (id, ticket_key, status, work_plan, logs_dir, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                        (id, ticket_key, status, work_plan, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     (
                         workflow_id,
                         ticket_key,
                         status.value,
                         work_plan_json,
-                        logs_dir,
                         now,
                         now,
                     ),

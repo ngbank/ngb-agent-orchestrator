@@ -10,7 +10,6 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from dispatcher.jira_client import JiraConfigurationError, JiraTicket, JiraTicketNotFoundError
 from dispatcher.run import run
-from state import get_connection
 from state import workflow_repository as state_store
 from state.workflow_status import WorkflowStatus
 
@@ -330,46 +329,38 @@ def test_run_keyboard_interrupt(test_db, cli_runner, memory_checkpointer):
     assert "⚠️  Workflow interrupted by user" in result.output
 
 
-def test_logs_reads_from_persisted_logs_dir_when_env_changes(test_db, cli_runner, monkeypatch):
-    """--logs should resolve using persisted workflow logs_dir, not current env."""
-    from graph.utils import workflow_log_path
-
-    monkeypatch.setenv("LOGS_DIR", "/tmp/aos-119-original")
-    workflow_id = state_store.create_workflow("AOS-119", status=WorkflowStatus.COMPLETED)
-
-    plan_log = workflow_log_path(workflow_id, "plan", ticket_key="AOS-119")
-    plan_log.write_text("plan log from persisted dir")
-
-    # Simulate a later shell with a different LOGS_DIR.
-    monkeypatch.setenv("LOGS_DIR", "/tmp/aos-119-new-shell")
-    result = cli_runner.invoke(run, ["--ticket", "AOS-119", "--logs"])
-
-    assert result.exit_code == 0
-    assert "plan log from persisted dir" in result.output
-    assert "workflow ran with LOGS_DIR=/tmp/aos-119-original" in result.output
-
-
-def test_logs_legacy_rows_fall_back_to_current_env_logs_dir(test_db, cli_runner, monkeypatch):
-    """Legacy rows with NULL logs_dir should still resolve via current LOGS_DIR."""
+def test_logs_reads_from_xdg_default_base_dir(test_db, cli_runner, monkeypatch):
+    """--logs resolves from XDG base path when LOGS_DIR is not set."""
     from graph.utils import log_path
 
-    monkeypatch.setenv("LOGS_DIR", "/tmp/aos-119-legacy")
+    monkeypatch.delenv("LOGS_DIR", raising=False)
+    monkeypatch.setenv("XDG_STATE_HOME", "/tmp/aos-119-xdg")
     workflow_id = state_store.create_workflow("AOS-119", status=WorkflowStatus.COMPLETED)
 
-    conn = get_connection()
-    try:
-        conn.execute("UPDATE workflows SET logs_dir = NULL WHERE id = ?", (workflow_id,))
-        conn.commit()
-    finally:
-        conn.close()
-
     plan_log = log_path(workflow_id, "plan", ticket_key="AOS-119")
-    plan_log.write_text("plan log from legacy fallback")
+    plan_log.write_text("plan log from xdg default")
 
     result = cli_runner.invoke(run, ["--ticket", "AOS-119", "--logs"])
 
     assert result.exit_code == 0
-    assert "plan log from legacy fallback" in result.output
+    assert "plan log from xdg default" in result.output
+
+
+def test_logs_uses_explicit_logs_dir_override(test_db, cli_runner, monkeypatch):
+    """--logs honors explicit LOGS_DIR override when provided."""
+    from graph.utils import log_path
+
+    monkeypatch.setenv("XDG_STATE_HOME", "/tmp/aos-119-xdg")
+    monkeypatch.setenv("LOGS_DIR", "/tmp/aos-119-override")
+    workflow_id = state_store.create_workflow("AOS-119", status=WorkflowStatus.COMPLETED)
+
+    plan_log = log_path(workflow_id, "plan", ticket_key="AOS-119")
+    plan_log.write_text("plan log from override")
+
+    result = cli_runner.invoke(run, ["--ticket", "AOS-119", "--logs"])
+
+    assert result.exit_code == 0
+    assert "plan log from override" in result.output
 
 
 class TestPostExecutionComment:
