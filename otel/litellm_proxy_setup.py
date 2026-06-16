@@ -31,7 +31,7 @@ from __future__ import annotations
 import os
 
 from graph.litellm_callbacks import proxy_handler_instance
-from otel.context import set_workflow_context
+from otel.context import set_proxy_parent_context, set_workflow_context
 from otel.instrumentation import setup_tracing
 
 
@@ -40,12 +40,44 @@ def _bootstrap_proxy_otel() -> None:
 
     Idempotent: ``setup_tracing`` short-circuits after the first call, and
     ``set_workflow_context`` is a no-op when both env vars are unset.
+
+    ``synchronous=True`` switches the proxy's tracer provider to a
+    ``SimpleSpanProcessor`` so each ``llm.call`` span is written to
+    ``otel.jsonl`` immediately inside the callback that produced it. The
+    dispatcher kills the proxy with ``SIGTERM`` (see
+    ``graph.utils.goose_session``), and uvicorn's own SIGTERM handler does
+    not reliably trigger the ``atexit`` hook that flushes
+    ``BatchSpanProcessor`` — any buffered proxy spans would be lost.
+
+    Also extracts the dispatcher's W3C ``traceparent`` (forwarded via
+    ``NGB_TRACEPARENT``/``NGB_TRACESTATE`` env vars by
+    ``graph.utils.goose_session``) and stashes the resulting OTel
+    ``Context`` so ``OtelLiteLLMCallback`` can use it as the parent when
+    starting each ``llm.call`` span — turning what used to be 58 orphan
+    traces per workflow into a single trace tree rooted at
+    ``workflow.run``.
     """
     workflow_id = os.environ.get("NGB_WORKFLOW_ID")
     ticket_key = os.environ.get("NGB_TICKET_KEY")
     if workflow_id or ticket_key:
         set_workflow_context(workflow_id=workflow_id, ticket_key=ticket_key)
-    setup_tracing()
+    setup_tracing(synchronous=True)
+
+    carrier: dict[str, str] = {}
+    traceparent = os.environ.get("NGB_TRACEPARENT")
+    if traceparent:
+        carrier["traceparent"] = traceparent
+    tracestate = os.environ.get("NGB_TRACESTATE")
+    if tracestate:
+        carrier["tracestate"] = tracestate
+    if carrier:
+        try:
+            from opentelemetry.propagate import extract as _extract
+
+            set_proxy_parent_context(_extract(carrier))
+        except Exception:
+            # Best-effort — fall back to orphan llm.call traces.
+            set_proxy_parent_context(None)
 
 
 _bootstrap_proxy_otel()

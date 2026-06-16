@@ -119,4 +119,7 @@ class TestProxyYamlReferencesBootstrap:
         from graph.utils import _litellm_config_yaml
 
         yaml = _litellm_config_yaml("openai/gpt-4o")
-        assert "callbacks: otel.litellm_proxy_setup.proxy_handler_instance" in yaml
+        # List form is required so LiteLLM's YAML loader *extends* (not replaces)
+        # litellm.callbacks, preserving the OtelLiteLLMCallback registered by
+        # the bootstrap module during import.
+        assert "callbacks:\n    - otel.litellm_proxy_setup.proxy_handler_instance" in yaml

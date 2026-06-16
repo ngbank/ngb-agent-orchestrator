@@ -15,9 +15,12 @@ Usage:
 
 from __future__ import annotations
 
+import os
 from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Optional
+
+from opentelemetry.context import Context as _OtelContextType
 
 # ---------------------------------------------------------------------------
 # Context variables — one per correlation attribute
@@ -34,13 +37,25 @@ _node_name: ContextVar[Optional[str]] = ContextVar("otel_node_name", default=Non
 
 
 def get_workflow_id() -> Optional[str]:
-    """Return the current workflow ID from context."""
-    return _workflow_id.get()
+    """Return the current workflow ID from context.
+
+    Falls back to ``NGB_WORKFLOW_ID`` in the process environment when the
+    ContextVar is empty. The LiteLLM proxy subprocess (see
+    ``otel/litellm_proxy_setup.py``) runs each request as a fresh uvicorn
+    task that does not inherit the module-import-time ContextVar, so the
+    env-var fallback is what carries ``workflow.id`` onto ``llm.call``
+    spans emitted from the proxy.
+    """
+    return _workflow_id.get() or os.environ.get("NGB_WORKFLOW_ID") or None
 
 
 def get_ticket_key() -> Optional[str]:
-    """Return the current JIRA ticket key from context."""
-    return _ticket_key.get()
+    """Return the current JIRA ticket key from context.
+
+    Falls back to ``NGB_TICKET_KEY`` in the process environment for the
+    same reason as :func:`get_workflow_id`.
+    """
+    return _ticket_key.get() or os.environ.get("NGB_TICKET_KEY") or None
 
 
 def get_node_name() -> Optional[str]:
@@ -79,6 +94,37 @@ def set_node_context(node_name: Optional[str]) -> None:
         node_name: Name of the node about to execute.
     """
     _node_name.set(node_name)
+
+
+# ---------------------------------------------------------------------------
+# Cross-process OTel parent context (W3C traceparent)
+# ---------------------------------------------------------------------------
+#
+# The LiteLLM proxy runs as its own subprocess and emits ``llm.call`` spans
+# from a fresh OTel context.  To attach those spans to the dispatcher's
+# trace tree, we inject the active traceparent into the proxy environment
+# (see ``graph.utils.goose_session``) and the proxy bootstrap
+# (``otel/litellm_proxy_setup.py``) calls
+# :func:`set_proxy_parent_context` with the extracted Context object so
+# :class:`otel.litellm_callback.OtelLiteLLMCallback` can use it as the
+# parent when starting each ``llm.call`` span.
+#
+# This slot lives here (rather than in ``litellm_proxy_setup``) so the
+# callback module can read it without importing the proxy bootstrap and
+# creating an import cycle.
+
+_proxy_parent_context: _OtelContextType | None = None
+
+
+def set_proxy_parent_context(ctx: _OtelContextType | None) -> None:
+    """Store the OTel ``Context`` to use as parent for proxy llm.call spans."""
+    global _proxy_parent_context
+    _proxy_parent_context = ctx
+
+
+def get_proxy_parent_context() -> _OtelContextType | None:
+    """Return the proxy llm.call parent context, or ``None`` if unset."""
+    return _proxy_parent_context
 
 
 # ---------------------------------------------------------------------------
