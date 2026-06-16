@@ -27,12 +27,41 @@ def _logs_dir() -> Path:
     return Path(os.getenv("LOGS_DIR", str(default)))
 
 
-def log_path(workflow_id: str, stage: str, ticket_key: Optional[str] = None) -> Path:
-    """Return the log file path for a given workflow and stage (e.g. 'plan', 'execute')."""
-    workflow_dir = _logs_dir() / workflow_id
-    workflow_dir.mkdir(parents=True, exist_ok=True)
+def workflow_persisted_logs_dir(workflow_id: str) -> Optional[Path]:
+    """Return persisted logs_dir for a workflow, or None for legacy rows."""
+    # Import lazily to avoid introducing import-time coupling for callers that
+    # only need utility helpers.
+    from state.workflow_repository import get_workflow
+
+    workflow = get_workflow(workflow_id)
+    if workflow is None:
+        return None
+
+    logs_dir = workflow.get("logs_dir")
+    if not logs_dir:
+        return None
+
+    return Path(str(logs_dir))
+
+
+def workflow_log_path(
+    workflow_id: str,
+    stage: str,
+    ticket_key: Optional[str] = None,
+    ensure_dir: bool = True,
+) -> Path:
+    """Return a workflow log path pinned to persisted logs_dir when present."""
+    base_dir = workflow_persisted_logs_dir(workflow_id) or _logs_dir()
+    workflow_dir = base_dir / workflow_id
+    if ensure_dir:
+        workflow_dir.mkdir(parents=True, exist_ok=True)
     prefix = f"{ticket_key}_" if ticket_key else ""
     return workflow_dir / f"{prefix}{workflow_id}_{stage}.log"
+
+
+def log_path(workflow_id: str, stage: str, ticket_key: Optional[str] = None) -> Path:
+    """Return the log file path for a given workflow and stage (e.g. 'plan', 'execute')."""
+    return workflow_log_path(workflow_id, stage, ticket_key=ticket_key, ensure_dir=True)
 
 
 # Azure deployment name → API version.

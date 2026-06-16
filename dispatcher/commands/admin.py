@@ -8,7 +8,7 @@ import click
 
 import dispatcher.commands.common as common
 from dispatcher.constants import NODE_EMOJI, STATUS_DISPLAY
-from graph.utils import log_path
+from graph.utils import workflow_log_path, workflow_persisted_logs_dir
 from state.workflow_repository import (
     clear_db,
     get_workflow,
@@ -31,8 +31,9 @@ def _handle_logs(ticket_key: Optional[str], workflow_id: Optional[str]) -> None:
         resolved_id = sorted(workflows, key=lambda w: w["created_at"])[-1]["id"]
 
     found_any = False
+    persisted_logs_dir = workflow_persisted_logs_dir(resolved_id)
     for stage in ("plan", "execute"):
-        lp = log_path(resolved_id, stage, ticket_key=ticket_key)
+        lp = workflow_log_path(resolved_id, stage, ticket_key=ticket_key, ensure_dir=False)
         if lp.exists():
             found_any = True
             click.echo(f"\n{'='*60}")
@@ -40,7 +41,14 @@ def _handle_logs(ticket_key: Optional[str], workflow_id: Optional[str]) -> None:
             click.echo(f"{'='*60}")
             click.echo(lp.read_text())
         else:
-            click.echo(f"ℹ️  No {stage} log found at {lp}")
+            if persisted_logs_dir:
+                click.echo(
+                    f"ℹ️  No {stage} log found at {lp} "
+                    f"(workflow ran with LOGS_DIR={persisted_logs_dir}, "
+                    "which may have been deleted)"
+                )
+            else:
+                click.echo(f"ℹ️  No {stage} log found at {lp}")
 
     if not found_any:
         click.echo("No logs found for this workflow.")

@@ -49,6 +49,12 @@ except Exception:
 
 For the current column definitions and status values, refer to the latest migration file in [`state/migrations/`](../state/migrations/).
 
+`workflows` now stores a nullable `logs_dir` column (migration `011_logs_dir.sql`).
+
+- New workflows persist the active `LOGS_DIR` at row creation time.
+- Log reads/writes for an existing workflow should resolve against this persisted directory.
+- Legacy rows (created before migration 011) keep `logs_dir = NULL` and fall back to the current process `LOGS_DIR`.
+
 ### `audit_log`
 
 Append-only record of every state change and significant action.

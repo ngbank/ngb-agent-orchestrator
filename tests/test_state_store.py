@@ -3,6 +3,7 @@
 import os
 import sqlite3
 import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -74,6 +75,30 @@ def test_create_workflow_minimal(test_db):
     assert workflow["status"] == WorkflowStatus.PENDING  # Default status
     assert workflow["work_plan"] is None
     assert workflow["pr_url"] is None
+
+
+def test_create_workflow_persists_logs_dir(test_db, monkeypatch):
+    """New workflows persist the active LOGS_DIR for stable future lookups."""
+    monkeypatch.setenv("LOGS_DIR", "/tmp/aos-119-logs")
+    workflow_id = state_store.create_workflow(ticket_key="AOS-119")
+
+    workflow = state_store.get_workflow(workflow_id)
+    assert workflow is not None
+    assert workflow["logs_dir"] == "/tmp/aos-119-logs"
+
+
+def test_log_path_uses_persisted_logs_dir_for_existing_workflow(test_db, monkeypatch):
+    """Log writes stay in the original workflow directory even after env changes."""
+    from graph.utils import log_path
+
+    monkeypatch.setenv("LOGS_DIR", "/tmp/aos-119-original")
+    workflow_id = state_store.create_workflow(ticket_key="AOS-119")
+
+    monkeypatch.setenv("LOGS_DIR", "/tmp/aos-119-current")
+    lp = log_path(workflow_id, "execute", ticket_key="AOS-119")
+
+    expected_prefix = Path("/tmp/aos-119-original") / workflow_id
+    assert str(lp).startswith(str(expected_prefix))
 
 
 def test_update_status(test_db):
@@ -217,6 +242,52 @@ def test_migration_idempotency(test_db):
     workflow = state_store.get_workflow(workflow_id)
     assert workflow is not None
     assert workflow["ticket_key"] == "AOS-44"
+
+
+def test_logs_dir_migration_upgrades_existing_data(tmp_path, monkeypatch):
+    """Migration 011 adds logs_dir and preserves rows created before it existed."""
+    db_path = tmp_path / "upgrade.db"
+    monkeypatch.setenv("DB_PATH", str(db_path))
+
+    conn = sqlite3.connect(db_path)
+    try:
+        migrations_dir = Path(__file__).resolve().parents[1] / "state" / "migrations"
+        migration_files = sorted(migrations_dir.glob("*.sql"))
+
+        # Simulate an upgraded existing DB: apply pre-011 migrations only.
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                name TEXT PRIMARY KEY,
+                applied_at TEXT NOT NULL
+            );
+            """)
+        for migration_file in migration_files:
+            if migration_file.name >= "011_logs_dir.sql":
+                continue
+            conn.executescript(migration_file.read_text())
+            conn.execute(
+                "INSERT INTO schema_migrations (name, applied_at) VALUES (?, datetime('now'))",
+                (migration_file.name,),
+            )
+        conn.execute(
+            """
+            INSERT INTO workflows (id, ticket_key, status, work_plan, created_at, updated_at)
+            VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+            """,
+            ("wf-pre-011", "AOS-119", "pending", None),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    state_store.run_migrations()
+    state_store.run_migrations()
+
+    upgraded = state_store.get_workflow("wf-pre-011")
+    assert upgraded is not None
+    assert upgraded["ticket_key"] == "AOS-119"
+    assert "logs_dir" in upgraded
+    assert upgraded["logs_dir"] is None
 
 
 def test_workflow_not_found(test_db):

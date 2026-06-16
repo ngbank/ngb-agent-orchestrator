@@ -242,3 +242,20 @@ Completed and rejected workflows do not block new runs — each run creates a ne
 | Plan recipe fails | Workflow marked `failed` in SQLite |
 | Execute recipe fails | Execution summary stored with `status: failed`, workflow marked `failed` |
 | Keyboard interrupt (Ctrl+C) | Workflow marked `failed`, clean exit |
+
+---
+
+## Workflow Logs
+
+Use `--logs` to print captured plan/execute logs for a workflow:
+
+```bash
+dispatcher --ticket AOS-41 --logs
+dispatcher --workflow-id <uuid> --logs
+```
+
+Log paths are workflow-pinned:
+
+- For new workflows, the active `LOGS_DIR` is persisted at workflow creation and reused later.
+- This means `--logs` and resume/retry writes continue using the original directory even when run from a later shell with a different `LOGS_DIR` value.
+- Legacy workflows with `logs_dir = NULL` fall back to the current process `LOGS_DIR`.
