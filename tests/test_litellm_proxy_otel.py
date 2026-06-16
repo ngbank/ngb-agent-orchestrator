@@ -1,4 +1,4 @@
-"""Tests for the LiteLLM proxy OTel bootstrap module (AOS-118).
+"""Tests for the LiteLLM proxy OTel bootstrap module.
 
 The module under test is intended to be imported once by the LiteLLM proxy
 subprocess as ``litellm_settings.callbacks: otel.litellm_proxy_setup.proxy_handler_instance``.

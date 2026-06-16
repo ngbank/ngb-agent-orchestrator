@@ -143,7 +143,7 @@ def instrument_graph_stream(
             "graph.thread_id": config.get("configurable", {}).get("thread_id", ""),
         },
     ) as root_span:
-        # AOS-117: capture a rollup of what happened so the root span is
+        # Capture a rollup of what happened so the root span is
         # self-describing (without grepping all child spans).
         node_count = 0
         last_node: str | None = None
@@ -381,8 +381,8 @@ def _record_node_output(span: Span, node_name: str, output: Any) -> None:
     if not isinstance(output, dict):
         return
 
-    # AOS-117 enrichment: surface which state keys this node produced (no values,
-    # avoids any redaction concern) and a rough size signal.
+    # Surface which state keys this node produced (no values, avoids any
+    # redaction concern) and a rough size signal.
     keys = sorted(str(k) for k in output.keys())
     if keys:
         span.set_attribute("graph.node.state_keys_changed", keys)

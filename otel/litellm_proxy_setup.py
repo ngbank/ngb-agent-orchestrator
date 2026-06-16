@@ -1,4 +1,4 @@
-"""OTel bootstrap for the LiteLLM proxy subprocess (AOS-118).
+"""OTel bootstrap for the LiteLLM proxy subprocess.
 
 The dispatcher spawns LiteLLM as a separate Python process (see
 ``graph.utils.goose_session``).  That subprocess has its own
