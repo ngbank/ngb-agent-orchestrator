@@ -89,7 +89,9 @@ Spans are **always** written as JSON lines (NDJSON) to `LOGS_DIR/<workflow_id>/o
     "attributes": {
         "workflow.id": "abc-123",
         "jira.ticket_key": "AOS-109",
-        "graph.node_name": "work_planner"
+        "graph.node_name": "work_planner",
+        "graph.node.state_keys_changed": ["draft", "work_plan"],
+        "graph.node.output_size_bytes": 2048
     },
     "events": [],
     "status": {"status_code": "OK", "description": null}
@@ -97,6 +99,16 @@ Spans are **always** written as JSON lines (NDJSON) to `LOGS_DIR/<workflow_id>/o
 ```
 
 This JSON format is machine-parseable for downstream analysis, dashboards, and debugging tools.
+
+#### Span Types & Attributes
+
+| Span | Emitted by | Key attributes (beyond `workflow.id` / `jira.ticket_key`) |
+|---|---|---|
+| `workflow.run` | `otel.instrumentation.instrument_graph_stream` (root span per run) | `graph.thread_id`, `workflow.node_count`, `workflow.last_node`, `workflow.exit_reason` (`completed` / `interrupted` / `error`) |
+| `graph.node.<name>` | `otel.instrumentation` (one per stream event) | `graph.node_name`, `graph.node.state_keys_changed` (sorted keys, no values), `graph.node.output_size_bytes`, `graph.node.error` / `graph.node.failed_node` on failure, `workflow.status` when set |
+| `graph.checkpoint` | `state.observable_sqlite_saver.ObservableSqliteSaver.put` | `checkpoint.step`, `checkpoint.source` (`input` / `loop` / `update` / `fork`), `checkpoint.changed_channels`, `checkpoint.writes_nodes`, `checkpoint.channel_count`, `graph.thread_id` |
+| `goose.run` | `graph.utils.run_and_tee` (when `cmd[0] == "goose"`) | `process.command`, `process.command_line`, `process.exit_code`, `goose.recipe`, `goose.stage` (recipe basename, e.g. `plan` / `execute`), `goose.stdout_lines` |
+| `llm.call` | `otel.litellm_callback.OtelLiteLLMCallback` (LiteLLM proxy subprocess) | `llm.model`, `llm.input_tokens`, `llm.output_tokens`, `llm.total_tokens`, `llm.latency_ms`, `llm.error_type` on failure. *Note: these spans currently export from the proxy subprocess and may not appear in the dispatcher's `otel.jsonl`.* |
 
 #### Local OTLP Export (optional)
 

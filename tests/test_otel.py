@@ -514,3 +514,297 @@ class TestRunAndTeeGooseSpan:
 
         goose_spans = [s for s in exporter.get_finished_spans() if s.name == "goose.run"]
         assert goose_spans == []
+
+
+# ---------------------------------------------------------------------------
+# AOS-117 enrichments — _record_node_output state-keys + size (Enrichment C)
+# ---------------------------------------------------------------------------
+
+
+class TestRecordNodeOutputEnrichment:
+    def _make_span(self, provider):
+        return provider.get_tracer("test").start_span("test-span")
+
+    def test_state_keys_changed_attribute_is_sorted_list(self):
+        provider, exporter = _make_in_memory_provider()
+        span = self._make_span(provider)
+        _record_node_output(
+            span,
+            "work_planner",
+            {"work_plan": {"steps": []}, "workflow_id": "wf-x", "draft": "abc"},
+        )
+        span.end()
+        finished = exporter.get_finished_spans()[0]
+        keys = finished.attributes.get("graph.node.state_keys_changed")
+        # OTel converts lists to tuples on the span; compare as sequence.
+        assert tuple(keys) == ("draft", "work_plan", "workflow_id")
+
+    def test_output_size_bytes_recorded(self):
+        provider, exporter = _make_in_memory_provider()
+        span = self._make_span(provider)
+        payload = {"a": "x" * 100, "b": [1, 2, 3]}
+        _record_node_output(span, "work_planner", payload)
+        span.end()
+        finished = exporter.get_finished_spans()[0]
+        size = finished.attributes.get("graph.node.output_size_bytes")
+        assert isinstance(size, int)
+        assert size > 100  # at least the "x"*100 content
+
+    def test_non_dict_output_does_not_set_enrichment_attrs(self):
+        provider, exporter = _make_in_memory_provider()
+        span = self._make_span(provider)
+        _record_node_output(span, "n", "not a dict")
+        span.end()
+        attrs = exporter.get_finished_spans()[0].attributes
+        assert "graph.node.state_keys_changed" not in attrs
+        assert "graph.node.output_size_bytes" not in attrs
+
+
+# ---------------------------------------------------------------------------
+# AOS-117 enrichments — instrument_graph_stream rollup (Enrichment B)
+# ---------------------------------------------------------------------------
+
+
+class TestInstrumentGraphStreamRollup:
+    def setup_method(self):
+        _workflow_id.set(None)
+        _ticket_key.set(None)
+        _node_name.set(None)
+
+    def _make_mock_graph(self, events):
+        graph = MagicMock()
+        graph.stream = MagicMock(return_value=iter(events))
+        return graph
+
+    def test_completed_run_sets_ok_status_and_rollup_attrs(self, monkeypatch):
+        from opentelemetry.trace import StatusCode
+
+        import otel.instrumentation as instr
+
+        provider, exporter = _make_in_memory_provider()
+        monkeypatch.setattr(instr, "_tracer", provider.get_tracer("test"))
+
+        events = [{"work_planner": {"draft": "x"}}, {"execute_plan": {"result": "ok"}}]
+        graph = self._make_mock_graph(events)
+        list(instr.instrument_graph_stream(graph, {}, {"configurable": {"thread_id": "t1"}}))
+
+        root = next(s for s in exporter.get_finished_spans() if s.name == "workflow.run")
+        assert root.status.status_code == StatusCode.OK
+        assert root.attributes.get("workflow.exit_reason") == "completed"
+        assert root.attributes.get("workflow.node_count") == 2
+        assert root.attributes.get("workflow.last_node") == "execute_plan"
+
+    def test_interrupted_run_marks_exit_reason_interrupted(self, monkeypatch):
+        import otel.instrumentation as instr
+
+        provider, exporter = _make_in_memory_provider()
+        monkeypatch.setattr(instr, "_tracer", provider.get_tracer("test"))
+
+        events = [{"work_planner": {}}, {"__interrupt__": {}}]
+        graph = self._make_mock_graph(events)
+        list(instr.instrument_graph_stream(graph, {}, {"configurable": {"thread_id": "t1"}}))
+
+        root = next(s for s in exporter.get_finished_spans() if s.name == "workflow.run")
+        assert root.attributes.get("workflow.exit_reason") == "interrupted"
+        assert root.attributes.get("workflow.last_node") == "__interrupt__"
+
+    def test_error_run_marks_exit_reason_error(self, monkeypatch):
+        import otel.instrumentation as instr
+
+        provider, exporter = _make_in_memory_provider()
+        monkeypatch.setattr(instr, "_tracer", provider.get_tracer("test"))
+
+        graph = MagicMock()
+        graph.stream = MagicMock(side_effect=RuntimeError("boom"))
+
+        with pytest.raises(RuntimeError):
+            list(instr.instrument_graph_stream(graph, {}, {"configurable": {"thread_id": "t1"}}))
+
+        root = next(s for s in exporter.get_finished_spans() if s.name == "workflow.run")
+        assert root.attributes.get("workflow.exit_reason") == "error"
+
+
+# ---------------------------------------------------------------------------
+# AOS-117 enrichments — goose.run stage/cmdline/stdout_lines (Enrichment D)
+# ---------------------------------------------------------------------------
+
+
+class TestGooseRunEnrichment:
+    def setup_method(self):
+        _workflow_id.set(None)
+        _ticket_key.set(None)
+        _node_name.set(None)
+
+    def _patched_run_and_tee(self, monkeypatch, provider):
+        import opentelemetry.trace as otel_trace_module
+
+        import graph.utils as utils_module
+
+        tracer = provider.get_tracer("test")
+        monkeypatch.setattr(otel_trace_module, "get_tracer", lambda *_: tracer)
+        return utils_module.run_and_tee
+
+    def test_goose_stage_derived_from_recipe_basename(self, monkeypatch, tmp_path):
+        provider, exporter = _make_in_memory_provider()
+        run_and_tee = self._patched_run_and_tee(monkeypatch, provider)
+
+        log_file = tmp_path / "test.log"
+        with log_file.open("w") as lf:
+            run_and_tee(
+                ["goose", "run", "--recipe", "recipes/plan.yaml"],
+                lf,
+                stdout=__import__("subprocess").DEVNULL,
+                stderr=__import__("subprocess").DEVNULL,
+            )
+
+        span = next(s for s in exporter.get_finished_spans() if s.name == "goose.run")
+        assert span.attributes.get("goose.stage") == "plan"
+
+    def test_goose_command_line_is_full_joined(self, monkeypatch, tmp_path):
+        provider, exporter = _make_in_memory_provider()
+        run_and_tee = self._patched_run_and_tee(monkeypatch, provider)
+
+        log_file = tmp_path / "test.log"
+        with log_file.open("w") as lf:
+            run_and_tee(
+                ["goose", "run", "--recipe", "recipes/execute.yaml", "--params", "k=v"],
+                lf,
+                stdout=__import__("subprocess").DEVNULL,
+                stderr=__import__("subprocess").DEVNULL,
+            )
+
+        span = next(s for s in exporter.get_finished_spans() if s.name == "goose.run")
+        assert span.attributes.get("process.command_line") == (
+            "goose run --recipe recipes/execute.yaml --params k=v"
+        )
+
+    def test_goose_stdout_lines_counted(self, monkeypatch, tmp_path):
+        """Use printf to emit a known number of stdout lines and verify the count."""
+        import subprocess as _subprocess
+
+        provider, exporter = _make_in_memory_provider()
+        run_and_tee = self._patched_run_and_tee(monkeypatch, provider)
+
+        log_file = tmp_path / "test.log"
+        # We need real stdout to flow into run_and_tee; mock Popen to a known stream.
+        from unittest.mock import patch as _patch
+
+        class _FakeProc:
+            def __init__(self, lines):
+                self.stdout = iter([line.encode() for line in lines])
+                self.returncode = 0
+
+            def wait(self):
+                pass
+
+        fake = _FakeProc(["line1\n", "line2\n", "line3\n"])
+        with _patch("subprocess.Popen", return_value=fake):
+            with log_file.open("w") as lf:
+                run_and_tee(
+                    ["goose", "run", "--recipe", "recipes/plan.yaml"],
+                    lf,
+                    stdout=_subprocess.PIPE,
+                    stderr=_subprocess.STDOUT,
+                )
+
+        span = next(s for s in exporter.get_finished_spans() if s.name == "goose.run")
+        assert span.attributes.get("goose.stdout_lines") == 3
+
+
+# ---------------------------------------------------------------------------
+# AOS-117 enrichments — ObservableSqliteSaver graph.checkpoint (Enrichment A)
+# ---------------------------------------------------------------------------
+
+
+class TestObservableSqliteSaverCheckpointSpan:
+    def setup_method(self):
+        _workflow_id.set(None)
+        _ticket_key.set(None)
+        _node_name.set(None)
+
+    def _make_saver(self, monkeypatch, provider):
+        """Build an ObservableSqliteSaver whose tracer points to *provider*."""
+        import sqlite3 as _sqlite3
+
+        import opentelemetry.trace as otel_trace_module
+
+        from state.observable_sqlite_saver import ObservableSqliteSaver
+
+        tracer = provider.get_tracer("test")
+        monkeypatch.setattr(otel_trace_module, "get_tracer", lambda *_: tracer)
+
+        conn = _sqlite3.connect(":memory:", check_same_thread=False)
+        saver = ObservableSqliteSaver(conn)
+        # Run any setup the saver needs (creates checkpoint tables).
+        saver.setup()
+        return saver
+
+    def _put(self, saver, *, source, writes, new_versions, step=1):
+        config = {"configurable": {"thread_id": "t-cp", "checkpoint_ns": ""}}
+        checkpoint = {
+            "v": 1,
+            "id": "cp-1",
+            "ts": "2026-01-01T00:00:00+00:00",
+            "channel_values": {},
+            "channel_versions": {"chA": 1, "chB": 1},
+            "versions_seen": {},
+            "pending_sends": [],
+        }
+        metadata = {"source": source, "step": step, "writes": writes, "parents": {}}
+        saver.put(config, checkpoint, metadata, new_versions)
+
+    def test_checkpoint_span_includes_source(self, monkeypatch):
+        provider, exporter = _make_in_memory_provider()
+        saver = self._make_saver(monkeypatch, provider)
+
+        self._put(
+            saver,
+            source="loop",
+            writes={"work_planner": [("draft", "x")]},
+            new_versions={"chA": 2},
+        )
+
+        span = next(s for s in exporter.get_finished_spans() if s.name == "graph.checkpoint")
+        assert span.attributes.get("checkpoint.source") == "loop"
+
+    def test_checkpoint_span_includes_writes_nodes_sorted(self, monkeypatch):
+        provider, exporter = _make_in_memory_provider()
+        saver = self._make_saver(monkeypatch, provider)
+
+        self._put(
+            saver,
+            source="loop",
+            writes={"work_planner": [], "execute_plan": []},
+            new_versions={"chA": 2},
+        )
+
+        span = next(s for s in exporter.get_finished_spans() if s.name == "graph.checkpoint")
+        assert tuple(span.attributes.get("checkpoint.writes_nodes")) == (
+            "execute_plan",
+            "work_planner",
+        )
+
+    def test_checkpoint_span_includes_changed_channels_sorted(self, monkeypatch):
+        provider, exporter = _make_in_memory_provider()
+        saver = self._make_saver(monkeypatch, provider)
+
+        self._put(
+            saver,
+            source="loop",
+            writes={"work_planner": []},
+            new_versions={"chB": 2, "chA": 2},
+        )
+
+        span = next(s for s in exporter.get_finished_spans() if s.name == "graph.checkpoint")
+        assert tuple(span.attributes.get("checkpoint.changed_channels")) == ("chA", "chB")
+
+    def test_checkpoint_span_omits_writes_when_metadata_missing(self, monkeypatch):
+        provider, exporter = _make_in_memory_provider()
+        saver = self._make_saver(monkeypatch, provider)
+
+        # source="input" typically has no writes — verify we don't emit the attr.
+        self._put(saver, source="input", writes={}, new_versions={"chA": 1})
+
+        span = next(s for s in exporter.get_finished_spans() if s.name == "graph.checkpoint")
+        assert "checkpoint.writes_nodes" not in span.attributes
+        assert span.attributes.get("checkpoint.source") == "input"

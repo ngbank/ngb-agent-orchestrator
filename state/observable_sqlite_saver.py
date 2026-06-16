@@ -56,11 +56,28 @@ class ObservableSqliteSaver(SqliteSaver):
         channel_versions: dict[str, Any] = dict(checkpoint.get("channel_versions", {}))
         step = metadata.get("step", -1)
 
-        attributes = {
+        attributes: dict[str, Any] = {
             **ctx.as_attributes(),
             "checkpoint.step": step,
             "checkpoint.channel_count": len(channel_versions),
         }
+
+        # AOS-117 enrichment: surface what actually changed in this checkpoint
+        # so the span is debuggable without cross-referencing LangGraph state.
+        source = metadata.get("source")
+        if source:
+            attributes["checkpoint.source"] = str(source)
+
+        # Channel names whose versions changed this step (precise delta).
+        changed_channels = sorted(str(k) for k in (new_versions or {}).keys())
+        if changed_channels:
+            attributes["checkpoint.changed_channels"] = changed_channels
+
+        # Node names that wrote in this step (LangGraph populates metadata["writes"]
+        # as a dict keyed by writer node when source == "loop"/"update").
+        writes = metadata.get("writes") or {}
+        if isinstance(writes, dict) and writes:
+            attributes["checkpoint.writes_nodes"] = sorted(str(k) for k in writes.keys())
 
         configurable = config.get("configurable") or {}
         thread_id = configurable.get("thread_id")
