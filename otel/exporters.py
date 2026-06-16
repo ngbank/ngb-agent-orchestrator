@@ -1,8 +1,10 @@
 """OTel span exporter factory.
 
 File logging (``LocalJsonFileExporter``) is always on -- spans are written
-as JSON lines to ``LOGS_DIR/<workflow_id>/otel.json`` regardless of any other
-exporter configuration.
+as JSON lines to ``LOGS_DIR/<workflow_id>/otel.jsonl`` regardless of any other
+exporter configuration. ``workflow_id`` is read from each span's
+``workflow.id`` attribute (set by ``otel.context.OtelContext``); spans
+emitted outside any workflow context fall back to ``LOGS_DIR/unknown/otel.jsonl``.
 
 Additional exporters are controlled by the ``OTEL_EXPORTERS`` env var, a
 comma-separated list of zero or more of:
@@ -29,6 +31,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from collections import defaultdict
 from pathlib import Path
 from threading import Lock
 from typing import Sequence
@@ -39,20 +42,33 @@ from opentelemetry.sdk.trace.export import ConsoleSpanExporter, SpanExporter, Sp
 from otel.redaction import redact_attributes, redact_events
 
 _JSON_EXPORT_LOCK = Lock()
+_UNKNOWN_WORKFLOW_ID = "unknown"
 
 
 def _otlp_endpoint() -> str:
     return os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
 
 
-def _otel_json_path() -> Path:
-    """Get path to local OTel JSON export file."""
+def _logs_base_dir() -> Path:
+    """Return the base directory for run logs (``LOGS_DIR`` or system tmp fallback)."""
     default = Path(tempfile.gettempdir()) / "ngb-agent-orchestrator"
-    base = Path(os.getenv("LOGS_DIR", str(default)))
-    workflow_id = os.getenv("NGB_WORKFLOW_ID", "unknown")
-    path = base / workflow_id
+    return Path(os.getenv("LOGS_DIR", str(default)))
+
+
+def _otel_json_path_for(workflow_id: str) -> Path:
+    """Return the ``otel.jsonl`` path for a specific workflow id, creating the dir."""
+    path = _logs_base_dir() / workflow_id
     path.mkdir(parents=True, exist_ok=True)
-    return path / "otel.json"
+    return path / "otel.jsonl"
+
+
+def _span_workflow_id(span: ReadableSpan) -> str:
+    """Extract the workflow id from a span's attributes, falling back to ``unknown``."""
+    attrs = span.attributes or {}
+    wf_id = attrs.get("workflow.id")
+    if not wf_id:
+        return _UNKNOWN_WORKFLOW_ID
+    return str(wf_id)
 
 
 class LocalJsonFileExporter(SpanExporter):
@@ -61,23 +77,37 @@ class LocalJsonFileExporter(SpanExporter):
     Each span is serialized to JSON with a minimal set of fields (name, context,
     attributes, events, status) and appended to the export file as a single line.
     This format is human-readable and easy to parse for analysis.
+
+    Spans are routed to ``LOGS_DIR/<workflow_id>/otel.jsonl`` based on the
+    ``workflow.id`` attribute on each span. Spans without that attribute fall
+    back to ``LOGS_DIR/unknown/otel.jsonl``. A single ``export()`` batch may
+    contain spans for multiple workflows; they are grouped and written to the
+    correct per-workflow file.
     """
 
     def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
-        """Export spans to local JSON file."""
+        """Export spans to per-workflow local JSON files."""
         if not spans:
             return SpanExportResult.SUCCESS
 
+        groups: dict[str, list[ReadableSpan]] = defaultdict(list)
+        for span in spans:
+            groups[_span_workflow_id(span)].append(span)
+
         try:
-            json_path = _otel_json_path()
             with _JSON_EXPORT_LOCK:
-                with json_path.open("a", encoding="utf-8") as f:
-                    for span in spans:
-                        span_dict = _span_to_dict(span, apply_redaction=False)
-                        line = json.dumps(
-                            span_dict, default=str, separators=(",", ":"), ensure_ascii=True
-                        )
-                        f.write(line + "\n")
+                for workflow_id, group_spans in groups.items():
+                    json_path = _otel_json_path_for(workflow_id)
+                    with json_path.open("a", encoding="utf-8") as f:
+                        for span in group_spans:
+                            span_dict = _span_to_dict(span, apply_redaction=False)
+                            line = json.dumps(
+                                span_dict,
+                                default=str,
+                                separators=(",", ":"),
+                                ensure_ascii=True,
+                            )
+                            f.write(line + "\n")
             return SpanExportResult.SUCCESS
         except Exception as exc:
             print(f"Error exporting spans to JSON file: {exc}", flush=True)
