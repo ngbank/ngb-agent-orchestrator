@@ -51,16 +51,18 @@ def test_failure_summary_helper_semantics():
 # ---------------------------------------------------------------------------
 
 
-def test_log_path_without_ticket_key():
+def test_log_path_without_ticket_key(monkeypatch, tmp_path):
     from graph.utils import log_path
 
+    monkeypatch.setenv("LOGS_DIR", str(tmp_path / "logs"))
     lp = log_path("wf-123", "execute")
     assert lp.name == "wf-123_execute.log"
 
 
-def test_log_path_with_ticket_key_prefix():
+def test_log_path_with_ticket_key_prefix(monkeypatch, tmp_path):
     from graph.utils import log_path
 
+    monkeypatch.setenv("LOGS_DIR", str(tmp_path / "logs"))
     lp = log_path("wf-123", "execute", ticket_key="AOS-77")
     assert lp.name == "AOS-77_wf-123_execute.log"
 
