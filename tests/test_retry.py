@@ -209,11 +209,17 @@ def _failed_workflow(ticket_key: str, failed_node: str) -> str:
 
 def _mock_graph_with_failed_node(failed_node: str, retry_result: dict) -> Mock:
     """Build a mock graph whose ``get_state`` reports ``failed_node`` and
-    whose ``invoke`` returns ``retry_result``.
+    whose post-stream ``get_state().values`` returns ``retry_result``.
+
+    Dispatcher commands drive the graph via ``instrument_graph_stream``
+    (which iterates ``graph.stream(...)``) and read the final state via
+    ``graph.get_state(thread_config).values`` — so the mock exposes both
+    a stream that yields nothing and a state whose values merge the failed
+    node hint with the retry result fields.
     """
     mock_graph = Mock()
-    mock_state = Mock(values={"failed_node": failed_node})
-    mock_graph.get_state.return_value = mock_state
+    final_values = {"failed_node": failed_node, **retry_result}
+    mock_graph.get_state.return_value = Mock(values=final_values)
 
     # Provide one snapshot whose ``next`` matches the parent node so
     # find_rewind_config succeeds.
@@ -222,7 +228,7 @@ def _mock_graph_with_failed_node(failed_node: str, retry_result: dict) -> Mock:
     snap.next = (parent,)
     mock_graph.get_state_history.return_value = iter([snap])
 
-    mock_graph.invoke.return_value = retry_result
+    mock_graph.stream.return_value = iter([])
     return mock_graph
 
 
@@ -311,13 +317,20 @@ def test_retry_transitions_to_in_progress_then_completed(test_db, cli_runner):
 
     captured_status_during_invoke = {}
 
-    def fake_invoke(*_args, **_kwargs):
+    def fake_stream(*_args, **_kwargs):
         captured_status_during_invoke["status"] = state_store.get_workflow(wf_id)["status"]
-        return {"workflow_id": wf_id, "ticket_key": "TEST-1", "execution_summary": success_summary}
+        return iter([])
 
     with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-        mock_graph = _mock_graph_with_failed_node("execute_plan", {})
-        mock_graph.invoke = fake_invoke
+        mock_graph = _mock_graph_with_failed_node(
+            "execute_plan",
+            {
+                "workflow_id": wf_id,
+                "ticket_key": "TEST-1",
+                "execution_summary": success_summary,
+            },
+        )
+        mock_graph.stream = fake_stream
         mock_build.return_value = mock_graph
         with patch("dispatcher.commands.common._post_execution_comment"):
             result = cli_runner.invoke(run, ["--retry", "--workflow-id", wf_id])
@@ -474,15 +487,21 @@ def test_retry_derives_failed_node_from_next_when_missing(test_db, cli_runner):
     with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
         mock_graph = Mock()
         # No failed_node in state, but snapshot.next reveals where it stopped.
-        mock_graph.get_state.return_value = Mock(values={}, next=("execute_plan",))
+        # The dispatcher calls get_state twice: once before retry to inspect
+        # next/failed_node, and once after the stream to read execution_summary.
+        # A single Mock with both attributes satisfies both reads.
+        mock_graph.get_state.return_value = Mock(
+            values={
+                "workflow_id": wf_id,
+                "ticket_key": "TEST-1",
+                "execution_summary": success_summary,
+            },
+            next=("execute_plan",),
+        )
         snap = Mock(config={"configurable": {"thread_id": "t", "checkpoint_id": "cp"}})
         snap.next = ("execute_plan",)
         mock_graph.get_state_history.return_value = iter([snap])
-        mock_graph.invoke.return_value = {
-            "workflow_id": wf_id,
-            "ticket_key": "TEST-1",
-            "execution_summary": success_summary,
-        }
+        mock_graph.stream.return_value = iter([])
         mock_build.return_value = mock_graph
         with patch("dispatcher.commands.common._post_execution_comment"):
             result = cli_runner.invoke(run, ["--retry", "--workflow-id", wf_id])

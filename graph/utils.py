@@ -135,7 +135,12 @@ def _litellm_config_yaml(model_string: str) -> str:
         "\n"
         "litellm_settings:\n"
         "  drop_params: true\n"
-        "  callbacks: graph.litellm_callbacks.proxy_handler_instance\n"
+        # AOS-118: routed through otel.litellm_proxy_setup so the proxy
+        # subprocess installs the dispatcher's LocalJsonFileExporter and
+        # emits ``llm.call`` spans into LOGS_DIR/<workflow_id>/otel.jsonl.
+        # That module re-exports ``proxy_handler_instance`` so the existing
+        # token-usage logger keeps working unchanged.
+        "  callbacks: otel.litellm_proxy_setup.proxy_handler_instance\n"
     )
 
 
@@ -192,6 +197,10 @@ def goose_session(
             proxy_env["NGB_WORKFLOW_ID"] = workflow_id
         if stage:
             proxy_env["NGB_WORKFLOW_STAGE"] = stage
+        # AOS-118: forward ticket key so the proxy-side OtelContext can
+        # populate ``jira.ticket_key`` on ``llm.call`` spans.
+        if ticket_key:
+            proxy_env["NGB_TICKET_KEY"] = ticket_key
 
         proxy_log = log_path(workflow_id or "proxy", "litellm_proxy", ticket_key=ticket_key)
         proxy_log_fh = open(proxy_log, "w")

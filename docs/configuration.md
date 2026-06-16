@@ -108,7 +108,7 @@ This JSON format is machine-parseable for downstream analysis, dashboards, and d
 | `graph.node.<name>` | `otel.instrumentation` (one per stream event) | `graph.node_name`, `graph.node.state_keys_changed` (sorted keys, no values), `graph.node.output_size_bytes`, `graph.node.error` / `graph.node.failed_node` on failure, `workflow.status` when set |
 | `graph.checkpoint` | `state.observable_sqlite_saver.ObservableSqliteSaver.put` | `checkpoint.step`, `checkpoint.source` (`input` / `loop` / `update` / `fork`), `checkpoint.changed_channels`, `checkpoint.writes_nodes`, `checkpoint.channel_count`, `graph.thread_id` |
 | `goose.run` | `graph.utils.run_and_tee` (when `cmd[0] == "goose"`) | `process.command`, `process.command_line`, `process.exit_code`, `goose.recipe`, `goose.stage` (recipe basename, e.g. `plan` / `execute`), `goose.stdout_lines` |
-| `llm.call` | `otel.litellm_callback.OtelLiteLLMCallback` (LiteLLM proxy subprocess) | `llm.model`, `llm.input_tokens`, `llm.output_tokens`, `llm.total_tokens`, `llm.latency_ms`, `llm.error_type` on failure. *Note: these spans currently export from the proxy subprocess and may not appear in the dispatcher's `otel.jsonl`.* |
+| `llm.call` | `otel.litellm_callback.OtelLiteLLMCallback` (registered inside the LiteLLM proxy subprocess via `otel.litellm_proxy_setup`) | `llm.model`, `llm.input_tokens`, `llm.output_tokens`, `llm.total_tokens`, `llm.latency_ms`, `llm.error_type` on failure. Routed into `LOGS_DIR/<workflow_id>/otel.jsonl` via the proxy-side `LocalJsonFileExporter` (AOS-118), using `NGB_WORKFLOW_ID` / `NGB_TICKET_KEY` forwarded by `graph.utils.goose_session`. |
 
 #### Local OTLP Export (optional)
 
