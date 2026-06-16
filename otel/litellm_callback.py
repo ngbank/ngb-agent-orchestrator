@@ -20,7 +20,7 @@ from litellm.integrations.custom_logger import CustomLogger
 from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
 
-from otel.context import OtelContext
+from otel.context import OtelContext, get_proxy_parent_context
 
 
 def _duration_ms(start: Any, end: Any) -> float | None:
@@ -77,7 +77,11 @@ class OtelLiteLLMCallback(CustomLogger):
         if latency is not None:
             attributes["llm.latency_ms"] = round(latency, 2)
 
-        with tracer.start_as_current_span("llm.call", attributes=attributes) as span:
+        with tracer.start_as_current_span(
+            "llm.call",
+            context=get_proxy_parent_context(),
+            attributes=attributes,
+        ) as span:
             span.set_status(Status(StatusCode.OK))
 
     # ------------------------------------------------------------------
@@ -108,7 +112,11 @@ class OtelLiteLLMCallback(CustomLogger):
         if latency is not None:
             attributes["llm.latency_ms"] = round(latency, 2)
 
-        with tracer.start_as_current_span("llm.call", attributes=attributes) as span:
+        with tracer.start_as_current_span(
+            "llm.call",
+            context=get_proxy_parent_context(),
+            attributes=attributes,
+        ) as span:
             if exception:
                 span.record_exception(exception)
             span.set_status(

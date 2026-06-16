@@ -602,7 +602,7 @@ def test_reject_handles_resume_error(test_db, cli_runner):
 
     with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
         mock_graph = Mock()
-        mock_graph.invoke.side_effect = Exception("boom")
+        mock_graph.stream.side_effect = Exception("boom")
         mock_build.return_value = mock_graph
 
         result = cli_runner.invoke(run, ["--reject", "--workflow-id", workflow_id])
@@ -649,11 +649,14 @@ class TestHandleApproveFailedExecution:
 
         with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
-            mock_graph.invoke.return_value = {
-                "workflow_id": workflow_id,
-                "ticket_key": "TEST-123",
-                "execution_summary": failed_summary,
-            }
+            mock_graph.stream.return_value = iter([])
+            mock_graph.get_state.return_value = Mock(
+                values={
+                    "workflow_id": workflow_id,
+                    "ticket_key": "TEST-123",
+                    "execution_summary": failed_summary,
+                }
+            )
             mock_build.return_value = mock_graph
 
             with patch("dispatcher.commands.common._post_execution_comment"):
@@ -684,11 +687,14 @@ class TestHandleApproveFailedExecution:
 
         with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
-            mock_graph.invoke.return_value = {
-                "workflow_id": workflow_id,
-                "ticket_key": "TEST-123",
-                "execution_summary": success_summary,
-            }
+            mock_graph.stream.return_value = iter([])
+            mock_graph.get_state.return_value = Mock(
+                values={
+                    "workflow_id": workflow_id,
+                    "ticket_key": "TEST-123",
+                    "execution_summary": success_summary,
+                }
+            )
             mock_build.return_value = mock_graph
 
             with patch("dispatcher.commands.common._post_execution_comment"):
@@ -705,11 +711,14 @@ class TestHandleApproveFailedExecution:
 
         with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
-            mock_graph.invoke.return_value = {
-                "workflow_id": workflow_id,
-                "ticket_key": "TEST-123",
-                # no execution_summary key
-            }
+            mock_graph.stream.return_value = iter([])
+            mock_graph.get_state.return_value = Mock(
+                values={
+                    "workflow_id": workflow_id,
+                    "ticket_key": "TEST-123",
+                    # no execution_summary key
+                }
+            )
             mock_build.return_value = mock_graph
 
             with patch("dispatcher.commands.common._post_execution_comment"):
@@ -736,11 +745,14 @@ class TestHandleApproveFailedExecution:
 
         with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
-            mock_graph.invoke.return_value = {
-                "workflow_id": workflow_id,
-                "ticket_key": "TEST-123",
-                "execution_summary": partial_summary,
-            }
+            mock_graph.stream.return_value = iter([])
+            mock_graph.get_state.return_value = Mock(
+                values={
+                    "workflow_id": workflow_id,
+                    "ticket_key": "TEST-123",
+                    "execution_summary": partial_summary,
+                }
+            )
             mock_build.return_value = mock_graph
 
             with patch("dispatcher.commands.common._post_execution_comment"):
@@ -820,10 +832,13 @@ class TestHandleClarify:
 
         with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
-            mock_graph.invoke.return_value = {
-                "workflow_id": workflow_id,
-                "ticket_key": "TEST-123",
-            }
+            mock_graph.stream.return_value = iter([])
+            mock_graph.get_state.return_value = Mock(
+                values={
+                    "workflow_id": workflow_id,
+                    "ticket_key": "TEST-123",
+                }
+            )
             mock_build.return_value = mock_graph
 
             with patch("subprocess.run", side_effect=lambda cmd, **kwargs: fake_editor(cmd[1])):
@@ -836,7 +851,7 @@ class TestHandleClarify:
         # Verify graph was resumed with a Command containing answers
         from langgraph.types import Command
 
-        call_args = mock_graph.invoke.call_args
+        call_args = mock_graph.stream.call_args
         command = call_args[0][0]
         assert isinstance(command, Command)
         answers = command.resume["answers"]
@@ -858,7 +873,10 @@ class TestHandleClarify:
 
         with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
-            mock_graph.invoke.return_value = {"workflow_id": "any", "ticket_key": "TEST-123"}
+            mock_graph.stream.return_value = iter([])
+            mock_graph.get_state.return_value = Mock(
+                values={"workflow_id": "any", "ticket_key": "TEST-123"}
+            )
             mock_build.return_value = mock_graph
 
             with patch("subprocess.run", side_effect=lambda cmd, **kwargs: fake_editor(cmd[1])):
@@ -868,18 +886,18 @@ class TestHandleClarify:
                 )
 
         assert result.exit_code == 0
-        mock_graph.invoke.assert_called_once()
+        mock_graph.stream.assert_called_once()
 
     def test_clarify_shows_approval_instructions_after_success(self, test_db, cli_runner):
         """After the clarification loop posts a new plan, show approval instructions."""
         workflow_id = self._make_pending_clarification_workflow("TEST-123")
 
-        def _invoke_and_transition(command, config):
+        def _stream_and_transition(*_args, **_kwargs):
             # Simulate the graph transitioning to PENDING_APPROVAL during invocation
             state_store.update_status(
                 workflow_id, WorkflowStatus.PENDING_APPROVAL, actor="test", reason="plan done"
             )
-            return {"workflow_id": workflow_id, "ticket_key": "TEST-123"}
+            return iter([])
 
         def fake_editor(tmp_path):
             with open(tmp_path, "w", encoding="utf-8") as f:
@@ -887,7 +905,10 @@ class TestHandleClarify:
 
         with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
-            mock_graph.invoke.side_effect = _invoke_and_transition
+            mock_graph.stream.side_effect = _stream_and_transition
+            mock_graph.get_state.return_value = Mock(
+                values={"workflow_id": workflow_id, "ticket_key": "TEST-123"}
+            )
             mock_build.return_value = mock_graph
 
             with patch("subprocess.run", side_effect=lambda cmd, **kwargs: fake_editor(cmd[1])):
@@ -934,10 +955,13 @@ class TestHandleApprovePr:
 
         with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
-            mock_graph.invoke.return_value = {
-                "workflow_id": workflow_id,
-                "ticket_key": "TEST-123",
-            }
+            mock_graph.stream.return_value = iter([])
+            mock_graph.get_state.return_value = Mock(
+                values={
+                    "workflow_id": workflow_id,
+                    "ticket_key": "TEST-123",
+                }
+            )
             mock_build.return_value = mock_graph
 
             result = cli_runner.invoke(run, ["--approve-pr", "--workflow-id", workflow_id])
@@ -981,10 +1005,13 @@ class TestHandleCommentPr:
 
         with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
-            mock_graph.invoke.return_value = {
-                "workflow_id": workflow_id,
-                "ticket_key": "TEST-123",
-            }
+            mock_graph.stream.return_value = iter([])
+            mock_graph.get_state.return_value = Mock(
+                values={
+                    "workflow_id": workflow_id,
+                    "ticket_key": "TEST-123",
+                }
+            )
             mock_build.return_value = mock_graph
 
             with patch("subprocess.run", side_effect=lambda cmd, **kwargs: fake_editor(cmd[1])):
@@ -996,7 +1023,7 @@ class TestHandleCommentPr:
         assert result.exit_code == 0
         from langgraph.types import Command
 
-        call_args = mock_graph.invoke.call_args
+        call_args = mock_graph.stream.call_args
         command = call_args[0][0]
         assert isinstance(command, Command)
         assert command.resume["decision"] == "commented"
@@ -1024,10 +1051,13 @@ class TestHandleRejectPr:
 
         with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
             mock_graph = Mock()
-            mock_graph.invoke.return_value = {
-                "workflow_id": workflow_id,
-                "ticket_key": "TEST-123",
-            }
+            mock_graph.stream.return_value = iter([])
+            mock_graph.get_state.return_value = Mock(
+                values={
+                    "workflow_id": workflow_id,
+                    "ticket_key": "TEST-123",
+                }
+            )
             mock_build.return_value = mock_graph
 
             result = cli_runner.invoke(

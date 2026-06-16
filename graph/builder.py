@@ -11,7 +11,7 @@ The ``work_planner`` subgraph handles all planning stages (fetch, generate,
 validate, store, post to Jira).  ``await_approval`` calls interrupt() so the
 graph suspends until the developer explicitly approves or rejects via CLI.
 The ``execute_plan`` node invokes the Goose execute recipe to implement the
-approved WorkPlan (AOS-41).  ``await_pr_approval`` calls interrupt() so the
+approved WorkPlan.  ``await_pr_approval`` calls interrupt() so the
 graph suspends until the PR is approved, commented on, or rejected via CLI.
 """
 

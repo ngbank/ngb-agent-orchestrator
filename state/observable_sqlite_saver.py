@@ -62,8 +62,8 @@ class ObservableSqliteSaver(SqliteSaver):
             "checkpoint.channel_count": len(channel_versions),
         }
 
-        # AOS-117 enrichment: surface what actually changed in this checkpoint
-        # so the span is debuggable without cross-referencing LangGraph state.
+        # Surface what actually changed in this checkpoint so the span is
+        # debuggable without cross-referencing LangGraph state.
         source = metadata.get("source")
         if source:
             attributes["checkpoint.source"] = str(source)

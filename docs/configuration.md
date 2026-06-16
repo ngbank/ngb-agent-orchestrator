@@ -100,15 +100,19 @@ Spans are **always** written as JSON lines (NDJSON) to `LOGS_DIR/<workflow_id>/o
 
 This JSON format is machine-parseable for downstream analysis, dashboards, and debugging tools.
 
+For ready-made queries that reconstruct the workflow tree, attribute
+`llm.call` latency to the node that triggered it, and detect interrupts
+or failures, see [docs/trace-reconstruction.md](trace-reconstruction.md).
+
 #### Span Types & Attributes
 
 | Span | Emitted by | Key attributes (beyond `workflow.id` / `jira.ticket_key`) |
 |---|---|---|
 | `workflow.run` | `otel.instrumentation.instrument_graph_stream` (root span per run) | `graph.thread_id`, `workflow.node_count`, `workflow.last_node`, `workflow.exit_reason` (`completed` / `interrupted` / `error`) |
-| `graph.node.<name>` | `otel.instrumentation` (one per stream event) | `graph.node_name`, `graph.node.state_keys_changed` (sorted keys, no values), `graph.node.output_size_bytes`, `graph.node.error` / `graph.node.failed_node` on failure, `workflow.status` when set |
+| `graph.node.<name>` | `otel.instrumentation` (one per LangGraph `task` debug event — covers every dispatched node, including subgraph nodes and nodes that return no state delta) | `graph.node_name`, `graph.step`, `graph.task_id`, `graph.triggers` (incoming `branch:to:*` channels), `graph.namespace` (set on subgraph nodes, e.g. `work_planner:<task_id>`), `graph.node.state_keys_changed` (sorted keys, no values), `graph.node.output_size_bytes`, `graph.node.error` / `graph.node.failed_node` on failure, `graph.interrupts_count` when the node interrupted, `workflow.status` when set |
 | `graph.checkpoint` | `state.observable_sqlite_saver.ObservableSqliteSaver.put` | `checkpoint.step`, `checkpoint.source` (`input` / `loop` / `update` / `fork`), `checkpoint.changed_channels`, `checkpoint.writes_nodes`, `checkpoint.channel_count`, `graph.thread_id` |
 | `goose.run` | `graph.utils.run_and_tee` (when `cmd[0] == "goose"`) | `process.command`, `process.command_line`, `process.exit_code`, `goose.recipe`, `goose.stage` (recipe basename, e.g. `plan` / `execute`), `goose.stdout_lines` |
-| `llm.call` | `otel.litellm_callback.OtelLiteLLMCallback` (LiteLLM proxy subprocess) | `llm.model`, `llm.input_tokens`, `llm.output_tokens`, `llm.total_tokens`, `llm.latency_ms`, `llm.error_type` on failure. *Note: these spans currently export from the proxy subprocess and may not appear in the dispatcher's `otel.jsonl`.* |
+| `llm.call` | `otel.litellm_callback.OtelLiteLLMCallback` (registered inside the LiteLLM proxy subprocess via `otel.litellm_proxy_setup`) | `llm.model`, `llm.input_tokens`, `llm.output_tokens`, `llm.total_tokens`, `llm.latency_ms`, `llm.error_type` on failure. Routed into `LOGS_DIR/<workflow_id>/otel.jsonl` via the proxy-side `LocalJsonFileExporter` (AOS-118), using `NGB_WORKFLOW_ID` / `NGB_TICKET_KEY` forwarded by `graph.utils.goose_session`. Parented to the dispatcher span active when `goose_session()` was entered (typically `workflow.run`) via W3C `traceparent` forwarded as `NGB_TRACEPARENT` / `NGB_TRACESTATE` env vars, so every LLM call lives in the same trace tree as the orchestrator. |
 
 #### Local OTLP Export (optional)
 

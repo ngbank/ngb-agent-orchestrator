@@ -135,7 +135,19 @@ def _litellm_config_yaml(model_string: str) -> str:
         "\n"
         "litellm_settings:\n"
         "  drop_params: true\n"
-        "  callbacks: graph.litellm_callbacks.proxy_handler_instance\n"
+        # Routed through otel.litellm_proxy_setup so the proxy subprocess
+        # installs the dispatcher's LocalJsonFileExporter and emits
+        # ``llm.call`` spans into LOGS_DIR/<workflow_id>/otel.jsonl. That
+        # module re-exports ``proxy_handler_instance`` so the existing
+        # token-usage logger keeps working unchanged.
+        #
+        # The list form (vs scalar) is REQUIRED: LiteLLM's proxy YAML loader
+        # replaces ``litellm.callbacks`` entirely when ``callbacks`` is a
+        # scalar string (see ``initialize_callbacks_on_proxy``) which would
+        # wipe out the ``OtelLiteLLMCallback`` that ``setup_tracing()``
+        # appends during module import.  List form *extends* instead.
+        "  callbacks:\n"
+        "    - otel.litellm_proxy_setup.proxy_handler_instance\n"
     )
 
 
@@ -192,6 +204,28 @@ def goose_session(
             proxy_env["NGB_WORKFLOW_ID"] = workflow_id
         if stage:
             proxy_env["NGB_WORKFLOW_STAGE"] = stage
+        # Forward ticket key so the proxy-side OtelContext can populate
+        # ``jira.ticket_key`` on ``llm.call`` spans.
+        if ticket_key:
+            proxy_env["NGB_TICKET_KEY"] = ticket_key
+
+        # Inject the active W3C traceparent so the proxy can parent every
+        # ``llm.call`` span under the current dispatcher span (typically
+        # ``graph.node.work_planner`` / ``graph.node.execute_plan``). Without
+        # this, each LiteLLM request lands in its own orphan trace because the
+        # proxy subprocess has no shared OTel context with the dispatcher.
+        try:
+            from opentelemetry.propagate import inject as _otel_inject
+
+            carrier: dict[str, str] = {}
+            _otel_inject(carrier)
+            if carrier.get("traceparent"):
+                proxy_env["NGB_TRACEPARENT"] = carrier["traceparent"]
+            if carrier.get("tracestate"):
+                proxy_env["NGB_TRACESTATE"] = carrier["tracestate"]
+        except Exception:
+            # Best-effort — fall back to orphan llm.call traces.
+            pass
 
         proxy_log = log_path(workflow_id or "proxy", "litellm_proxy", ticket_key=ticket_key)
         proxy_log_fh = open(proxy_log, "w")

@@ -349,7 +349,15 @@ class TestOtelLiteLLMCallback:
         _node_name.set(None)
 
     def _run(self, coro):
-        return asyncio.get_event_loop().run_until_complete(coro)
+        # Use a fresh event loop per call: ``asyncio.get_event_loop()`` is
+        # deprecated in 3.12+ and raises when an earlier async test has
+        # closed/cleared the loop policy (e.g. ``test_litellm_callbacks``
+        # via pytest-asyncio auto mode).
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(coro)
+        finally:
+            loop.close()
 
     def _patched_cb(self, monkeypatch, provider):
         """Return an OtelLiteLLMCallback whose tracer writes to *provider*."""
