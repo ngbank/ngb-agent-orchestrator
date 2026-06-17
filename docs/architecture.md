@@ -36,7 +36,13 @@ LangGraph Graph (graph/)
  │    Prints instructions for approve/reject CLI
  │
  └── execute_plan
-      Invokes Goose execute recipe:
+            Runs code_generator subgraph:
+                - Resolves repo URL
+                - Fetches GitHub App installation token
+                - Clones the repo over HTTPS
+                - Invokes Goose execute recipe
+                - Pushes the branch and opens or updates the PR
+            Goose execute recipe:
         - Creates feature branch
         - Implements WorkPlan tasks
         - Runs build + test checks
@@ -78,7 +84,7 @@ Goose recipe that produces a `WorkPlan` JSON document from a JIRA ticket. Parame
 
 ### `recipes/execute.yaml`
 
-Goose recipe that implements an approved WorkPlan. Parameters: `ticket_key`, `work_plan_path`, `output_path`. Creates a feature branch, implements tasks, runs checks, commits, and writes an execution summary JSON. See [docs/recipes.md](recipes.md).
+Goose recipe that implements an approved WorkPlan. Parameters: `ticket_key`, `work_plan_path`, `output_path`. Creates a feature branch, implements tasks, runs checks, commits, and writes an execution summary JSON. Push and PR creation happen afterward in graph nodes using GitHub App auth. See [docs/recipes.md](recipes.md).
 
 ### `state/`
 

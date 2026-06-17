@@ -62,6 +62,7 @@ See [docs/architecture.md](docs/architecture.md) for a full sequence diagram and
 - [Goose CLI](https://github.com/block/goose) (`~/.local/bin/goose`)
 - `acli` (Atlassian CLI) configured with JIRA credentials
 - A JIRA account on `mirandags.atlassian.net`
+- GitHub App credentials for repository access (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_INSTALLATION_ID`)
 - An LLM provider API key (Anthropic, OpenAI, or Azure) — set as `GOOSE_MODEL` with provider prefix
 
 ### Installation

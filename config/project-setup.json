@@ -13,9 +13,7 @@
     "vcs": {
       "branch_pattern": "feature/{ticket_key}+{slug}",
       "commit_template": "feat({ticket_key}): {summary}\n\nImplements WorkPlan tasks for {ticket_key}.",
-      "files_changed_command": "git diff --name-only HEAD && git ls-files --others --exclude-standard",
-      "push_command": "git push origin {branch}",
-      "pr_command": "gh pr create --base main"
+      "files_changed_command": "git diff --name-only HEAD && git ls-files --others --exclude-standard"
     }
   }
 }

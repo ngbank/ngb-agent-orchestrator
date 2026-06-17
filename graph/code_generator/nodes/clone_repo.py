@@ -14,13 +14,14 @@ from graph.utils import log_path, run_and_tee
 def clone_repo(state: CloneRepoInputState) -> CloneRepoOutputState:
     """Create temp workspace files and clone the target repository.
 
-    Reads:  workflow_id, ticket_key, repo_url, work_plan_data
+    Reads:  workflow_id, ticket_key, repo_url, work_plan_data, github_token
     Writes: working_dir, work_plan_path, summary_path, reasoning_path, exec_log_path
     On failure: additionally sets execution_summary, exec_error, failed_node.
     """
     workflow_id = state.get("workflow_id")
     ticket_key = state.get("ticket_key", "")
     repo_url = state.get("repo_url", "")
+    github_token = state.get("github_token", "")
     work_plan_data = state.get("work_plan_data")
 
     # Create temp workspace — done before the clone so paths are always in state
@@ -49,13 +50,38 @@ def clone_repo(state: CloneRepoInputState) -> CloneRepoOutputState:
     )
     os.close(reasoning_fd)
 
+    # Inject GitHub token into HTTPS URL for authentication
+    # Format: https://x-access-token:{token}@github.com/owner/repo.git
+    if not repo_url.startswith("https://"):
+        error_msg = f"Repository URL must be HTTPS format (got {repo_url})"
+        click.echo(f"❌ {error_msg}", err=True)
+        return {
+            "working_dir": working_dir,
+            "work_plan_path": work_plan_path,
+            "summary_path": summary_path,
+            "reasoning_path": reasoning_path,
+            "exec_log_path": str(lp),
+            "execution_summary": _failure_summary(ticket_key, error_msg),
+            "exec_error": error_msg,
+            "failed_node": "execute_plan",
+        }
+
+    # Extract github.com URL and inject token
+    # https://github.com/owner/repo.git → https://x-access-token:{token}@github.com/owner/repo.git
+    if github_token:
+        clone_url = repo_url.replace(
+            "https://github.com/", f"https://x-access-token:{github_token}@github.com/"
+        )
+    else:
+        clone_url = repo_url
+
     # Attempt git clone
     click.echo(f"📂 Cloning {repo_url} into {working_dir}... (log: {lp})")
     try:
         with open(lp, "w") as log_file:
             log_file.write(f"=== git clone {repo_url} ===\n")
             clone_result = run_and_tee(
-                ["git", "clone", repo_url, working_dir],
+                ["git", "clone", clone_url, working_dir],
                 log_file,
             )
         if clone_result.returncode != 0:

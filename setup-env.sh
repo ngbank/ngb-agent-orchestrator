@@ -174,6 +174,9 @@ if $DO_ENV; then
     JIRA_API_TOKEN=$(op_read "JIRA_API_TOKEN")
     AZURE_API_KEY=$(op_read "AZURE_API_KEY")
     ANTHROPIC_API_KEY=$(op_read "ANTHROPIC_API_KEY")
+    GITHUB_APP_ID=$(op_read "GITHUB_APP_ID")
+    GITHUB_APP_PRIVATE_KEY=$(op_read "GITHUB_APP_PRIVATE_KEY")
+    GITHUB_APP_INSTALLATION_ID=$(op_read "GITHUB_APP_INSTALLATION_ID")
     GOOSE_MCP_PYTHON="${VENV_DIR}/bin/python"
 
     success "Secrets retrieved."
@@ -190,6 +193,9 @@ if $DO_ENV; then
         -e "s|__JIRA_API_TOKEN__|$(escape_sed "$JIRA_API_TOKEN")|g" \
         -e "s|__AZURE_API_KEY__|$(escape_sed "$AZURE_API_KEY")|g" \
         -e "s|__ANTHROPIC_API_KEY__|$(escape_sed "$ANTHROPIC_API_KEY")|g" \
+        -e "s|__GITHUB_APP_ID__|$(escape_sed "$GITHUB_APP_ID")|g" \
+        -e "s|__GITHUB_APP_PRIVATE_KEY__|$(escape_sed "$GITHUB_APP_PRIVATE_KEY")|g" \
+        -e "s|__GITHUB_APP_INSTALLATION_ID__|$(escape_sed "$GITHUB_APP_INSTALLATION_ID")|g" \
         -e "s|__GOOSE_MCP_PYTHON__|$(escape_sed "$GOOSE_MCP_PYTHON")|g" \
         .env.example > .env
 

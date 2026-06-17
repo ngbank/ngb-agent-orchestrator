@@ -17,6 +17,21 @@ class ResolveRepoInputState(TypedDict):
     ticket_key: str
 
 
+class FetchGithubTokenInputState(TypedDict):
+    """Input required by fetch_github_token node."""
+
+    ticket_key: str
+
+
+class FetchGithubTokenOutputState(TypedDict, total=False):
+    """Output produced by fetch_github_token node."""
+
+    github_token: str
+    execution_summary: Optional[dict]
+    exec_error: Optional[str]
+    failed_node: Optional[str]
+
+
 class ResolveRepoOutputState(TypedDict, total=False):
     """Output produced by resolve_repo node."""
 
@@ -32,6 +47,7 @@ class CloneRepoInputState(TypedDict, total=False):
     workflow_id: str
     ticket_key: str
     repo_url: str
+    github_token: str
     work_plan_data: dict
 
 
@@ -89,6 +105,27 @@ class PersistResultsOutputState(TypedDict, total=False):
     failed_node: Optional[str]
 
 
+class PushAndCreatePrInputState(TypedDict, total=False):
+    """Input required by push_and_create_pr node."""
+
+    workflow_id: str
+    ticket_key: str
+    working_dir: str
+    repo_url: str
+    github_token: str
+    execution_summary: Optional[dict]
+    work_plan_data: dict
+    pr_comments: Optional[str]
+    exec_error: Optional[str]
+
+
+class PushAndCreatePrOutputState(TypedDict, total=False):
+    """Output produced by push_and_create_pr node."""
+
+    execution_summary: Optional[dict]
+    failed_node: Optional[str]
+
+
 class CleanupInputState(TypedDict, total=False):
     """Input required by cleanup node."""
 
@@ -124,6 +161,9 @@ class CodeGeneratorState(TypedDict, total=False):
     # Set by resolve_repo or clone_repo on failure so that edges can skip
     # straight to persist_results without running the Goose step.
     exec_error: Optional[str]
+
+    # --- GitHub App token (ephemeral, subgraph-local) ---
+    github_token: str
 
     # --- execution-local workspace fields ---
     repo_url: str

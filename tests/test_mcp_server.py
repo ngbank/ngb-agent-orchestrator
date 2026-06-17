@@ -143,8 +143,6 @@ _SAMPLE_SETUP = {
             "branch_pattern": "feature/{ticket_key}+{slug}",
             "commit_template": "feat({ticket_key}): {summary}",
             "files_changed_command": "git diff --name-only HEAD",
-            "push_command": "git push origin {branch}",
-            "pr_command": "gh pr create --base main",
         },
     }
 }
@@ -181,8 +179,6 @@ def test_get_project_setup_vcs_has_required_fields(setup_file):
         "branch_pattern",
         "commit_template",
         "files_changed_command",
-        "push_command",
-        "pr_command",
     ):
         assert key in vcs, f"Missing vcs key '{key}' in get_project_setup response"
 
