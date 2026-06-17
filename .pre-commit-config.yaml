@@ -18,7 +18,7 @@ repos:
     rev: 26.1.0
     hooks:
       - id: black
-        language_version: python3.12
+        language_version: python3.13
 
   - repo: https://github.com/PyCQA/isort
     rev: 6.0.1
@@ -38,7 +38,7 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies: []
-        args: [--ignore-missing-imports, --no-error-summary, --python-version=3.12]
+        args: [--ignore-missing-imports, --no-error-summary, --python-version=3.13]
         exclude: ^(venv/|state/migrations/)
 
   # Pyright runs Pylance's analysis engine — catches possibly-unbound symbols,
@@ -49,7 +49,7 @@ repos:
     hooks:
       - id: pyright
         name: pyright
-        entry: venv/bin/python -m pyright
+        entry: .venv/bin/python -m pyright
         language: system
         pass_filenames: false
         always_run: true
@@ -59,7 +59,7 @@ repos:
     hooks:
       - id: pytest
         name: pytest
-        entry: venv/bin/python -m pytest tests/ -q --tb=short
+        entry: .venv/bin/python -m pytest tests/ -q --tb=short
         language: system
         pass_filenames: false
         always_run: true
@@ -67,7 +67,7 @@ repos:
   # ── SQL migration safety ──────────────────────────────────────────────────
       - id: check-sql-migrations
         name: check-sql-migrations
-        entry: venv/bin/python scripts/check_sql_migrations.py
+        entry: .venv/bin/python scripts/check_sql_migrations.py
         language: system
         files: ^state/migrations/.*\.sql$
         pass_filenames: true

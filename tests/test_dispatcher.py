@@ -52,7 +52,7 @@ def memory_checkpointer():
 @pytest.fixture
 def mock_jira_client():
     """Mock JIRA client for predictable responses."""
-    with patch("graph.work_planner.nodes.fetch_ticket.JiraClient") as mock:
+    with patch("orchestrator.work_planner.nodes.fetch_ticket.JiraClient") as mock:
         mock_instance = Mock()
         mock_instance.get_ticket.return_value = JiraTicket(
             key="TEST-123",
@@ -74,7 +74,7 @@ def cli_runner():
 @pytest.fixture
 def mock_generate_plan():
     """Mock generate_plan node to return a schema-valid WorkPlan so tests reach await_approval."""
-    with patch("graph.work_planner.builder.generate_plan") as mock:
+    with patch("orchestrator.work_planner.builder.generate_plan") as mock:
         mock.return_value = {
             "work_plan_data": {
                 "schema_version": "1.0",
@@ -94,7 +94,7 @@ def test_run_creates_workflow(
 ):
     """Test that running the dispatcher creates a workflow record and pauses for approval."""
     with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-        from graph.builder import build_orchestrator
+        from orchestrator.builder import build_orchestrator
 
         mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
 
@@ -120,7 +120,7 @@ def test_run_rejects_duplicate(test_db, mock_jira_client, cli_runner, memory_che
     workflow_id = state_store.create_workflow("TEST-123", status=WorkflowStatus.IN_PROGRESS)
 
     with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-        from graph.builder import build_orchestrator
+        from orchestrator.builder import build_orchestrator
 
         mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
 
@@ -140,7 +140,7 @@ def test_run_allows_rerun_after_completion(
     state_store.create_workflow("TEST-123", status=WorkflowStatus.COMPLETED)
 
     with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-        from graph.builder import build_orchestrator
+        from orchestrator.builder import build_orchestrator
 
         mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
 
@@ -158,13 +158,13 @@ def test_run_allows_rerun_after_completion(
 
 def test_run_handles_ticket_not_found(test_db, cli_runner, memory_checkpointer):
     """Test graceful handling of non-existent tickets."""
-    with patch("graph.work_planner.nodes.fetch_ticket.JiraClient") as mock:
+    with patch("orchestrator.work_planner.nodes.fetch_ticket.JiraClient") as mock:
         mock_instance = Mock()
         mock_instance.get_ticket.side_effect = JiraTicketNotFoundError("Ticket not found")
         mock.return_value = mock_instance
 
         with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            from graph.builder import build_orchestrator
+            from orchestrator.builder import build_orchestrator
 
             mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
 
@@ -199,7 +199,7 @@ def test_run_logs_transitions(
 ):
     """Test that all stage transitions are logged to audit log."""
     with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-        from graph.builder import build_orchestrator
+        from orchestrator.builder import build_orchestrator
 
         mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
 
@@ -234,7 +234,7 @@ def test_run_logs_transitions(
 
 def test_run_handles_exceptions(test_db, cli_runner):
     """Test that exceptions are caught and logged with failed status."""
-    with patch("graph.work_planner.nodes.fetch_ticket.JiraClient") as mock:
+    with patch("orchestrator.work_planner.nodes.fetch_ticket.JiraClient") as mock:
         mock.side_effect = Exception("Unexpected error")
 
         result = cli_runner.invoke(run, ["--ticket", "TEST-123"])
@@ -253,11 +253,11 @@ def test_run_validates_ticket_format(test_db, cli_runner):
 
 def test_run_handles_jira_config_error(test_db, cli_runner, memory_checkpointer):
     """Test handling of JIRA configuration errors."""
-    with patch("graph.work_planner.nodes.fetch_ticket.JiraClient") as mock:
+    with patch("orchestrator.work_planner.nodes.fetch_ticket.JiraClient") as mock:
         mock.side_effect = JiraConfigurationError("Missing JIRA_URL")
 
         with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            from graph.builder import build_orchestrator
+            from orchestrator.builder import build_orchestrator
 
             mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
 
@@ -270,7 +270,7 @@ def test_run_handles_jira_config_error(test_db, cli_runner, memory_checkpointer)
 
 def test_check_duplicate_node(test_db):
     """Test duplicate detection via the check_duplicate graph node."""
-    from graph.work_planner.nodes.check_duplicate import check_duplicate
+    from orchestrator.work_planner.nodes.check_duplicate import check_duplicate
 
     # No workflows — should return empty dict (no error)
     result = check_duplicate({"ticket_key": "TEST-999", "dry_run": False})
@@ -296,7 +296,7 @@ def test_check_duplicate_node(test_db):
 
 def test_create_workflow_record_node(test_db):
     """Test that create_workflow_record creates a workflow and transitions to IN_PROGRESS."""
-    from graph.work_planner.nodes.create_workflow_record import create_workflow_record
+    from orchestrator.work_planner.nodes.create_workflow_record import create_workflow_record
 
     result = create_workflow_record({"ticket_key": "TEST-123", "dry_run": False})
 
@@ -313,13 +313,13 @@ def test_create_workflow_record_node(test_db):
 
 def test_run_keyboard_interrupt(test_db, cli_runner, memory_checkpointer):
     """Test that KeyboardInterrupt is handled gracefully."""
-    with patch("graph.work_planner.nodes.fetch_ticket.JiraClient") as mock:
+    with patch("orchestrator.work_planner.nodes.fetch_ticket.JiraClient") as mock:
         mock_instance = Mock()
         mock_instance.get_ticket.side_effect = KeyboardInterrupt()
         mock.return_value = mock_instance
 
         with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            from graph.builder import build_orchestrator
+            from orchestrator.builder import build_orchestrator
 
             mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
 
@@ -418,13 +418,13 @@ class TestPostExecutionComment:
         """TicketNotFoundError (abstract) raised directly is caught by run_workflow handler."""
         from dispatcher.exceptions import TicketNotFoundError
 
-        with patch("graph.work_planner.nodes.fetch_ticket.JiraClient") as mock:
+        with patch("orchestrator.work_planner.nodes.fetch_ticket.JiraClient") as mock:
             mock_instance = Mock()
             mock_instance.get_ticket.side_effect = TicketNotFoundError("abstract not found")
             mock.return_value = mock_instance
 
             with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-                from graph.builder import build_orchestrator
+                from orchestrator.builder import build_orchestrator
 
                 mock_build.side_effect = lambda: build_orchestrator(
                     checkpointer=memory_checkpointer
@@ -441,7 +441,7 @@ class TestFetchTicketNode:
     def test_uses_injected_ticket_source(self):
         """fetch_ticket uses an injected TicketSource stub — no JiraClient constructed."""
         from dispatcher.jira_client import JiraTicket
-        from graph.work_planner.nodes.fetch_ticket import fetch_ticket
+        from orchestrator.work_planner.nodes.fetch_ticket import fetch_ticket
 
         class FakeTicketSource:
             def get_ticket(self, ticket_key: str) -> JiraTicket:
@@ -463,9 +463,9 @@ class TestFetchTicketNode:
 
     def test_default_uses_jira_client(self):
         """fetch_ticket constructs a JiraClient when no ticket_source is provided."""
-        from graph.work_planner.nodes.fetch_ticket import fetch_ticket
+        from orchestrator.work_planner.nodes.fetch_ticket import fetch_ticket
 
-        with patch("graph.work_planner.nodes.fetch_ticket.JiraClient") as mock_cls:
+        with patch("orchestrator.work_planner.nodes.fetch_ticket.JiraClient") as mock_cls:
             mock_instance = Mock()
             from dispatcher.jira_client import JiraTicket
 
@@ -507,7 +507,7 @@ class TestHandleHistory:
         self, test_db, mock_jira_client, mock_generate_plan, cli_runner, memory_checkpointer
     ):
         """--history should list at least one step after a workflow run."""
-        from graph.builder import build_orchestrator
+        from orchestrator.builder import build_orchestrator
 
         checkpointer = memory_checkpointer
         with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
@@ -534,7 +534,7 @@ class TestHandleHistory:
         self, test_db, mock_jira_client, mock_generate_plan, cli_runner, memory_checkpointer
     ):
         """--history --workflow-id should show the same output as --ticket."""
-        from graph.builder import build_orchestrator
+        from orchestrator.builder import build_orchestrator
 
         checkpointer = memory_checkpointer
         with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
@@ -612,9 +612,9 @@ def test_reject_handles_resume_error(test_db, cli_runner):
 
 
 def test_get_actor_imported_from_graph_utils():
-    """Dispatcher should consume shared _get_actor from graph.utils."""
+    """Dispatcher should consume shared _get_actor from orchestrator.utils."""
     import dispatcher.commands.common as run_module
-    from graph.utils import _get_actor as shared_get_actor
+    from orchestrator.utils import _get_actor as shared_get_actor
 
     assert run_module._get_actor is shared_get_actor
 

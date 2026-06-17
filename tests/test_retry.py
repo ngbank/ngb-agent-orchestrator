@@ -10,7 +10,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from dispatcher.jira_client import JiraTicket
 from dispatcher.run import run
-from graph.retry import find_rewind_config, resolve_parent_node
+from orchestrator.retry import find_rewind_config, resolve_parent_node
 from state import workflow_repository as state_store
 from state.workflow_status import WorkflowStatus
 
@@ -49,7 +49,7 @@ def memory_checkpointer():
 @pytest.fixture
 def mock_jira_client():
     """Mock JIRA client for predictable responses."""
-    with patch("graph.work_planner.nodes.fetch_ticket.JiraClient") as mock:
+    with patch("orchestrator.work_planner.nodes.fetch_ticket.JiraClient") as mock:
         mock_instance = Mock()
         mock_instance.get_ticket.return_value = JiraTicket(
             key="TEST-123",
@@ -392,7 +392,7 @@ def test_retry_integration_plan_failure_then_success(
     re-runs the subgraph (with generate_plan now returning a valid plan),
     and the workflow pauses at await_approval.
     """
-    from graph.builder import build_orchestrator
+    from orchestrator.builder import build_orchestrator
 
     checkpointer = memory_checkpointer
     call_counter = {"count": 0}
@@ -407,7 +407,7 @@ def test_retry_integration_plan_failure_then_success(
         return {"work_plan_data": _VALID_WORK_PLAN}
 
     with patch(
-        "graph.work_planner.builder.generate_plan",
+        "orchestrator.work_planner.builder.generate_plan",
         side_effect=flaky_generate_plan,
     ):
         with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
