@@ -9,7 +9,7 @@ import shutil
 
 import click
 
-from graph.code_generator.state import CleanupInputState
+from orchestrator.code_generator.state import CleanupInputState
 
 
 def cleanup(state: CleanupInputState) -> dict:

@@ -2,8 +2,8 @@
 
 import click
 
-from graph.code_generator.state import ResolveRepoInputState, ResolveRepoOutputState
 from mcp_server.server import get_repo_for_project
+from orchestrator.code_generator.state import ResolveRepoInputState, ResolveRepoOutputState
 
 
 def _failure_summary(ticket_key: str, error: str) -> dict:

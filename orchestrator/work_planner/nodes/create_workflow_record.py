@@ -2,7 +2,7 @@
 
 import click
 
-from graph.work_planner.state import (
+from orchestrator.work_planner.state import (
     CreateWorkflowRecordInputState,
     CreateWorkflowRecordOutputState,
 )

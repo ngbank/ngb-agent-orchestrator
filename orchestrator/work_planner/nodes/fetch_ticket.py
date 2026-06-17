@@ -7,7 +7,7 @@ import click
 
 from dispatcher.jira_client import JiraClient
 from dispatcher.protocols import TicketSource
-from graph.work_planner.state import (
+from orchestrator.work_planner.state import (
     FetchTicketInputState,
     FetchTicketOutputState,
 )

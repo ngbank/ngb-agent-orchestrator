@@ -3,8 +3,8 @@
 import click
 from langgraph.types import interrupt
 
-from graph.state import PRApprovalInputState, PRApprovalOutputState
-from graph.utils import _get_actor
+from orchestrator.state import PRApprovalInputState, PRApprovalOutputState
+from orchestrator.utils import _get_actor
 from state.workflow_repository import get_workflow, update_pr_comments, update_status
 from state.workflow_status import WorkflowStatus
 

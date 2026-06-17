@@ -2,17 +2,17 @@
 
 from unittest.mock import patch
 
-from graph.work_planner.nodes.await_workplan_clarification import (
+from orchestrator.work_planner.nodes.await_workplan_clarification import (
     MAX_CLARIFICATION_ROUNDS,
     await_workplan_clarification,
 )
 
-_PATCH_INTERRUPT = "graph.work_planner.nodes.await_workplan_clarification.interrupt"
-_PATCH_UPDATE_STATUS = "graph.work_planner.nodes.await_workplan_clarification.update_status"
+_PATCH_INTERRUPT = "orchestrator.work_planner.nodes.await_workplan_clarification.interrupt"
+_PATCH_UPDATE_STATUS = "orchestrator.work_planner.nodes.await_workplan_clarification.update_status"
 _PATCH_UPDATE_CLARIFICATION_HISTORY = (
-    "graph.work_planner.nodes.await_workplan_clarification.update_clarification_history"
+    "orchestrator.work_planner.nodes.await_workplan_clarification.update_clarification_history"
 )
-_PATCH_GET_ACTOR = "graph.work_planner.nodes.await_workplan_clarification._get_actor"
+_PATCH_GET_ACTOR = "orchestrator.work_planner.nodes.await_workplan_clarification._get_actor"
 
 
 def _make_state(

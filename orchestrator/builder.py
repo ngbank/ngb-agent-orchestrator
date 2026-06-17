@@ -20,11 +20,11 @@ from typing import Literal
 
 from langgraph.graph import END, StateGraph
 
-from graph.code_generator.builder import build_code_generator
-from graph.nodes.await_approval import await_approval
-from graph.nodes.await_pr_approval import await_pr_approval
-from graph.state import OrchestratorState
-from graph.work_planner.builder import build_work_planner
+from orchestrator.code_generator.builder import build_code_generator
+from orchestrator.nodes.await_approval import await_approval
+from orchestrator.nodes.await_pr_approval import await_pr_approval
+from orchestrator.state import OrchestratorState
+from orchestrator.work_planner.builder import build_work_planner
 from state.observable_sqlite_saver import ObservableSqliteSaver
 from state.workflow_repository import get_db_path
 

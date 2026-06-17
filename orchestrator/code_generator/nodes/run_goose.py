@@ -5,8 +5,8 @@ from pathlib import Path
 
 import click
 
-from graph.code_generator.state import RunGooseInputState
-from graph.utils import goose_session, run_and_tee
+from orchestrator.code_generator.state import RunGooseInputState
+from orchestrator.utils import goose_session, run_and_tee
 
 
 def run_goose(state: RunGooseInputState) -> dict:

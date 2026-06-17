@@ -25,14 +25,14 @@ summaries are always persisted and temp files are always removed.
 
 from langgraph.graph import END, StateGraph
 
-from graph.code_generator.edges import route_after_clone, route_after_resolve
-from graph.code_generator.nodes.cleanup import cleanup
-from graph.code_generator.nodes.clone_repo import clone_repo
-from graph.code_generator.nodes.persist_results import persist_results
-from graph.code_generator.nodes.process_results import process_results
-from graph.code_generator.nodes.resolve_repo import resolve_repo
-from graph.code_generator.nodes.run_goose import run_goose
-from graph.code_generator.state import CodeGeneratorState
+from orchestrator.code_generator.edges import route_after_clone, route_after_resolve
+from orchestrator.code_generator.nodes.cleanup import cleanup
+from orchestrator.code_generator.nodes.clone_repo import clone_repo
+from orchestrator.code_generator.nodes.persist_results import persist_results
+from orchestrator.code_generator.nodes.process_results import process_results
+from orchestrator.code_generator.nodes.resolve_repo import resolve_repo
+from orchestrator.code_generator.nodes.run_goose import run_goose
+from orchestrator.code_generator.state import CodeGeneratorState
 
 
 def build_code_generator():

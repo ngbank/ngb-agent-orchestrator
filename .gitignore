@@ -28,6 +28,7 @@ state/*.sqlite3
 # IDE
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~

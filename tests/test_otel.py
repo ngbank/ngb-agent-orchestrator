@@ -447,7 +447,7 @@ class TestRunAndTeeGooseSpan:
 
     def _patched_run_and_tee(self, monkeypatch, provider):
         """Return run_and_tee with its OTel tracer wired to *provider*."""
-        import graph.utils as utils_module
+        import orchestrator.utils as utils_module
 
         tracer = provider.get_tracer("test")
 
@@ -646,7 +646,7 @@ class TestGooseRunEnrichment:
     def _patched_run_and_tee(self, monkeypatch, provider):
         import opentelemetry.trace as otel_trace_module
 
-        import graph.utils as utils_module
+        import orchestrator.utils as utils_module
 
         tracer = provider.get_tracer("test")
         monkeypatch.setattr(otel_trace_module, "get_tracer", lambda *_: tracer)

@@ -12,7 +12,7 @@ LOG_LEVEL controls the verbosity of all application logs:
 
 Example::
 
-    from graph.logging_setup import setup_logging
+    from orchestrator.logging_setup import setup_logging
     setup_logging()
 """
 

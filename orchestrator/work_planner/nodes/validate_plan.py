@@ -3,7 +3,7 @@
 import click
 
 from dispatcher.work_plan_validator import WorkPlanValidationError, validate_work_plan
-from graph.work_planner.state import (
+from orchestrator.work_planner.state import (
     ValidatePlanInputState,
     ValidatePlanOutputState,
 )

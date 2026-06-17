@@ -1,7 +1,7 @@
 """Node: error_handler — mark the workflow FAILED when a routing error occurs."""
 
-from graph.node_result import WorkPlannerNodeResult
-from graph.work_planner.state import ErrorHandlerInputState
+from orchestrator.node_result import WorkPlannerNodeResult
+from orchestrator.work_planner.state import ErrorHandlerInputState
 from state.workflow_repository import update_status
 from state.workflow_status import WorkflowStatus
 

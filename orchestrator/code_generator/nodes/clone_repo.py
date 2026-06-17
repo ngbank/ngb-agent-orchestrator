@@ -6,9 +6,9 @@ import tempfile
 
 import click
 
-from graph.code_generator.nodes.resolve_repo import _failure_summary
-from graph.code_generator.state import CloneRepoInputState, CloneRepoOutputState
-from graph.utils import log_path, run_and_tee
+from orchestrator.code_generator.nodes.resolve_repo import _failure_summary
+from orchestrator.code_generator.state import CloneRepoInputState, CloneRepoOutputState
+from orchestrator.utils import log_path, run_and_tee
 
 
 def clone_repo(state: CloneRepoInputState) -> CloneRepoOutputState:
