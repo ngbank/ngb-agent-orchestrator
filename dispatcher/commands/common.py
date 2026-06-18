@@ -12,7 +12,7 @@ from langchain_core.runnables import RunnableConfig
 
 from dispatcher.constants import NODE_EMOJI, STATUS_DISPLAY
 from dispatcher.protocols import CommentPoster
-from graph.utils import _get_actor  # noqa: F401
+from orchestrator.utils import _get_actor  # noqa: F401
 from state.workflow_repository import get_workflow, update_status
 from state.workflow_status import WorkflowStatus
 
@@ -50,7 +50,7 @@ def build_orchestrator(*args, **kwargs):
     Also ensures OTel tracing is initialised exactly once before any graph
     work begins — keeping setup_tracing() out of every individual command.
     """
-    from graph.builder import build_orchestrator as _build_orchestrator
+    from orchestrator.builder import build_orchestrator as _build_orchestrator
     from otel import setup_tracing
 
     setup_tracing()

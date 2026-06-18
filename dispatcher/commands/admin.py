@@ -8,7 +8,7 @@ import click
 
 import dispatcher.commands.common as common
 from dispatcher.constants import NODE_EMOJI, STATUS_DISPLAY
-from graph.utils import log_path
+from orchestrator.utils import log_path
 from state.workflow_repository import (
     clear_db,
     get_workflow,

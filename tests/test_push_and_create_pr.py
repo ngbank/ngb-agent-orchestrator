@@ -27,13 +27,17 @@ def _base_state():
 
 
 def test_push_and_create_pr_creates_new_pr_when_none_exists():
-    from graph.code_generator.nodes.push_and_create_pr import push_and_create_pr
+    from orchestrator.code_generator.nodes.push_and_create_pr import push_and_create_pr
 
     with (
-        patch("graph.code_generator.nodes.push_and_create_pr.push_branch_with_token") as mock_push,
-        patch("graph.code_generator.nodes.push_and_create_pr.get_open_pr", return_value=None),
         patch(
-            "graph.code_generator.nodes.push_and_create_pr.create_pr",
+            "orchestrator.code_generator.nodes.push_and_create_pr.push_branch_with_token"
+        ) as mock_push,
+        patch(
+            "orchestrator.code_generator.nodes.push_and_create_pr.get_open_pr", return_value=None
+        ),
+        patch(
+            "orchestrator.code_generator.nodes.push_and_create_pr.create_pr",
             return_value="https://github.com/ngbank/ngb-agent-orchestrator/pull/5",
         ) as mock_create,
     ):
@@ -45,18 +49,20 @@ def test_push_and_create_pr_creates_new_pr_when_none_exists():
 
 
 def test_push_and_create_pr_reuses_existing_pr_and_adds_comment_when_needed():
-    from graph.code_generator.nodes.push_and_create_pr import push_and_create_pr
+    from orchestrator.code_generator.nodes.push_and_create_pr import push_and_create_pr
 
     state = _base_state()
     state["pr_comments"] = "Please address the review feedback"
 
     with (
-        patch("graph.code_generator.nodes.push_and_create_pr.push_branch_with_token"),
+        patch("orchestrator.code_generator.nodes.push_and_create_pr.push_branch_with_token"),
         patch(
-            "graph.code_generator.nodes.push_and_create_pr.get_open_pr",
+            "orchestrator.code_generator.nodes.push_and_create_pr.get_open_pr",
             return_value="https://github.com/ngbank/ngb-agent-orchestrator/pull/7",
         ),
-        patch("graph.code_generator.nodes.push_and_create_pr.add_pr_comment") as mock_comment,
+        patch(
+            "orchestrator.code_generator.nodes.push_and_create_pr.add_pr_comment"
+        ) as mock_comment,
     ):
         result = push_and_create_pr(state)
 
@@ -65,12 +71,14 @@ def test_push_and_create_pr_reuses_existing_pr_and_adds_comment_when_needed():
 
 
 def test_push_and_create_pr_skips_when_exec_error_set():
-    from graph.code_generator.nodes.push_and_create_pr import push_and_create_pr
+    from orchestrator.code_generator.nodes.push_and_create_pr import push_and_create_pr
 
     state = _base_state()
     state["exec_error"] = "earlier failure"
 
-    with patch("graph.code_generator.nodes.push_and_create_pr.push_branch_with_token") as mock_push:
+    with patch(
+        "orchestrator.code_generator.nodes.push_and_create_pr.push_branch_with_token"
+    ) as mock_push:
         result = push_and_create_pr(state)
 
     assert result["execution_summary"]["status"] == "success"
@@ -79,10 +87,10 @@ def test_push_and_create_pr_skips_when_exec_error_set():
 
 def test_push_and_create_pr_downgrades_to_partial_on_push_failure():
     from dispatcher.github_client import GitHubAuthError
-    from graph.code_generator.nodes.push_and_create_pr import push_and_create_pr
+    from orchestrator.code_generator.nodes.push_and_create_pr import push_and_create_pr
 
     with patch(
-        "graph.code_generator.nodes.push_and_create_pr.push_branch_with_token",
+        "orchestrator.code_generator.nodes.push_and_create_pr.push_branch_with_token",
         side_effect=GitHubAuthError("git push failed"),
     ):
         result = push_and_create_pr(_base_state())

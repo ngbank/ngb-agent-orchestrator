@@ -4,8 +4,8 @@ All routing functions are pure: they inspect state and return a string
 destination — no I/O, no side-effects.
 """
 
-from graph.builder import _route_after_pr_approval
-from graph.work_planner.edges import (
+from orchestrator.builder import _route_after_pr_approval
+from orchestrator.work_planner.edges import (
     route_after_check_duplicate,
     route_after_fetch_ticket,
     route_after_generate_plan,

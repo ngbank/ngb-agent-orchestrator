@@ -1,4 +1,4 @@
-from graph.code_generator.edges import (
+from orchestrator.code_generator.edges import (
     route_after_clone,
     route_after_fetch_token,
     route_after_resolve,

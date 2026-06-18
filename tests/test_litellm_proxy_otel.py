@@ -20,8 +20,8 @@ from unittest.mock import patch
 
 import pytest
 
-from graph.litellm_callbacks import TokenUsageLogger
-from graph.litellm_callbacks import proxy_handler_instance as token_logger_instance
+from orchestrator.litellm_callbacks import TokenUsageLogger
+from orchestrator.litellm_callbacks import proxy_handler_instance as token_logger_instance
 from otel.context import (
     _node_name,
     _ticket_key,
@@ -116,7 +116,7 @@ class TestProxyYamlReferencesBootstrap:
 
     def test_generated_yaml_uses_bootstrap_callback(self, monkeypatch):
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-        from graph.utils import _litellm_config_yaml
+        from orchestrator.utils import _litellm_config_yaml
 
         yaml = _litellm_config_yaml("openai/gpt-4o")
         # List form is required so LiteLLM's YAML loader *extends* (not replaces)

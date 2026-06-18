@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import os
 
-from graph.litellm_callbacks import proxy_handler_instance
+from orchestrator.litellm_callbacks import proxy_handler_instance
 from otel.context import set_proxy_parent_context, set_workflow_context
 from otel.instrumentation import setup_tracing
 

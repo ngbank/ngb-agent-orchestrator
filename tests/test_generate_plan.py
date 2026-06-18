@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from graph.work_planner.nodes.generate_plan import generate_plan
+from orchestrator.work_planner.nodes.generate_plan import generate_plan
 
 VALID_WORK_PLAN = {
     "schema_version": "1.0",
@@ -26,9 +26,9 @@ def _make_run_result(returncode=0):
     return mock
 
 
-_PATCH_TEE = "graph.work_planner.nodes.generate_plan.run_and_tee"
-_PATCH_LOG = "graph.work_planner.nodes.generate_plan.log_path"
-_PATCH_SESSION = "graph.work_planner.nodes.generate_plan.goose_session"
+_PATCH_TEE = "orchestrator.work_planner.nodes.generate_plan.run_and_tee"
+_PATCH_LOG = "orchestrator.work_planner.nodes.generate_plan.log_path"
+_PATCH_SESSION = "orchestrator.work_planner.nodes.generate_plan.goose_session"
 
 
 @pytest.fixture(autouse=True)
