@@ -2,7 +2,7 @@
 
 import click
 
-from mcp_server.server import get_repo_for_project
+from orchestrator.shared.repo_setup import extract_project_key, resolve_repository_url
 from orchestrator.work_planner.state import ResolveRepoInputState, ResolveRepoOutputState
 
 
@@ -13,15 +13,15 @@ def resolve_repo(state: ResolveRepoInputState) -> ResolveRepoOutputState:
     1. Explicit repo_url already present in state.
     2. Project mapping lookup via ticket key prefix.
     """
+    ticket_key = state.get("ticket_key", "")
+    project_key = extract_project_key(ticket_key)
     existing_repo_url = (state.get("repo_url") or "").strip()
+
     if existing_repo_url:
         click.echo(f"🔗 Using provided repository URL: {existing_repo_url}")
-        return {"repo_url": existing_repo_url}
 
-    ticket_key = state.get("ticket_key", "")
-    project_key = ticket_key.split("-")[0].upper() if ticket_key else ""
     try:
-        repo_url = get_repo_for_project(project_key)
+        repo_url = resolve_repository_url(ticket_key, existing_repo_url)
         click.echo(f"🔗 Resolved repository URL for {project_key}: {repo_url}")
         return {"repo_url": repo_url}
     except ValueError as exc:

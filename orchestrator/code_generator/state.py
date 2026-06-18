@@ -17,10 +17,11 @@ class ResolveRepoInputState(TypedDict):
     ticket_key: str
 
 
-class FetchGithubTokenInputState(TypedDict):
+class FetchGithubTokenInputState(TypedDict, total=False):
     """Input required by fetch_github_token node."""
 
     ticket_key: str
+    repo_url: str
 
 
 class FetchGithubTokenOutputState(TypedDict, total=False):

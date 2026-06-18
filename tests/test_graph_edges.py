@@ -12,6 +12,7 @@ from orchestrator.work_planner.edges import (
     route_after_fetch_github_token,
     route_after_fetch_ticket,
     route_after_generate_plan,
+    route_after_repo_setup,
     route_after_resolve_repo,
     route_after_validate_input,
     route_after_validate_plan,
@@ -252,6 +253,16 @@ def test_route_cleanup_with_error():
 def test_route_cleanup_without_error():
     state = {"ticket_key": "AOS-50"}
     assert route_after_cleanup(state) == "end"
+
+
+def test_route_repo_setup_ok():
+    state = {"ticket_key": "AOS-50", "working_dir": "/tmp/work"}
+    assert route_after_repo_setup(state) == "generate_plan"
+
+
+def test_route_repo_setup_error():
+    state = {"ticket_key": "AOS-50", "error": "boom"}
+    assert route_after_repo_setup(state) == "cleanup"
 
 
 # ---------------------------------------------------------------------------

@@ -37,14 +37,13 @@ Graph topology:
 
 from langgraph.graph import END, StateGraph
 
+from orchestrator.shared.repo_setup import build_repo_setup_subgraph
 from orchestrator.work_planner.edges import (
     route_after_check_duplicate,
     route_after_cleanup,
-    route_after_clone_repo,
-    route_after_fetch_github_token,
     route_after_fetch_ticket,
     route_after_generate_plan,
-    route_after_resolve_repo,
+    route_after_repo_setup,
     route_after_validate_input,
     route_after_validate_plan,
     route_after_workplan_clarification,
@@ -54,14 +53,11 @@ from orchestrator.work_planner.nodes.await_workplan_clarification import (
 )
 from orchestrator.work_planner.nodes.check_duplicate import check_duplicate
 from orchestrator.work_planner.nodes.cleanup import cleanup
-from orchestrator.work_planner.nodes.clone_repo import clone_repo
 from orchestrator.work_planner.nodes.create_workflow_record import create_workflow_record
 from orchestrator.work_planner.nodes.error_handler import error_handler
-from orchestrator.work_planner.nodes.fetch_github_token import fetch_github_token
 from orchestrator.work_planner.nodes.fetch_ticket import fetch_ticket
 from orchestrator.work_planner.nodes.generate_plan import generate_plan
 from orchestrator.work_planner.nodes.post_to_jira import post_to_jira
-from orchestrator.work_planner.nodes.resolve_repo import resolve_repo
 from orchestrator.work_planner.nodes.store_plan import store_plan
 from orchestrator.work_planner.nodes.validate_input import validate_input
 from orchestrator.work_planner.nodes.validate_plan import validate_plan
@@ -80,15 +76,14 @@ def build_work_planner(checkpointer=None):
         embedded as a node inside the top-level orchestrator graph.
     """
     builder = StateGraph(WorkPlannerState)
+    repo_setup_subgraph = build_repo_setup_subgraph("work_planner")
 
     # --- nodes ---
     builder.add_node("validate_input", validate_input)
     builder.add_node("check_duplicate", check_duplicate)
     builder.add_node("fetch_ticket", fetch_ticket)
     builder.add_node("create_workflow_record", create_workflow_record)
-    builder.add_node("resolve_repo", resolve_repo)
-    builder.add_node("fetch_github_token", fetch_github_token)
-    builder.add_node("clone_repo", clone_repo)
+    builder.add_node("repo_setup", repo_setup_subgraph)
     builder.add_node("generate_plan", generate_plan)
     builder.add_node("validate_plan", validate_plan)
     builder.add_node("await_workplan_clarification", await_workplan_clarification)
@@ -119,26 +114,10 @@ def build_work_planner(checkpointer=None):
             "cleanup": "cleanup",
         },
     )
-    builder.add_edge("create_workflow_record", "resolve_repo")
+    builder.add_edge("create_workflow_record", "repo_setup")
     builder.add_conditional_edges(
-        "resolve_repo",
-        route_after_resolve_repo,
-        {
-            "fetch_github_token": "fetch_github_token",
-            "cleanup": "cleanup",
-        },
-    )
-    builder.add_conditional_edges(
-        "fetch_github_token",
-        route_after_fetch_github_token,
-        {
-            "clone_repo": "clone_repo",
-            "cleanup": "cleanup",
-        },
-    )
-    builder.add_conditional_edges(
-        "clone_repo",
-        route_after_clone_repo,
+        "repo_setup",
+        route_after_repo_setup,
         {
             "generate_plan": "generate_plan",
             "cleanup": "cleanup",

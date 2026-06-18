@@ -5,11 +5,11 @@ directories are leaked.
 """
 
 import os
-import shutil
 
 import click
 
 from orchestrator.code_generator.state import CleanupInputState
+from orchestrator.shared.repo_setup import cleanup_working_dir
 
 
 def cleanup(state: CleanupInputState) -> dict:
@@ -30,8 +30,7 @@ def cleanup(state: CleanupInputState) -> dict:
                 pass
 
     working_dir = state.get("working_dir")
-    if working_dir and os.path.isdir(working_dir):
-        shutil.rmtree(working_dir, ignore_errors=True)
+    if cleanup_working_dir(working_dir):
         click.echo(f"🧹 Cleaned up working directory: {working_dir}")
 
     return {}

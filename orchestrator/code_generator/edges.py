@@ -30,3 +30,14 @@ def route_after_clone(
     if state.get("exec_error"):
         return "persist_results"
     return "run_goose"
+
+
+def route_after_repo_setup(
+    state: CodeGeneratorState,
+) -> Literal["run_goose", "persist_results"]:
+    """Skip to persist_results if repo_setup subgraph failed."""
+    if state.get("exec_error"):
+        return "persist_results"
+    if not state.get("working_dir"):
+        return "persist_results"
+    return "run_goose"

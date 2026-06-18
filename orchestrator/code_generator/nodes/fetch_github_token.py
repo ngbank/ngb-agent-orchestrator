@@ -2,11 +2,11 @@
 
 import click
 
-from dispatcher.github_client import GitHubAuthError, get_installation_token
 from orchestrator.code_generator.state import (
     FetchGithubTokenInputState,
     FetchGithubTokenOutputState,
 )
+from orchestrator.shared.repo_setup import fetch_token_for_repo
 
 
 def _failure_summary(ticket_key: str, error: str) -> dict:
@@ -34,13 +34,13 @@ def fetch_github_token(
     On failure: additionally sets execution_summary, exec_error, failed_node.
     """
     ticket_key = state.get("ticket_key", "")
-    project_key = ticket_key.split("-")[0].upper() if ticket_key else ""
+    repo_url = state.get("repo_url", "")
 
     try:
-        token = get_installation_token(project_key)
+        token = fetch_token_for_repo(ticket_key, repo_url)
         click.echo("✓ Fetched GitHub App installation token")
-        return {"github_token": token}
-    except GitHubAuthError as e:
+        return {"github_token": token} if token else {}
+    except Exception as e:  # noqa: BLE001
         click.echo(f"❌ Failed to fetch GitHub token: {e}", err=True)
         error_msg = f"GitHub token fetch failed: {e}"
         return {

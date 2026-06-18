@@ -1,6 +1,7 @@
 from orchestrator.code_generator.edges import (
     route_after_clone,
     route_after_fetch_token,
+    route_after_repo_setup,
     route_after_resolve,
 )
 
@@ -15,3 +16,11 @@ def test_route_after_fetch_token_failure():
 
 def test_route_after_clone_success():
     assert route_after_clone({}) == "run_goose"
+
+
+def test_route_after_repo_setup_failure():
+    assert route_after_repo_setup({"exec_error": "boom"}) == "persist_results"
+
+
+def test_route_after_repo_setup_success():
+    assert route_after_repo_setup({"working_dir": "/tmp/work"}) == "run_goose"

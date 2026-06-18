@@ -2,8 +2,8 @@
 
 import click
 
-from mcp_server.server import get_repo_for_project
 from orchestrator.code_generator.state import ResolveRepoInputState, ResolveRepoOutputState
+from orchestrator.shared.repo_setup import resolve_repository_url
 
 
 def _failure_summary(ticket_key: str, error: str) -> dict:
@@ -29,9 +29,8 @@ def resolve_repo(state: ResolveRepoInputState) -> ResolveRepoOutputState:
     On failure: sets execution_summary, exec_error, failed_node and routes to persist_results.
     """
     ticket_key = state.get("ticket_key", "")
-    project_key = ticket_key.split("-")[0].upper()
     try:
-        repo_url = get_repo_for_project(project_key)
+        repo_url = resolve_repository_url(ticket_key)
         return {"repo_url": repo_url}
     except ValueError as e:
         click.echo(f"❌ {e}", err=True)

@@ -1,0 +1,21 @@
+"""Shared repository-setup primitives and wiring helpers."""
+
+from orchestrator.shared.repo_setup.chain import add_repo_setup_chain
+from orchestrator.shared.repo_setup.primitives import (
+    cleanup_working_dir,
+    clone_repository,
+    extract_project_key,
+    fetch_token_for_repo,
+    resolve_repository_url,
+)
+from orchestrator.shared.repo_setup.subgraph import build_repo_setup_subgraph
+
+__all__ = [
+    "add_repo_setup_chain",
+    "cleanup_working_dir",
+    "build_repo_setup_subgraph",
+    "clone_repository",
+    "extract_project_key",
+    "fetch_token_for_repo",
+    "resolve_repository_url",
+]

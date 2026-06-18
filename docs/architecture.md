@@ -75,6 +75,7 @@ LangGraph state machine. Two levels:
 
 - **Top-level graph** (`graph/builder.py`): `work_planner → await_approval → execute_plan`
 - **`work_planner` subgraph** (`graph/work_planner/`): planning + repo setup + cleanup nodes
+- **Shared repo setup module** (`orchestrator/shared/repo_setup/`): reusable repo setup primitives (`resolve_repository_url`, `fetch_token_for_repo`, `clone_repository`, `cleanup_working_dir`) and a nested shared repo setup subgraph (`build_repo_setup_subgraph`) used by both `work_planner` and `code_generator`.
 
 State is defined in `graph/state.py` (`OrchestratorState`) and `graph/work_planner/state.py` (`WorkPlannerState`).
 

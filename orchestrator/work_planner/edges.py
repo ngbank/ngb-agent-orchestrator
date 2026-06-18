@@ -34,6 +34,16 @@ def route_after_fetch_ticket(
     return "create_workflow_record"
 
 
+def route_after_repo_setup(
+    state: WorkPlannerState,
+) -> Literal["generate_plan", "cleanup"]:
+    if state.get("error"):
+        return "cleanup"
+    if not state.get("working_dir"):
+        return "cleanup"
+    return "generate_plan"
+
+
 def route_after_resolve_repo(
     state: WorkPlannerState,
 ) -> Literal["fetch_github_token", "cleanup"]:

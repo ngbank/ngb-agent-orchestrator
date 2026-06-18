@@ -2,7 +2,7 @@
 
 import click
 
-from dispatcher.github_client import GitHubAuthError, get_installation_token
+from orchestrator.shared.repo_setup import fetch_token_for_repo
 from orchestrator.work_planner.state import (
     FetchGithubTokenInputState,
     FetchGithubTokenOutputState,
@@ -25,14 +25,11 @@ def fetch_github_token(state: FetchGithubTokenInputState) -> FetchGithubTokenOut
         click.echo("🔑 Skipping GitHub token fetch for SSH repository URL")
         return {}
 
-    ticket_key = state.get("ticket_key", "")
-    project_key = ticket_key.split("-")[0].upper() if ticket_key else ""
-
     try:
-        token = get_installation_token(project_key)
+        token = fetch_token_for_repo(state.get("ticket_key", ""), repo_url)
         click.echo("✓ Fetched GitHub App installation token")
-        return {"github_token": token}
-    except GitHubAuthError as exc:
-        error_msg = f"GitHub token fetch failed: {exc}"
+        return {"github_token": token} if token else {}
+    except Exception as exc:  # noqa: BLE001
+        error_msg = str(exc)
         click.echo(f"❌ {error_msg}", err=True)
         return {"error": error_msg, "failed_node": "fetch_github_token"}

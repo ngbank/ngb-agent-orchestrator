@@ -1,10 +1,9 @@
 """Node: clone_repo — clone the planning target repository into a temp workspace."""
 
-import tempfile
-
 import click
 
-from orchestrator.utils import log_path, run_and_tee
+from orchestrator.shared.repo_setup import clone_repository
+from orchestrator.utils import log_path
 from orchestrator.work_planner.state import CloneRepoInputState, CloneRepoOutputState
 
 
@@ -20,23 +19,19 @@ def clone_repo(state: CloneRepoInputState) -> CloneRepoOutputState:
         click.echo(f"❌ {error_msg}", err=True)
         return {"error": error_msg, "failed_node": "clone_repo"}
 
-    working_dir = tempfile.mkdtemp(prefix=f"ngb-plan-{workflow_id}-")
+    working_dir = None
     lp = log_path(workflow_id, "plan", ticket_key=ticket_key)
 
-    clone_url = repo_url
-    if repo_url.startswith("https://github.com/") and github_token:
-        clone_url = repo_url.replace(
-            "https://github.com/",
-            f"https://x-access-token:{github_token}@github.com/",
-        )
-
-    click.echo(f"📂 Cloning {repo_url} into {working_dir}... (log: {lp})")
     try:
         with open(lp, "a") as log_file:
             log_file.write(f"\n=== git clone {repo_url} ===\n")
-            result = run_and_tee(["git", "clone", clone_url, working_dir], log_file)
-        if result.returncode != 0:
-            raise RuntimeError(f"git clone exited with code {result.returncode}")
+            working_dir = clone_repository(
+                repo_url,
+                github_token,
+                temp_prefix=f"ngb-plan-{workflow_id}-",
+                log_file=log_file,
+            )
+        click.echo(f"📂 Cloning {repo_url} into {working_dir}... (log: {lp})")
     except Exception as exc:  # noqa: BLE001
         error_msg = f"Failed to clone {repo_url}: {exc}"
         click.echo(f"❌ {error_msg}", err=True)
