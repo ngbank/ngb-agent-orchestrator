@@ -3,7 +3,7 @@
 import click
 
 from orchestrator.shared.repo_setup.nodes.common import failure_update
-from orchestrator.shared.repo_setup.primitives import clone_repository
+from orchestrator.shared.repo_setup.repo_operations import clone_repository
 from orchestrator.shared.repo_setup.state import RepoSetupState
 from orchestrator.utils import log_path
 

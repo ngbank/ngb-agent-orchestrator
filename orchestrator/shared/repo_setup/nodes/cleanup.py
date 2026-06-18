@@ -5,7 +5,7 @@ from typing import Callable, Sequence
 
 import click
 
-from orchestrator.shared.repo_setup.primitives import cleanup_working_dir
+from orchestrator.shared.repo_setup.repo_operations import cleanup_working_dir
 
 
 def build_cleanup_node(*, temp_file_keys: Sequence[str] = ()) -> Callable[[dict], dict]:
