@@ -76,34 +76,6 @@ def test_create_workflow_minimal(test_db):
     assert workflow["pr_url"] is None
 
 
-def test_log_path_uses_xdg_state_home_by_default(test_db, monkeypatch, tmp_path):
-    """Without LOGS_DIR, base log path follows XDG state directory."""
-    from graph.utils import log_path
-
-    monkeypatch.delenv("LOGS_DIR", raising=False)
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-state"))
-    workflow_id = state_store.create_workflow(ticket_key="AOS-119")
-
-    lp = log_path(workflow_id, "execute", ticket_key="AOS-119")
-
-    expected_prefix = (tmp_path / "xdg-state") / "ngb-agent-orchestrator" / "logs" / workflow_id
-    assert str(lp).startswith(str(expected_prefix))
-
-
-def test_log_path_honors_logs_dir_override(test_db, monkeypatch, tmp_path):
-    """Explicit LOGS_DIR continues to override XDG-derived defaults."""
-    from graph.utils import log_path
-
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-state"))
-    monkeypatch.setenv("LOGS_DIR", str(tmp_path / "logs-override"))
-    workflow_id = state_store.create_workflow(ticket_key="AOS-119")
-
-    lp = log_path(workflow_id, "execute", ticket_key="AOS-119")
-
-    expected_prefix = (tmp_path / "logs-override") / workflow_id
-    assert str(lp).startswith(str(expected_prefix))
-
-
 def test_update_status(test_db):
     """Test status updates and timestamp changes."""
     workflow_id = state_store.create_workflow(ticket_key="AOS-37", status=WorkflowStatus.PENDING)
