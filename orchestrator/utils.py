@@ -13,6 +13,8 @@ import urllib.request
 from pathlib import Path
 from typing import IO, List, Optional
 
+from orchestrator.log_paths import logs_base_dir, workflow_logs_dir
+
 
 def _get_actor() -> str:
     """Return the current OS username, or 'unknown' if it cannot be determined."""
@@ -23,14 +25,12 @@ def _get_actor() -> str:
 
 
 def _logs_dir() -> Path:
-    default = Path(tempfile.gettempdir()) / "ngb-agent-orchestrator"
-    return Path(os.getenv("LOGS_DIR", str(default)))
+    return logs_base_dir()
 
 
 def log_path(workflow_id: str, stage: str, ticket_key: Optional[str] = None) -> Path:
     """Return the log file path for a given workflow and stage (e.g. 'plan', 'execute')."""
-    workflow_dir = _logs_dir() / workflow_id
-    workflow_dir.mkdir(parents=True, exist_ok=True)
+    workflow_dir = workflow_logs_dir(workflow_id, ensure_dir=True)
     prefix = f"{ticket_key}_" if ticket_key else ""
     return workflow_dir / f"{prefix}{workflow_id}_{stage}.log"
 

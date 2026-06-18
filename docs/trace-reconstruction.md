@@ -28,8 +28,8 @@ LOGS_DIR/
     └── litellm_proxy.log           # proxy uvicorn output
 ```
 
-Default `LOGS_DIR` resolves to `$TMPDIR/ngb-agent-orchestrator`
-(`/var/folders/.../T/ngb-agent-orchestrator/` on macOS).
+Default `LOGS_DIR` resolves to `$XDG_STATE_HOME/ngb-agent-orchestrator/logs`.
+If `XDG_STATE_HOME` is unset, fallback is `~/.local/state/ngb-agent-orchestrator/logs`.
 
 Each line in `otel.jsonl` is a JSON span object with these top-level keys:
 

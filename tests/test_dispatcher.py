@@ -329,6 +329,40 @@ def test_run_keyboard_interrupt(test_db, cli_runner, memory_checkpointer):
     assert "⚠️  Workflow interrupted by user" in result.output
 
 
+def test_logs_reads_from_xdg_default_base_dir(test_db, cli_runner, monkeypatch, tmp_path):
+    """--logs resolves from XDG base path when LOGS_DIR is not set."""
+    from orchestrator.utils import log_path
+
+    monkeypatch.delenv("LOGS_DIR", raising=False)
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-state"))
+    workflow_id = state_store.create_workflow("AOS-119", status=WorkflowStatus.COMPLETED)
+
+    plan_log = log_path(workflow_id, "plan", ticket_key="AOS-119")
+    plan_log.write_text("plan log from xdg default")
+
+    result = cli_runner.invoke(run, ["--ticket", "AOS-119", "--logs"])
+
+    assert result.exit_code == 0
+    assert "plan log from xdg default" in result.output
+
+
+def test_logs_uses_explicit_logs_dir_override(test_db, cli_runner, monkeypatch, tmp_path):
+    """--logs honors explicit LOGS_DIR override when provided."""
+    from orchestrator.utils import log_path
+
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-state"))
+    monkeypatch.setenv("LOGS_DIR", str(tmp_path / "logs-override"))
+    workflow_id = state_store.create_workflow("AOS-119", status=WorkflowStatus.COMPLETED)
+
+    plan_log = log_path(workflow_id, "plan", ticket_key="AOS-119")
+    plan_log.write_text("plan log from override")
+
+    result = cli_runner.invoke(run, ["--ticket", "AOS-119", "--logs"])
+
+    assert result.exit_code == 0
+    assert "plan log from override" in result.output
+
+
 class TestPostExecutionComment:
     """Tests for _post_execution_comment helper."""
 
