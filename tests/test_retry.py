@@ -72,10 +72,10 @@ def mock_jira_client():
 def mock_repo_setup():
     """Mock repo setup nodes (resolve_repo, fetch_github_token, clone_repo) to bypass actual git/network operations."""
     patches = [
-        patch("orchestrator.shared.repo_setup.subgraph.resolve_repository_url"),
-        patch("orchestrator.shared.repo_setup.subgraph.fetch_token_for_repo"),
-        patch("orchestrator.shared.repo_setup.subgraph.clone_repository"),
-        patch("orchestrator.shared.repo_setup.subgraph.log_path"),
+        patch("orchestrator.shared.repo_setup.nodes.resolve_repo.resolve_repository_url"),
+        patch("orchestrator.shared.repo_setup.nodes.fetch_github_token.fetch_token_for_repo"),
+        patch("orchestrator.shared.repo_setup.nodes.clone_repo.clone_repository"),
+        patch("orchestrator.shared.repo_setup.nodes.clone_repo.log_path"),
     ]
 
     started = [p.start() for p in patches]
