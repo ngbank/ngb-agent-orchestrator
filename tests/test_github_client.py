@@ -10,6 +10,7 @@ from dispatcher.github_client import (
     create_pr,
     get_installation_token,
     get_open_pr,
+    push_branch_with_token,
 )
 
 
@@ -104,3 +105,42 @@ def test_add_pr_comment_parses_url_and_posts():
 def test_parse_repo_url_https_and_ssh():
     assert _parse_repo_url("https://github.com/org/repo.git") == ("org", "repo")
     assert _parse_repo_url("git@github.com:org/repo.git") == ("org", "repo")
+
+
+def test_push_branch_with_token_success_sets_pushes_and_resets():
+    with patch("dispatcher.github_client.subprocess.run") as mock_run:
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stderr=""),
+            MagicMock(returncode=0, stderr=""),
+            MagicMock(returncode=0, stderr=""),
+        ]
+
+        push_branch_with_token(
+            working_dir="/tmp/repo",
+            owner="org",
+            repo="repo",
+            branch="feature/test",
+            token="tok",
+        )
+
+    assert mock_run.call_count == 3
+
+
+def test_push_branch_with_token_raises_on_push_failure_and_still_resets():
+    with patch("dispatcher.github_client.subprocess.run") as mock_run:
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stderr=""),
+            MagicMock(returncode=1, stderr="denied"),
+            MagicMock(returncode=0, stderr=""),
+        ]
+
+        with pytest.raises(GitHubAuthError, match="git push failed"):
+            push_branch_with_token(
+                working_dir="/tmp/repo",
+                owner="org",
+                repo="repo",
+                branch="feature/test",
+                token="tok",
+            )
+
+    assert mock_run.call_count == 3

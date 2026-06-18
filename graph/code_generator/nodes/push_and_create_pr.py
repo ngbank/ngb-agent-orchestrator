@@ -1,6 +1,5 @@
 """Node: push_and_create_pr — push branch and open/update PR."""
 
-import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -12,6 +11,7 @@ from dispatcher.github_client import (
     add_pr_comment,
     create_pr,
     get_open_pr,
+    push_branch_with_token,
 )
 from graph.code_generator.state import (
     PushAndCreatePrInputState,
@@ -150,44 +150,16 @@ def push_and_create_pr(
 
     # === PUSH ===
     click.echo(f"📤 Pushing {branch}...")
-    remote_url_with_token = f"https://x-access-token:{github_token}@github.com/{owner}/{repo}.git"
-    public_remote_url = f"https://github.com/{owner}/{repo}.git"
-
     try:
-        set_url_result = subprocess.run(
-            [
-                "git",
-                "-C",
-                working_dir,
-                "remote",
-                "set-url",
-                "origin",
-                remote_url_with_token,
-            ],
-            capture_output=True,
-            text=True,
+        push_branch_with_token(
+            working_dir=working_dir,
+            owner=owner,
+            repo=repo,
+            branch=branch,
+            token=github_token,
         )
-        if set_url_result.returncode != 0:
-            raise RuntimeError(f"git remote set-url exited with code {set_url_result.returncode}")
-
-        push_result = subprocess.run(
-            [
-                "git",
-                "-C",
-                working_dir,
-                "push",
-                "origin",
-                branch,
-            ],
-            capture_output=True,
-            text=True,
-        )
-
-        if push_result.returncode != 0:
-            raise RuntimeError(f"git push exited with code {push_result.returncode}")
-
         click.echo(f"✓ Pushed {branch}")
-    except Exception as e:
+    except GitHubAuthError as e:
         click.echo(f"❌ Failed to push branch: {e}", err=True)
         execution_summary["pr_url"] = ""
         # Downgrade status to "partial" (code was committed but push failed)
@@ -197,25 +169,6 @@ def push_and_create_pr(
             "execution_summary": execution_summary,
             "failed_node": None,
         }
-    finally:
-        reset_url_result = subprocess.run(
-            [
-                "git",
-                "-C",
-                working_dir,
-                "remote",
-                "set-url",
-                "origin",
-                public_remote_url,
-            ],
-            capture_output=True,
-            text=True,
-        )
-        if reset_url_result.returncode != 0:
-            click.echo(
-                f"⚠️  Failed to reset remote URL: {reset_url_result.returncode}",
-                err=True,
-            )
 
     # === PR CREATION / UPDATE ===
     try:

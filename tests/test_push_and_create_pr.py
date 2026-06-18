@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 
 def _base_state():
@@ -30,19 +30,18 @@ def test_push_and_create_pr_creates_new_pr_when_none_exists():
     from graph.code_generator.nodes.push_and_create_pr import push_and_create_pr
 
     with (
-        patch("graph.code_generator.nodes.push_and_create_pr.subprocess.run") as mock_run,
+        patch("graph.code_generator.nodes.push_and_create_pr.push_branch_with_token") as mock_push,
         patch("graph.code_generator.nodes.push_and_create_pr.get_open_pr", return_value=None),
         patch(
             "graph.code_generator.nodes.push_and_create_pr.create_pr",
             return_value="https://github.com/ngbank/ngb-agent-orchestrator/pull/5",
         ) as mock_create,
     ):
-        mock_run.return_value = MagicMock(returncode=0)
         result = push_and_create_pr(_base_state())
 
     assert result["execution_summary"]["pr_url"].endswith("/pull/5")
     assert mock_create.called
-    assert mock_run.call_count == 3
+    mock_push.assert_called_once()
 
 
 def test_push_and_create_pr_reuses_existing_pr_and_adds_comment_when_needed():
@@ -52,14 +51,13 @@ def test_push_and_create_pr_reuses_existing_pr_and_adds_comment_when_needed():
     state["pr_comments"] = "Please address the review feedback"
 
     with (
-        patch("graph.code_generator.nodes.push_and_create_pr.subprocess.run") as mock_run,
+        patch("graph.code_generator.nodes.push_and_create_pr.push_branch_with_token"),
         patch(
             "graph.code_generator.nodes.push_and_create_pr.get_open_pr",
             return_value="https://github.com/ngbank/ngb-agent-orchestrator/pull/7",
         ),
         patch("graph.code_generator.nodes.push_and_create_pr.add_pr_comment") as mock_comment,
     ):
-        mock_run.return_value = MagicMock(returncode=0)
         result = push_and_create_pr(state)
 
     assert result["execution_summary"]["pr_url"].endswith("/pull/7")
@@ -72,22 +70,21 @@ def test_push_and_create_pr_skips_when_exec_error_set():
     state = _base_state()
     state["exec_error"] = "earlier failure"
 
-    with patch("graph.code_generator.nodes.push_and_create_pr.subprocess.run") as mock_run:
+    with patch("graph.code_generator.nodes.push_and_create_pr.push_branch_with_token") as mock_push:
         result = push_and_create_pr(state)
 
     assert result["execution_summary"]["status"] == "success"
-    mock_run.assert_not_called()
+    mock_push.assert_not_called()
 
 
 def test_push_and_create_pr_downgrades_to_partial_on_push_failure():
+    from dispatcher.github_client import GitHubAuthError
     from graph.code_generator.nodes.push_and_create_pr import push_and_create_pr
 
-    with patch("graph.code_generator.nodes.push_and_create_pr.subprocess.run") as mock_run:
-        mock_run.side_effect = [
-            MagicMock(returncode=0),
-            MagicMock(returncode=1),
-            MagicMock(returncode=0),
-        ]
+    with patch(
+        "graph.code_generator.nodes.push_and_create_pr.push_branch_with_token",
+        side_effect=GitHubAuthError("git push failed"),
+    ):
         result = push_and_create_pr(_base_state())
 
     assert result["execution_summary"]["status"] == "partial"

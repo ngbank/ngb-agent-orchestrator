@@ -7,6 +7,7 @@ common GitHub API operations (clone, push, PR creation).
 
 import os
 import re
+import subprocess
 import time
 from typing import Optional
 
@@ -18,6 +19,81 @@ class GitHubAuthError(Exception):
     """Raised when GitHub authentication or API calls fail."""
 
     pass
+
+
+def push_branch_with_token(
+    working_dir: str,
+    owner: str,
+    repo: str,
+    branch: str,
+    token: str,
+) -> None:
+    """Push a branch using a short-lived GitHub App token.
+
+    This temporarily rewrites origin to a tokenized HTTPS URL, pushes the branch,
+    and always resets origin back to the public HTTPS URL.
+
+    Raises:
+        GitHubAuthError: if set-url, push, or reset-url fails.
+    """
+    remote_url_with_token = f"https://x-access-token:{token}@github.com/{owner}/{repo}.git"
+    public_remote_url = f"https://github.com/{owner}/{repo}.git"
+
+    try:
+        set_url_result = subprocess.run(
+            [
+                "git",
+                "-C",
+                working_dir,
+                "remote",
+                "set-url",
+                "origin",
+                remote_url_with_token,
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if set_url_result.returncode != 0:
+            raise GitHubAuthError(
+                "git remote set-url failed: "
+                f"{set_url_result.stderr.strip() or set_url_result.returncode}"
+            )
+
+        push_result = subprocess.run(
+            [
+                "git",
+                "-C",
+                working_dir,
+                "push",
+                "origin",
+                branch,
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if push_result.returncode != 0:
+            raise GitHubAuthError(
+                f"git push failed: {push_result.stderr.strip() or push_result.returncode}"
+            )
+    finally:
+        reset_url_result = subprocess.run(
+            [
+                "git",
+                "-C",
+                working_dir,
+                "remote",
+                "set-url",
+                "origin",
+                public_remote_url,
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if reset_url_result.returncode != 0:
+            raise GitHubAuthError(
+                "git remote reset-url failed: "
+                f"{reset_url_result.stderr.strip() or reset_url_result.returncode}"
+            )
 
 
 def _load_private_key() -> str:
