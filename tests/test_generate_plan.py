@@ -92,6 +92,7 @@ def test_generate_plan_passes_correct_params(log_tmp, write_workplan_to_output):
     assert "recipes/plan.yaml" in cmd
     assert any(a == "ticket_key=AOS-51" for a in cmd)
     assert any(a.startswith("output_path=") for a in cmd)
+    assert "cwd" not in mock_tee.call_args.kwargs
 
 
 def test_generate_plan_cleans_up_temp_file(log_tmp, write_workplan_to_output):
@@ -111,6 +112,41 @@ def test_generate_plan_cleans_up_temp_file(log_tmp, write_workplan_to_output):
         generate_plan({"ticket_key": "AOS-51", "workflow_id": "test-wf"})
 
     assert not os.path.exists(captured_path["path"])
+
+
+def test_generate_plan_uses_working_dir_as_cwd(log_tmp, write_workplan_to_output, tmp_path):
+    """When working_dir is provided, goose runs with cwd=working_dir."""
+    working_dir = tmp_path / "repo"
+    working_dir.mkdir()
+
+    with patch(_PATCH_TEE) as mock_tee:
+        mock_tee.side_effect = write_workplan_to_output
+        generate_plan(
+            {
+                "ticket_key": "AOS-51",
+                "workflow_id": "test-wf",
+                "working_dir": str(working_dir),
+            }
+        )
+
+    assert mock_tee.call_args.kwargs.get("cwd") == str(working_dir)
+
+
+def test_generate_plan_errors_for_missing_working_dir(log_tmp):
+    """A missing working_dir should fail before invoking goose."""
+    with patch(_PATCH_TEE) as mock_tee:
+        result = generate_plan(
+            {
+                "ticket_key": "AOS-51",
+                "workflow_id": "test-wf",
+                "working_dir": "/tmp/does-not-exist-ngb-aos-122",
+            }
+        )
+
+    assert "error" in result
+    assert "Working directory does not exist" in result["error"]
+    assert result.get("failed_node") == "generate_plan"
+    mock_tee.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

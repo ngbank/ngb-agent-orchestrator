@@ -7,8 +7,12 @@ destination — no I/O, no side-effects.
 from orchestrator.builder import _route_after_pr_approval
 from orchestrator.work_planner.edges import (
     route_after_check_duplicate,
+    route_after_cleanup,
+    route_after_clone_repo,
+    route_after_fetch_github_token,
     route_after_fetch_ticket,
     route_after_generate_plan,
+    route_after_resolve_repo,
     route_after_validate_input,
     route_after_validate_plan,
     route_after_workplan_clarification,
@@ -26,7 +30,7 @@ def test_route_validate_input_no_error():
 
 def test_route_validate_input_with_error():
     state = {"ticket_key": "invalid", "dry_run": False, "error": "bad format"}
-    assert route_after_validate_input(state) == "error_handler"
+    assert route_after_validate_input(state) == "cleanup"
 
 
 def test_route_validate_input_empty_error_is_falsy():
@@ -51,7 +55,7 @@ def test_route_check_duplicate_with_error():
         "dry_run": False,
         "error": "Workflow already in progress for AOS-50 (ID: abc123)",
     }
-    assert route_after_check_duplicate(state) == "error_handler"
+    assert route_after_check_duplicate(state) == "cleanup"
 
 
 # ---------------------------------------------------------------------------
@@ -66,7 +70,7 @@ def test_route_fetch_ticket_no_error():
 
 def test_route_fetch_ticket_with_error():
     state = {"ticket_key": "AOS-50", "dry_run": False, "error": "not found"}
-    assert route_after_fetch_ticket(state) == "error_handler"
+    assert route_after_fetch_ticket(state) == "cleanup"
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +89,7 @@ def test_route_validate_plan_with_error():
         "dry_run": False,
         "error": "Schema validation failed",
     }
-    assert route_after_validate_plan(state) == "error_handler"
+    assert route_after_validate_plan(state) == "cleanup"
 
 
 def test_route_validate_plan_none_error():
@@ -134,13 +138,13 @@ def test_route_validate_plan_pass_with_no_concerns_routes_to_store():
 
 
 def test_route_validate_plan_error_takes_priority_over_clarification():
-    """An error must route to error_handler even if plan needs clarification."""
+    """An error must route to cleanup even if plan needs clarification."""
     state = {
         "ticket_key": "AOS-50",
         "error": "Schema error",
         "work_plan_data": {"status": "blocked", "concerns": ["Q?"]},
     }
-    assert route_after_validate_plan(state) == "error_handler"
+    assert route_after_validate_plan(state) == "cleanup"
 
 
 # ---------------------------------------------------------------------------
@@ -158,7 +162,7 @@ def test_route_workplan_clarification_with_error():
         "ticket_key": "AOS-50",
         "error": "Maximum clarification rounds exceeded.",
     }
-    assert route_after_workplan_clarification(state) == "error_handler"
+    assert route_after_workplan_clarification(state) == "cleanup"
 
 
 def test_route_workplan_clarification_none_error():
@@ -178,31 +182,76 @@ def test_route_generate_plan_with_work_plan_data():
 
 
 def test_route_generate_plan_empty_work_plan_data():
-    """Empty dict for work_plan_data must route to error_handler."""
+    """Empty dict for work_plan_data must route to cleanup."""
     state = {"ticket_key": "AOS-50", "work_plan_data": {}}
-    assert route_after_generate_plan(state) == "error_handler"
+    assert route_after_generate_plan(state) == "cleanup"
 
 
 def test_route_generate_plan_missing_work_plan_data():
-    """Missing work_plan_data key must route to error_handler."""
+    """Missing work_plan_data key must route to cleanup."""
     state = {"ticket_key": "AOS-50"}
-    assert route_after_generate_plan(state) == "error_handler"
+    assert route_after_generate_plan(state) == "cleanup"
 
 
 def test_route_generate_plan_none_work_plan_data():
-    """Explicit None work_plan_data must route to error_handler."""
+    """Explicit None work_plan_data must route to cleanup."""
     state = {"ticket_key": "AOS-50", "work_plan_data": None}
-    assert route_after_generate_plan(state) == "error_handler"
+    assert route_after_generate_plan(state) == "cleanup"
 
 
 def test_route_generate_plan_with_error():
-    """An error in state must route to error_handler regardless of work_plan_data."""
+    """An error in state must route to cleanup regardless of work_plan_data."""
     state = {
         "ticket_key": "AOS-50",
         "work_plan_data": {"tasks": []},
         "error": "Plan generation not yet implemented (AOS-51).",
     }
-    assert route_after_generate_plan(state) == "error_handler"
+    assert route_after_generate_plan(state) == "cleanup"
+
+
+# ---------------------------------------------------------------------------
+# repo setup routes
+# ---------------------------------------------------------------------------
+
+
+def test_route_resolve_repo_ok():
+    state = {"ticket_key": "AOS-50", "repo_url": "git@github.com:org/repo.git"}
+    assert route_after_resolve_repo(state) == "fetch_github_token"
+
+
+def test_route_resolve_repo_error():
+    state = {"ticket_key": "AOS-50", "error": "missing mapping"}
+    assert route_after_resolve_repo(state) == "cleanup"
+
+
+def test_route_fetch_github_token_ok():
+    state = {"ticket_key": "AOS-50", "repo_url": "git@github.com:org/repo.git"}
+    assert route_after_fetch_github_token(state) == "clone_repo"
+
+
+def test_route_fetch_github_token_error():
+    state = {"ticket_key": "AOS-50", "error": "auth failed"}
+    assert route_after_fetch_github_token(state) == "cleanup"
+
+
+def test_route_clone_repo_ok():
+    state = {"ticket_key": "AOS-50", "working_dir": "/tmp/work"}
+    assert route_after_clone_repo(state) == "generate_plan"
+
+
+def test_route_clone_repo_missing_working_dir():
+    state = {"ticket_key": "AOS-50"}
+    assert route_after_clone_repo(state) == "cleanup"
+
+
+def test_route_cleanup_with_error():
+    state = {"ticket_key": "AOS-50", "error": "boom"}
+    assert route_after_cleanup(state) == "error_handler"
+
+
+def test_route_cleanup_without_error():
+    state = {"ticket_key": "AOS-50"}
+    assert route_after_cleanup(state) == "end"
 
 
 # ---------------------------------------------------------------------------

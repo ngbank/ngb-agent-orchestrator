@@ -26,10 +26,14 @@ LangGraph Graph (graph/)
  │    ├── check_duplicate       Reject if an active workflow exists
  │    ├── fetch_ticket          Fetch ticket from JIRA via JiraClient (REST API)
  │    ├── create_workflow_record  Create SQLite row (status=IN_PROGRESS)
- │    ├── generate_plan         Invoke Goose plan recipe → WorkPlan JSON
+ │    ├── resolve_repo          Resolve target repository URL (state override or project mapping)
+ │    ├── fetch_github_token    Fetch GitHub App token for HTTPS clone targets
+ │    ├── clone_repo            Clone target repository to a temp working directory
+ │    ├── generate_plan         Invoke Goose plan recipe in cloned repo → WorkPlan JSON
  │    ├── validate_plan         Validate WorkPlan against JSON schema
  │    ├── store_plan            Persist WorkPlan to SQLite
- │    └── post_to_jira          Post formatted WorkPlan as JIRA comment
+ │    ├── post_to_jira          Post formatted WorkPlan as JIRA comment
+ │    └── cleanup               Remove temp cloned working directory
  │
  ├── await_approval             ← graph suspends here (LangGraph interrupt)
  │    Marks workflow PENDING_APPROVAL in SQLite
@@ -70,7 +74,7 @@ Builds the LangGraph orchestrator and invokes it. On `GraphInterrupt` (the appro
 LangGraph state machine. Two levels:
 
 - **Top-level graph** (`graph/builder.py`): `work_planner → await_approval → execute_plan`
-- **`work_planner` subgraph** (`graph/work_planner/`): seven sequential nodes for planning
+- **`work_planner` subgraph** (`graph/work_planner/`): planning + repo setup + cleanup nodes
 
 State is defined in `graph/state.py` (`OrchestratorState`) and `graph/work_planner/state.py` (`WorkPlannerState`).
 

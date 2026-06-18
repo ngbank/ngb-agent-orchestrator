@@ -25,6 +25,7 @@ class WorkPlanningInputState(TypedDict, total=False):
     ticket_key: str
     dry_run: bool
     workflow_id: Optional[str]  # optional for fresh runs
+    repo_url: Optional[str]  # optional override for target repository
 
 
 class WorkPlanningOutputState(TypedDict, total=False):
@@ -36,6 +37,9 @@ class WorkPlanningOutputState(TypedDict, total=False):
     error: Optional[str]
     failed_node: Optional[str]
     clarifications: Optional[list]  # accumulated Q&A rounds from reviewer
+    repo_url: Optional[str]
+    github_token: Optional[str]
+    working_dir: Optional[str]
 
 
 class ApprovalInputState(TypedDict, total=False):
@@ -108,6 +112,9 @@ class OrchestratorState(TypedDict, total=False):
     error: Optional[str]
     failed_node: Optional[str]  # set when a node fails so --retry can resume
     clarifications: Optional[list]  # accumulated Q&A rounds from reviewer
+    repo_url: Optional[str]
+    github_token: Optional[str]
+    working_dir: Optional[str]
 
     # --- populated by await_approval node ---
     approval_decision: Optional[str]  # "approved" | "rejected"
