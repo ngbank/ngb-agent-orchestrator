@@ -155,8 +155,8 @@ sequenceDiagram
             end
 
             rect rgb(225, 245, 255)
-                Note over Dispatcher,GitHub: Step 10: Push Branch and Create PR (AOS-42)
-                Note over ExecRecipe: execute recipe already pushed branch<br/>and created PR via gh CLI
+                Note over Dispatcher,GitHub: Step 10: Push Branch and Create PR (AOS-120)
+                Note over Dispatcher: fetch_github_token node gets GitHub App token once<br/>push_and_create_pr node reuses it for push + PR
                 Dispatcher->>Formatter: format_execution_summary_comment()<br/>(execution_summary incl. pr_url)
                 Formatter-->>Dispatcher: Formatted comment
                 Dispatcher->>JiraAPI: post_comment(ticket_key, comment)<br/>includes PR URL if present

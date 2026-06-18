@@ -47,6 +47,21 @@ No proxy server is required. Set `GOOSE_MODEL` to a LiteLLM model string — the
 |---|---|---|---|
 | `GOOSE_MODEL` | Yes | `azure/gpt-4.1` | LiteLLM model string — provider inferred from prefix |
 
+### GitHub App Authentication
+
+All GitHub operations in the execute flow use a short-lived GitHub App installation token fetched by the LangGraph code-generator subgraph. The token is fetched once, stored in subgraph state, and reused for clone, push, and PR creation.
+
+| Variable | Required | Example | Description |
+|---|---|---|---|
+| `GITHUB_APP_ID` | Yes | `1234567` | GitHub App ID used as the JWT issuer |
+| `GITHUB_APP_PRIVATE_KEY` | Yes | `<inline-pem-with-escaped-newlines>` | Full PEM content for the app private key, stored inline with `\n` escapes preserved |
+| `GITHUB_APP_INSTALLATION_ID` | Yes | `98765432` | Installation ID for the target org or repository |
+
+Notes:
+- Keep the private key inline in `.env`; the loader normalizes literal `\n` sequences back to newlines at runtime.
+- The orchestrator clones and pushes via HTTPS using `x-access-token`, then resets the local remote URL back to the public HTTPS form after push.
+- `gh` is no longer required for PR creation or updates.
+
 ### Database
 
 | Variable | Required | Default | Description |

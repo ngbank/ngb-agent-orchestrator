@@ -37,7 +37,7 @@ repos:
     rev: v1.20.0
     hooks:
       - id: mypy
-        additional_dependencies: []
+        additional_dependencies: [types-requests]
         args: [--ignore-missing-imports, --no-error-summary, --python-version=3.13]
         exclude: ^(venv/|state/migrations/)
 
