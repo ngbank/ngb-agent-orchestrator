@@ -7,7 +7,7 @@ import click
 from langgraph.errors import GraphInterrupt
 
 import dispatcher.commands.common as common
-from graph.retry import prepare_retry
+from orchestrator.retry import prepare_retry
 from state.workflow_repository import (
     get_latest_retryable_workflow_by_ticket,
     get_workflow,

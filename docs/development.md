@@ -71,7 +71,7 @@ Use sparingly. The CI pipeline runs all checks independently.
 python -m pytest tests/ -v
 
 # Run with coverage
-python -m pytest tests/ --cov=dispatcher --cov=graph --cov=state --cov-report=term-missing
+python -m pytest tests/ --cov=dispatcher --cov=orchestrator --cov=state --cov-report=term-missing
 
 # Run a specific file
 python -m pytest tests/test_state_store.py -v
@@ -106,8 +106,8 @@ Configuration lives in `pyproject.toml` (black, isort, mypy, pytest) and `.flake
 
 Auto-format before committing:
 ```bash
-python -m black dispatcher/ graph/ state/ tests/ scripts/
-python -m isort dispatcher/ graph/ state/ tests/ scripts/
+python -m black dispatcher/ orchestrator/ state/ tests/ scripts/
+python -m isort dispatcher/ orchestrator/ state/ tests/ scripts/
 ```
 
 ---
@@ -133,7 +133,7 @@ ngb-agent-orchestrator/
 │   ├── work_plan_formatter.py    # WorkPlan → JIRA comment formatter
 │   └── work_plan_validator.py    # WorkPlan JSON schema validator
 ├── docs/                         # Documentation (this folder)
-├── graph/
+├── orchestrator/
 │   ├── builder.py                # Top-level LangGraph orchestrator
 │   ├── state.py                  # OrchestratorState TypedDict
 │   ├── nodes/
@@ -169,10 +169,10 @@ ngb-agent-orchestrator/
 
 ## Adding a New Graph Node
 
-1. Create `graph/nodes/my_node.py` or `graph/work_planner/nodes/my_node.py`
+1. Create `orchestrator/nodes/my_node.py` or `orchestrator/work_planner/nodes/my_node.py`
 2. Define the node function: `def my_node(state: OrchestratorState) -> dict:`
 3. Return only the state keys you want to update
-4. Register it in `graph/builder.py` or `graph/work_planner/builder.py`
+4. Register it in `orchestrator/builder.py` or `orchestrator/work_planner/builder.py`
 5. Add or update routing edges
 6. Update `docs/architecture.md` if the flow changes
 

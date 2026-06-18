@@ -24,7 +24,7 @@ import sys
 import click
 from dotenv import load_dotenv
 
-from graph.logging_setup import setup_logging
+from orchestrator.logging_setup import setup_logging
 
 load_dotenv()
 
