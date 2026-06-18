@@ -4,24 +4,13 @@ from typing import Literal
 
 from langgraph.graph import END, StateGraph
 
+from orchestrator.shared.repo_setup.edges import route_after_fetch, route_after_resolve
 from orchestrator.shared.repo_setup.nodes import (
     build_clone_repo_node,
     build_fetch_github_token_node,
     build_resolve_repo_node,
 )
 from orchestrator.shared.repo_setup.state import RepoSetupState
-
-
-def _route_after_resolve(state: RepoSetupState) -> Literal["fetch_github_token", "end"]:
-    if state.get("error") or state.get("exec_error"):
-        return "end"
-    return "fetch_github_token"
-
-
-def _route_after_fetch(state: RepoSetupState) -> Literal["clone_repo", "end"]:
-    if state.get("error") or state.get("exec_error"):
-        return "end"
-    return "clone_repo"
 
 
 def build_repo_setup_subgraph(mode: Literal["work_planner", "code_generator"]):
@@ -39,12 +28,12 @@ def build_repo_setup_subgraph(mode: Literal["work_planner", "code_generator"]):
     builder.set_entry_point("resolve_repo")
     builder.add_conditional_edges(
         "resolve_repo",
-        _route_after_resolve,
+        route_after_resolve,
         {"fetch_github_token": "fetch_github_token", "end": END},
     )
     builder.add_conditional_edges(
         "fetch_github_token",
-        _route_after_fetch,
+        route_after_fetch,
         {"clone_repo": "clone_repo", "end": END},
     )
     builder.add_edge("clone_repo", END)
