@@ -13,11 +13,7 @@ Graph topology:
         ↓ (error → cleanup → error_handler)
     create_workflow_record
         ↓
-    resolve_repo
-        ↓ (error → cleanup → error_handler)
-    fetch_github_token
-        ↓ (error → cleanup → error_handler)
-    clone_repo
+    repo_setup
         ↓ (error → cleanup → error_handler)
     generate_plan
         ↓ (error or empty work_plan_data → cleanup → error_handler)

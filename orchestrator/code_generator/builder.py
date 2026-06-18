@@ -5,11 +5,7 @@ Compiles the executor as a LangGraph StateGraph that decomposes execute_plan
 into focused, single-responsibility nodes.
 
 Graph topology:
-    resolve_repo
-        ↓ (error → persist_results)
-    fetch_github_token
-        ↓ (error → persist_results)
-    clone_repo
+    repo_setup
         ↓ (error → persist_results)
     run_goose
         ↓
