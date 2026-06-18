@@ -1,4 +1,4 @@
-"""Shared repo setup subgraph used by planner and executor flows."""
+"""Shared repo setup subgraph builder used by planner and executor flows."""
 
 from typing import Literal
 

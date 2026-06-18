@@ -1,5 +1,6 @@
 """Shared repository-setup primitives and wiring helpers."""
 
+from orchestrator.shared.repo_setup.builder import build_repo_setup_subgraph
 from orchestrator.shared.repo_setup.primitives import (
     cleanup_working_dir,
     clone_repository,
@@ -7,7 +8,6 @@ from orchestrator.shared.repo_setup.primitives import (
     fetch_token_for_repo,
     resolve_repository_url,
 )
-from orchestrator.shared.repo_setup.subgraph import build_repo_setup_subgraph
 
 __all__ = [
     "cleanup_working_dir",
