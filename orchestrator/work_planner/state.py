@@ -69,6 +69,7 @@ class GeneratePlanInputState(TypedDict, total=False):
     ticket_key: str
     workflow_id: Optional[str]
     clarifications: Optional[list]
+    working_dir: Optional[str]
 
 
 class GeneratePlanOutputState(TypedDict, total=False):
@@ -124,6 +125,12 @@ class PostToJiraInputState(TypedDict, total=False):
     ticket_key: str
 
 
+class CleanupInputState(TypedDict, total=False):
+    """Input required by cleanup node."""
+
+    working_dir: Optional[str]
+
+
 class ErrorHandlerInputState(TypedDict, total=False):
     """Input required by error_handler node."""
 
@@ -153,3 +160,8 @@ class WorkPlannerState(TypedDict, total=False):
     error: Optional[str]
     failed_node: Optional[str]  # set when a node fails so --retry can resume
     clarifications: Optional[list]  # accumulated Q&A rounds from reviewer
+
+    # --- repo setup fields ---
+    repo_url: Optional[str]
+    github_token: Optional[str]
+    working_dir: Optional[str]

@@ -52,7 +52,10 @@ def memory_checkpointer():
 @pytest.fixture
 def mock_jira_client():
     """Mock JIRA client for predictable responses."""
-    with patch("orchestrator.work_planner.nodes.fetch_ticket.JiraClient") as mock:
+    with (
+        patch("orchestrator.work_planner.nodes.fetch_ticket.JiraClient") as mock_fetch,
+        patch("orchestrator.work_planner.nodes.post_to_jira.JiraClient") as mock_post,
+    ):
         mock_instance = Mock()
         mock_instance.get_ticket.return_value = JiraTicket(
             key="TEST-123",
@@ -61,8 +64,11 @@ def mock_jira_client():
             labels=["test", "automation"],
             status="To Do",
         )
-        mock.return_value = mock_instance
-        yield mock
+        # Mock post_comment to avoid real JIRA calls
+        mock_instance.post_comment.return_value = None
+        mock_fetch.return_value = mock_instance
+        mock_post.return_value = mock_instance
+        yield mock_fetch
 
 
 @pytest.fixture
@@ -89,8 +95,42 @@ def mock_generate_plan():
         yield mock
 
 
+@pytest.fixture
+def mock_repo_setup():
+    """Mock repo setup nodes (resolve_repo, fetch_github_token, clone_repo) to bypass actual git/network operations."""
+    import os
+    import shutil
+
+    patches = [
+        patch("orchestrator.shared.repo_setup.nodes.resolve_repo.resolve_repository_url"),
+        patch("orchestrator.shared.repo_setup.nodes.fetch_github_token.fetch_token_for_repo"),
+        patch("orchestrator.shared.repo_setup.nodes.clone_repo.clone_repository"),
+        patch("orchestrator.shared.repo_setup.nodes.clone_repo.log_path"),
+    ]
+
+    started = [p.start() for p in patches]
+    started[0].return_value = "git@github.com:test/repo.git"  # resolve_repository_url
+    started[1].return_value = "ghs_test_token"  # fetch_token_for_repo
+
+    import tempfile
+
+    mock_workdir = tempfile.mkdtemp(prefix="test-plan-")
+    started[2].return_value = mock_workdir  # clone_repository
+
+    started[3].return_value = "/tmp/test.log"  # log_path
+
+    yield started
+
+    for p in patches:
+        p.stop()
+
+    # Cleanup temp directory
+    if os.path.exists(mock_workdir):
+        shutil.rmtree(mock_workdir, ignore_errors=True)
+
+
 def test_run_creates_workflow(
-    test_db, mock_jira_client, mock_generate_plan, cli_runner, memory_checkpointer
+    test_db, mock_jira_client, mock_generate_plan, mock_repo_setup, cli_runner, memory_checkpointer
 ):
     """Test that running the dispatcher creates a workflow record and pauses for approval."""
     with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
@@ -133,7 +173,7 @@ def test_run_rejects_duplicate(test_db, mock_jira_client, cli_runner, memory_che
 
 
 def test_run_allows_rerun_after_completion(
-    test_db, mock_jira_client, mock_generate_plan, cli_runner, memory_checkpointer
+    test_db, mock_jira_client, mock_generate_plan, mock_repo_setup, cli_runner, memory_checkpointer
 ):
     """Test that completed workflows can be re-run (pauses at approval gate)."""
     # Create a completed workflow
@@ -195,7 +235,7 @@ def test_run_dry_run_mode(test_db, cli_runner):
 
 
 def test_run_logs_transitions(
-    test_db, mock_jira_client, mock_generate_plan, cli_runner, memory_checkpointer
+    test_db, mock_jira_client, mock_generate_plan, mock_repo_setup, cli_runner, memory_checkpointer
 ):
     """Test that all stage transitions are logged to audit log."""
     with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
@@ -538,7 +578,13 @@ class TestHandleHistory:
         assert "Workflow not found" in result.output
 
     def test_history_shows_steps(
-        self, test_db, mock_jira_client, mock_generate_plan, cli_runner, memory_checkpointer
+        self,
+        test_db,
+        mock_jira_client,
+        mock_generate_plan,
+        mock_repo_setup,
+        cli_runner,
+        memory_checkpointer,
     ):
         """--history should list at least one step after a workflow run."""
         from orchestrator.builder import build_orchestrator
@@ -565,7 +611,13 @@ class TestHandleHistory:
         assert "work_planner" in result.output
 
     def test_history_by_workflow_id(
-        self, test_db, mock_jira_client, mock_generate_plan, cli_runner, memory_checkpointer
+        self,
+        test_db,
+        mock_jira_client,
+        mock_generate_plan,
+        mock_repo_setup,
+        cli_runner,
+        memory_checkpointer,
     ):
         """--history --workflow-id should show the same output as --ticket."""
         from orchestrator.builder import build_orchestrator

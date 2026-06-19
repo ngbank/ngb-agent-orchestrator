@@ -3,6 +3,7 @@
 import json
 import os
 import tempfile
+from typing import Any
 
 import click
 
@@ -28,6 +29,7 @@ def generate_plan(state: GeneratePlanInputState) -> GeneratePlanOutputState:
     ticket_key = state.get("ticket_key", "")
     workflow_id = state.get("workflow_id") or ticket_key
     clarifications = state.get("clarifications") or []
+    working_dir = state.get("working_dir")
 
     summary_fd, output_path = tempfile.mkstemp(
         suffix="_workplan.json",
@@ -72,11 +74,20 @@ def generate_plan(state: GeneratePlanInputState) -> GeneratePlanOutputState:
         if clarifications_path:
             cmd.extend(["--params", f"clarifications_path={clarifications_path}"])
 
+        if working_dir and not os.path.isdir(working_dir):
+            return {
+                "error": f"Working directory does not exist: {working_dir}",
+                "failed_node": "generate_plan",
+            }
+
         with open(lp, "w") as log_file:
             with goose_session(
                 workflow_id=workflow_id, stage="plan", ticket_key=ticket_key
             ) as goose_env:
-                result = run_and_tee(cmd, log_file, env=goose_env)
+                run_kwargs: dict[str, Any] = {"env": goose_env}
+                if working_dir:
+                    run_kwargs["cwd"] = working_dir
+                result = run_and_tee(cmd, log_file, **run_kwargs)
 
         # Persist token usage to SQLite
         try:

@@ -16,10 +16,12 @@ The dispatcher will:
 2. Check for an existing active workflow for this ticket (blocks if one exists)
 3. Create a workflow record in SQLite
 4. Fetch the JIRA ticket via `acli`
-5. Invoke the Goose plan recipe to generate a WorkPlan
-6. Validate and store the WorkPlan
-7. Post the WorkPlan as a JIRA comment
-8. Suspend at the approval gate — print instructions and exit
+5. Resolve the target repository URL and clone it to a temp directory
+6. Invoke the Goose plan recipe in that cloned repository to generate a WorkPlan
+7. Validate and store the WorkPlan
+8. Post the WorkPlan as a JIRA comment
+9. Clean up temp clone directories
+10. Suspend at the approval gate — print instructions and exit
 
 Output:
 ```
