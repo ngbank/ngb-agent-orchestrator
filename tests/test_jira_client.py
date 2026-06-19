@@ -30,8 +30,36 @@ from dispatcher.jira_client import (
 def mock_env_vars(monkeypatch):
     """Set up mock environment variables for JIRA configuration."""
     monkeypatch.setenv("JIRA_URL", "https://test.atlassian.net")
-    monkeypatch.setenv("JIRA_EMAIL", "test@example.com")
-    monkeypatch.setenv("JIRA_API_TOKEN", "test-api-token")
+    monkeypatch.setenv("JIRA_OAUTH_CLIENT_ID", "test-oauth-client-id")
+    monkeypatch.setenv("JIRA_OAUTH_CLIENT_SECRET", "test-oauth-client-secret")
+
+
+@pytest.fixture(autouse=True)
+def mock_oauth_token_request():
+    """Mock OAuth token and Atlassian resource discovery endpoints."""
+    with (
+        patch("dispatcher.jira_client.requests.post") as mock_post,
+        patch("dispatcher.jira_client.requests.get") as mock_get,
+    ):
+        response = Mock()
+        response.status_code = 200
+        response.json.return_value = {"access_token": "oauth-access-token"}
+        response.text = ""
+        mock_post.return_value = response
+
+        resources_response = Mock()
+        resources_response.status_code = 200
+        resources_response.json.return_value = [
+            {
+                "id": "cloud-id-123",
+                "url": "https://test.atlassian.net",
+                "scopes": ["read:jira-work", "write:jira-work"],
+            }
+        ]
+        resources_response.text = ""
+        mock_get.return_value = resources_response
+
+        yield mock_post
 
 
 @pytest.fixture
@@ -67,8 +95,8 @@ class TestJiraClient:
 
     def test_init_missing_jira_url(self, monkeypatch):
         """Test that JiraConfigurationError is raised when JIRA_URL is missing."""
-        monkeypatch.setenv("JIRA_EMAIL", "test@example.com")
-        monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
+        monkeypatch.setenv("JIRA_OAUTH_CLIENT_ID", "test-oauth-client-id")
+        monkeypatch.setenv("JIRA_OAUTH_CLIENT_SECRET", "test-oauth-client-secret")
         monkeypatch.delenv("JIRA_URL", raising=False)
 
         with pytest.raises(JiraConfigurationError) as exc_info:
@@ -76,41 +104,41 @@ class TestJiraClient:
 
         assert "JIRA_URL" in str(exc_info.value)
 
-    def test_init_missing_jira_email(self, monkeypatch):
-        """Test that JiraConfigurationError is raised when JIRA_EMAIL is missing."""
+    def test_init_missing_oauth_client_id(self, monkeypatch):
+        """Test that JiraConfigurationError is raised when JIRA_OAUTH_CLIENT_ID is missing."""
         monkeypatch.setenv("JIRA_URL", "https://test.atlassian.net")
-        monkeypatch.setenv("JIRA_API_TOKEN", "test-token")
-        monkeypatch.delenv("JIRA_EMAIL", raising=False)
+        monkeypatch.setenv("JIRA_OAUTH_CLIENT_SECRET", "test-token")
+        monkeypatch.delenv("JIRA_OAUTH_CLIENT_ID", raising=False)
 
         with pytest.raises(JiraConfigurationError) as exc_info:
             JiraClient()
 
-        assert "JIRA_EMAIL" in str(exc_info.value)
+        assert "JIRA_OAUTH_CLIENT_ID" in str(exc_info.value)
 
-    def test_init_missing_jira_api_token(self, monkeypatch):
-        """Test that JiraConfigurationError is raised when JIRA_API_TOKEN is missing."""
+    def test_init_missing_oauth_client_secret(self, monkeypatch):
+        """Test that JiraConfigurationError is raised when JIRA_OAUTH_CLIENT_SECRET is missing."""
         monkeypatch.setenv("JIRA_URL", "https://test.atlassian.net")
-        monkeypatch.setenv("JIRA_EMAIL", "test@example.com")
-        monkeypatch.delenv("JIRA_API_TOKEN", raising=False)
+        monkeypatch.setenv("JIRA_OAUTH_CLIENT_ID", "test-oauth-client-id")
+        monkeypatch.delenv("JIRA_OAUTH_CLIENT_SECRET", raising=False)
 
         with pytest.raises(JiraConfigurationError) as exc_info:
             JiraClient()
 
-        assert "JIRA_API_TOKEN" in str(exc_info.value)
+        assert "JIRA_OAUTH_CLIENT_SECRET" in str(exc_info.value)
 
     def test_init_missing_multiple_env_vars(self, monkeypatch):
         """Test that all missing env vars are reported."""
         monkeypatch.delenv("JIRA_URL", raising=False)
-        monkeypatch.delenv("JIRA_EMAIL", raising=False)
-        monkeypatch.delenv("JIRA_API_TOKEN", raising=False)
+        monkeypatch.delenv("JIRA_OAUTH_CLIENT_ID", raising=False)
+        monkeypatch.delenv("JIRA_OAUTH_CLIENT_SECRET", raising=False)
 
         with pytest.raises(JiraConfigurationError) as exc_info:
             JiraClient()
 
         error_msg = str(exc_info.value)
         assert "JIRA_URL" in error_msg
-        assert "JIRA_EMAIL" in error_msg
-        assert "JIRA_API_TOKEN" in error_msg
+        assert "JIRA_OAUTH_CLIENT_ID" in error_msg
+        assert "JIRA_OAUTH_CLIENT_SECRET" in error_msg
 
     @patch("dispatcher.jira_client.JIRA")
     def test_init_api_error_500(self, mock_jira_class, mock_env_vars):
@@ -134,7 +162,9 @@ class TestJiraClient:
             JiraClient()
 
         assert "401" in str(exc_info.value)
-        assert "JIRA_EMAIL" in str(exc_info.value) or "JIRA_API_TOKEN" in str(exc_info.value)
+        assert "JIRA_OAUTH_CLIENT_ID" in str(exc_info.value) or "JIRA_OAUTH_CLIENT_SECRET" in str(
+            exc_info.value
+        )
 
     @patch("dispatcher.jira_client.JIRA")
     def test_init_success(self, mock_jira_class, mock_env_vars):
@@ -145,13 +175,14 @@ class TestJiraClient:
         client = JiraClient()
 
         assert client.jira_url == "https://test.atlassian.net"
-        assert client.jira_email == "test@example.com"
-        assert client.jira_api_token == "test-api-token"
+        assert client.jira_oauth_client_id == "test-oauth-client-id"
+        assert client.jira_oauth_client_secret == "test-oauth-client-secret"
         assert client.client == mock_jira_instance
 
         # Verify JIRA was initialized with correct parameters
         mock_jira_class.assert_called_once_with(
-            server="https://test.atlassian.net", basic_auth=("test@example.com", "test-api-token")
+            server="https://api.atlassian.com/ex/jira/cloud-id-123",
+            token_auth="oauth-access-token",
         )
 
     @patch("dispatcher.jira_client.JIRA")
@@ -282,8 +313,8 @@ class TestGetTicketConvenienceFunction:
     def test_get_ticket_function_missing_env(self, monkeypatch):
         """Test that get_ticket() raises JiraConfigurationError when env vars missing."""
         monkeypatch.delenv("JIRA_URL", raising=False)
-        monkeypatch.delenv("JIRA_EMAIL", raising=False)
-        monkeypatch.delenv("JIRA_API_TOKEN", raising=False)
+        monkeypatch.delenv("JIRA_OAUTH_CLIENT_ID", raising=False)
+        monkeypatch.delenv("JIRA_OAUTH_CLIENT_SECRET", raising=False)
 
         with pytest.raises(JiraConfigurationError):
             get_ticket("AOS-34")

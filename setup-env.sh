@@ -6,7 +6,7 @@
 # Stages (all run by default; pass flags to run specific stages only):
 #   --python   Install Python 3.13.x via pyenv and pin .python-version
 #   --deps     Create/update the .venv and install pip dependencies
-#   --env      Validate Azure auth and generate non-secret .env configuration
+#   --env      Generate .env from .env.example and sync secrets from Azure Key Vault
 #   --clean    Remove .venv/ (and legacy venv/) and .env, then run all stages from scratch
 #
 # Examples:
@@ -14,7 +14,9 @@
 #   ./setup-env.sh --clean           # wipe and rebuild everything
 #   ./setup-env.sh --deps            # reinstall dependencies only
 #   ./setup-env.sh --python --deps   # reinstall Python + deps, skip .env
-#   ./setup-env.sh --env             # refresh non-secret .env values only
+#   ./setup-env.sh --env             # keep existing .env values where present, fill missing from Key Vault
+#   ./setup-env.sh --env --env-overwrite  # re-pull and overwrite all managed values from Key Vault
+#   ./setup-env.sh --env --env-keep       # explicit keep mode (same as default)
 #
 # Prerequisites for --env:
 #   az login   # REQUIRED before running --env locally
@@ -25,6 +27,7 @@ set -euo pipefail
 # Configuration
 # ---------------------------------------------------------------------------
 PYTHON_MAJOR="3.13"
+DEFAULT_AZURE_KEYVAULT_NAME="agent-os-kv"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -45,6 +48,7 @@ DO_PYTHON=false
 DO_DEPS=false
 DO_ENV=false
 DO_CLEAN=false
+ENV_SYNC_MODE="keep"
 
 if [[ $# -eq 0 ]]; then
     DO_PYTHON=true
@@ -56,9 +60,11 @@ else
             --python) DO_PYTHON=true ;;
             --deps)   DO_DEPS=true ;;
             --env)    DO_ENV=true ;;
+            --env-keep) DO_ENV=true; ENV_SYNC_MODE="keep" ;;
+            --env-overwrite) DO_ENV=true; ENV_SYNC_MODE="overwrite" ;;
             --clean)  DO_CLEAN=true ;;
             --help|-h) usage ;;
-            *) error "Unknown flag: $arg. Valid flags: --python, --deps, --env, --clean" ;;
+            *) error "Unknown flag: $arg. Valid flags: --python, --deps, --env, --env-keep, --env-overwrite, --clean" ;;
         esac
     done
 fi
@@ -93,8 +99,10 @@ if $DO_ENV; then
         || error "'direnv' is not installed or not on PATH. Install from: https://direnv.net/docs/installation.html"
     command -v az &>/dev/null \
         || error "'az' CLI is not installed or not on PATH. Install from: https://learn.microsoft.com/cli/azure/install-azure-cli"
-    az account show &>/dev/null \
-        || error "Azure CLI is not authenticated. Run 'az login' first, then retry."
+    if ! az account show &>/dev/null; then
+        info "Azure CLI is not authenticated. Running 'az login'..."
+        az login || error "Azure login failed. Authenticate and retry."
+    fi
 fi
 
 if $DO_PYTHON; then
@@ -156,42 +164,164 @@ fi
 # Stage: env
 # ---------------------------------------------------------------------------
 if $DO_ENV; then
-    info "Preparing non-secret .env values (Azure Key Vault runtime mode)..."
+    info "Generating .env from .env.example (mode: ${ENV_SYNC_MODE})..."
+
+    quote_env_value() {
+        local value="$1"
+        local normalized
+        normalized="${value//$'\r'/}"
+        normalized="${normalized//$'\n'/\\n}"
+        normalized="${normalized//\\/\\\\}"
+        normalized="${normalized//\"/\\\"}"
+        normalized="${normalized//\$/\\$}"
+        printf '"%s"\n' "$normalized"
+    }
+
+    # Check if AZURE_KEYVAULT_NAME is injected in shell environment (e.g., AKS deployment)
+    # If set, it overrides the value from .env.example; otherwise use template default
+    if [[ -n "${AZURE_KEYVAULT_NAME:-}" ]]; then
+        KEYVAULT_NAME="${AZURE_KEYVAULT_NAME}"
+        info "Using Azure Key Vault from shell environment: ${KEYVAULT_NAME}"
+        KEYVAULT_NAME_Q=$(quote_env_value "$KEYVAULT_NAME")
+        OVERRIDE_KEYVAULT=true
+    else
+        # Extract KEYVAULT_NAME from .env.example if available, otherwise use default
+        if [[ -f ".env.example" ]]; then
+            KEYVAULT_NAME=$(grep -E '^AZURE_KEYVAULT_NAME=' .env.example | head -1 | cut -d'=' -f2- | tr -d '"' || true)
+        fi
+        if [[ -z "$KEYVAULT_NAME" ]]; then
+            KEYVAULT_NAME="$DEFAULT_AZURE_KEYVAULT_NAME"
+        fi
+        OVERRIDE_KEYVAULT=false
+        info "Using Azure Key Vault from template: ${KEYVAULT_NAME}"
+    fi
+
+    get_existing_env_value() {
+        local var_name="$1"
+        [[ -f ".env" ]] || return 0
+        local line
+        line=$(grep -E "^${var_name}=" .env | tail -1 || true)
+        [[ -n "$line" ]] || return 0
+        line="${line#${var_name}=}"
+        if [[ "$line" == '"'*'"' ]]; then
+            line="${line#\"}"
+            line="${line%\"}"
+        fi
+        printf '%s\n' "$line"
+    }
+
+    akv_read() {
+        az keyvault secret show \
+            --vault-name "$KEYVAULT_NAME" \
+            --name "$1" \
+            --query value \
+            -o tsv 2>/dev/null \
+            || error "Failed to read secret '$1' from Azure Key Vault '${KEYVAULT_NAME}'."
+    }
+
+    resolve_secret_value() {
+        local env_name="$1"
+        local secret_name="$2"
+        local existing=""
+
+        if [[ "$ENV_SYNC_MODE" == "keep" ]]; then
+            existing=$(get_existing_env_value "$env_name")
+            if [[ -n "$existing" ]]; then
+                printf '%s\n' "$existing"
+                return
+            fi
+        fi
+
+        akv_read "$secret_name"
+    }
+
+    JIRA_URL=$(resolve_secret_value "JIRA_URL" "JIRA-URL")
+    JIRA_OAUTH_CLIENT_ID=$(resolve_secret_value "JIRA_OAUTH_CLIENT_ID" "JIRA-OAUTH-CLIENT-ID")
+    JIRA_OAUTH_CLIENT_SECRET=$(resolve_secret_value "JIRA_OAUTH_CLIENT_SECRET" "JIRA-OAUTH-CLIENT-SECRET")
+    AZURE_API_KEY=$(resolve_secret_value "AZURE_API_KEY" "AZURE-API-KEY")
+    ANTHROPIC_API_KEY=$(resolve_secret_value "ANTHROPIC_API_KEY" "ANTHROPIC-API-KEY")
+    GITHUB_APP_ID=$(resolve_secret_value "GITHUB_APP_ID" "GITHUB-APP-ID")
+    GITHUB_APP_PRIVATE_KEY=$(resolve_secret_value "GITHUB_APP_PRIVATE_KEY" "GITHUB-APP-PRIVATE-KEY")
+    GITHUB_APP_INSTALLATION_ID=$(resolve_secret_value "GITHUB_APP_INSTALLATION_ID" "GITHUB-APP-INSTALLATION-ID")
 
     GOOSE_MCP_PYTHON="${VENV_DIR}/bin/python"
 
-    info "Generating .env from .env.example..."
+    JIRA_URL_Q=$(quote_env_value "$JIRA_URL")
+    JIRA_OAUTH_CLIENT_ID_Q=$(quote_env_value "$JIRA_OAUTH_CLIENT_ID")
+    JIRA_OAUTH_CLIENT_SECRET_Q=$(quote_env_value "$JIRA_OAUTH_CLIENT_SECRET")
+    AZURE_API_KEY_Q=$(quote_env_value "$AZURE_API_KEY")
+    ANTHROPIC_API_KEY_Q=$(quote_env_value "$ANTHROPIC_API_KEY")
+    GITHUB_APP_ID_Q=$(quote_env_value "$GITHUB_APP_ID")
+    GITHUB_APP_PRIVATE_KEY_Q=$(quote_env_value "$GITHUB_APP_PRIVATE_KEY")
+    GITHUB_APP_INSTALLATION_ID_Q=$(quote_env_value "$GITHUB_APP_INSTALLATION_ID")
+    GOOSE_MCP_PYTHON_Q=$(quote_env_value "$GOOSE_MCP_PYTHON")
+
+    # Export bash variables so Python script can access them
+    export JIRA_URL JIRA_OAUTH_CLIENT_ID JIRA_OAUTH_CLIENT_SECRET AZURE_API_KEY ANTHROPIC_API_KEY
+    export GITHUB_APP_ID GITHUB_APP_PRIVATE_KEY GITHUB_APP_INSTALLATION_ID
+    export GOOSE_MCP_PYTHON
 
     # Escape characters that would break sed's | delimiter (& and \)
     escape_sed() {
         printf '%s\n' "$1" | sed 's/[&\]/\\&/g'
     }
 
-    sed \
-        -e "s|__GOOSE_MCP_PYTHON__|$(escape_sed "$GOOSE_MCP_PYTHON")|g" \
-        .env.example > .env
+    # Build sed command dynamically; only substitute AZURE_KEYVAULT_NAME if shell env overrides it
+    if $OVERRIDE_KEYVAULT; then
+        # Use bash substitution for the vault name (no newlines expected)
+        sed_expr="s|^AZURE_KEYVAULT_NAME=.*|AZURE_KEYVAULT_NAME=$(escape_sed "$KEYVAULT_NAME_Q")|g"
+        sed -e "$sed_expr" .env.example > .env.tmp
+        mv .env.tmp .env
+    else
+        cp .env.example .env
+    fi
+
+    # Use Python for template substitution to avoid sed issues with multiline values
+    python3 << 'PYTHON_EOF'
+import os
+
+env_file = ".env"
+replacements = {
+    "__JIRA_URL__": os.environ.get("JIRA_URL", ""),
+    "__JIRA_OAUTH_CLIENT_ID__": os.environ.get("JIRA_OAUTH_CLIENT_ID", ""),
+    "__JIRA_OAUTH_CLIENT_SECRET__": os.environ.get("JIRA_OAUTH_CLIENT_SECRET", ""),
+    "__AZURE_API_KEY__": os.environ.get("AZURE_API_KEY", ""),
+    "__ANTHROPIC_API_KEY__": os.environ.get("ANTHROPIC_API_KEY", ""),
+    "__GITHUB_APP_ID__": os.environ.get("GITHUB_APP_ID", ""),
+    "__GITHUB_APP_PRIVATE_KEY__": os.environ.get("GITHUB_APP_PRIVATE_KEY", ""),
+    "__GITHUB_APP_INSTALLATION_ID__": os.environ.get("GITHUB_APP_INSTALLATION_ID", ""),
+    "__GOOSE_MCP_PYTHON__": os.environ.get("GOOSE_MCP_PYTHON", ""),
+}
+
+with open(env_file, "r") as f:
+    content = f.read()
+
+for placeholder, value in replacements.items():
+    if placeholder in content:
+        # Quote multiline values with escaped newlines for shell parsing
+        if value:
+            quoted_value = value.replace("\\", "\\\\").replace('"', '\\"').replace('\n', '\\n')
+            quoted_value = f'"{quoted_value}"'
+        else:
+            quoted_value = '""'
+        content = content.replace(placeholder, quoted_value)
+
+with open(env_file, "w") as f:
+    f.write(content)
+PYTHON_EOF
 
     success ".env file generated."
 
-    # ---------------------------------------------------------------------------
-    # Upsert new env vars that may be missing from pre-existing .env files.
-    # Each entry is: VAR_NAME DEFAULT_VALUE
-    # If the var is already set (even to empty) it is left unchanged.
-    # ---------------------------------------------------------------------------
-    upsert_env_var() {
-        local var_name="$1"
-        local default_value="$2"
-        if ! grep -q "^${var_name}=" .env 2>/dev/null; then
-            printf '\n# Added by setup-env.sh\n%s=%s\n' "$var_name" "$default_value" >> .env
-            info "Added missing var: ${var_name}=${default_value}"
-        fi
+    extract_env_keys() {
+        local file_path="$1"
+        grep -E '^[A-Z][A-Z0-9_]*=' "$file_path" | cut -d'=' -f1 | sort -u
     }
 
-    upsert_env_var "OTEL_EXPORTER_TYPE" "console"
-    upsert_env_var "OTEL_EXPORTERS" "console"
-    upsert_env_var "OTEL_DEBUG_LOCAL" "false"
-    upsert_env_var "LOG_LEVEL" "INFO"
-    upsert_env_var "AZURE_KEYVAULT_NAME" "agent-os-kv"
+    missing_keys=$(comm -23 <(extract_env_keys .env.example) <(extract_env_keys .env) || true)
+    if [[ -n "$missing_keys" ]]; then
+        error "Generated .env is missing keys from .env.example:\n${missing_keys}"
+    fi
+    success "Validated: all keys from .env.example are present in .env."
 
     info "Allowing direnv to load .env..."
     direnv allow .

@@ -86,10 +86,9 @@ az login
 
 # 5. Set up environment variables
 cp .env.example .env
-# Edit .env with non-secret settings (including AZURE_KEYVAULT_NAME)
-# Secrets are loaded from Azure Key Vault at runtime
+# Edit .env minimally (for example AZURE_KEYVAULT_NAME if needed)
 
-# 5.1 Generate non-secret local env values
+# 5.1 Fetch secrets from Azure Key Vault and write them into .env
 ./setup-env.sh --env
 
 # 6. (Recommended) Auto-load .env with direnv

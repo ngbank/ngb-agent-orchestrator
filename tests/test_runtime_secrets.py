@@ -46,8 +46,8 @@ def test_noop_when_vault_name_not_set(monkeypatch):
 def test_noop_when_required_env_already_present(monkeypatch):
     monkeypatch.setenv("AZURE_KEYVAULT_NAME", "kv-test")
     monkeypatch.setenv("JIRA_URL", "https://example.atlassian.net")
-    monkeypatch.setenv("JIRA_EMAIL", "user@example.com")
-    monkeypatch.setenv("JIRA_API_TOKEN", "token")
+    monkeypatch.setenv("JIRA_OAUTH_CLIENT_ID", "client-id")
+    monkeypatch.setenv("JIRA_OAUTH_CLIENT_SECRET", "client-secret")
     monkeypatch.setenv("AZURE_API_KEY", "key")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "key")
     monkeypatch.setenv("GITHUB_APP_ID", "123")
@@ -60,8 +60,8 @@ def test_noop_when_required_env_already_present(monkeypatch):
 def test_loads_missing_values_from_keyvault(monkeypatch):
     monkeypatch.setenv("AZURE_KEYVAULT_NAME", "kv-test")
     monkeypatch.delenv("JIRA_URL", raising=False)
-    monkeypatch.delenv("JIRA_EMAIL", raising=False)
-    monkeypatch.delenv("JIRA_API_TOKEN", raising=False)
+    monkeypatch.delenv("JIRA_OAUTH_CLIENT_ID", raising=False)
+    monkeypatch.delenv("JIRA_OAUTH_CLIENT_SECRET", raising=False)
     monkeypatch.delenv("AZURE_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("GITHUB_APP_ID", raising=False)
@@ -72,8 +72,8 @@ def test_loads_missing_values_from_keyvault(monkeypatch):
         monkeypatch,
         {
             "JIRA-URL": "https://example.atlassian.net",
-            "JIRA-EMAIL": "user@example.com",
-            "JIRA-API-TOKEN": "jira-token",
+            "JIRA-OAUTH-CLIENT-ID": "oauth-client-id",
+            "JIRA-OAUTH-CLIENT-SECRET": "oauth-client-secret",
             "AZURE-API-KEY": "azure-key",
             "ANTHROPIC-API-KEY": "anthropic-key",
             "GITHUB-APP-ID": "123",
@@ -85,8 +85,8 @@ def test_loads_missing_values_from_keyvault(monkeypatch):
     load_runtime_secrets_from_keyvault()
 
     assert "https://example.atlassian.net" == os.environ["JIRA_URL"]
-    assert "user@example.com" == os.environ["JIRA_EMAIL"]
-    assert "jira-token" == os.environ["JIRA_API_TOKEN"]
+    assert "oauth-client-id" == os.environ["JIRA_OAUTH_CLIENT_ID"]
+    assert "oauth-client-secret" == os.environ["JIRA_OAUTH_CLIENT_SECRET"]
     assert "azure-key" == os.environ["AZURE_API_KEY"]
     assert "anthropic-key" == os.environ["ANTHROPIC_API_KEY"]
     assert "123" == os.environ["GITHUB_APP_ID"]
@@ -102,8 +102,8 @@ def test_raises_when_secret_fetch_fails(monkeypatch):
         monkeypatch,
         {
             "JIRA-URL": "https://example.atlassian.net",
-            "JIRA-EMAIL": "user@example.com",
-            "JIRA-API-TOKEN": "jira-token",
+            "JIRA-OAUTH-CLIENT-ID": "oauth-client-id",
+            "JIRA-OAUTH-CLIENT-SECRET": "oauth-client-secret",
             "AZURE-API-KEY": "azure-key",
             "ANTHROPIC-API-KEY": "anthropic-key",
             "GITHUB-APP-ID": "123",

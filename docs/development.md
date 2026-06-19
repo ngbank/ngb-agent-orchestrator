@@ -199,9 +199,9 @@ You should see `(venv)` in your prompt.
 
 ### JIRA authentication fails (401)
 
-1. Verify `JIRA_EMAIL` exactly matches your Atlassian account email
-2. Check `JIRA_API_TOKEN` has no extra spaces
-3. Regenerate the token at [Atlassian API Tokens](https://id.atlassian.com/manage-profile/security/api-tokens)
+1. Verify `JIRA_OAUTH_CLIENT_ID` and `JIRA_OAUTH_CLIENT_SECRET` are set and non-empty
+2. Verify the OAuth client has permission to read/post in your JIRA project
+3. If your JIRA uses a custom token endpoint, set `JIRA_OAUTH_TOKEN_URL` explicitly in `.env`
 
 ### Goose command not found
 

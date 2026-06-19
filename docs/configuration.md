@@ -1,7 +1,8 @@
 # Configuration
 
-Runtime configuration is managed through a `.env` file at the project root, but
-secrets are loaded at process startup from Azure Key Vault. **Never commit this file.**
+Runtime configuration is managed through a `.env` file at the project root.
+`./setup-env.sh --env` fetches secrets from Azure Key Vault and writes them into `.env`.
+**Never commit this file.**
 
 For local development, authenticate Azure CLI before running setup scripts or dispatcher commands:
 
@@ -12,7 +13,8 @@ az account show
 
 ```bash
 cp .env.example .env
-# Edit .env with non-secret settings
+# Edit .env with non-secret settings (for example AZURE_KEYVAULT_NAME)
+./setup-env.sh --env
 ```
 
 ---
@@ -25,14 +27,14 @@ cp .env.example .env
 |---|---|---|---|
 | `AZURE_KEYVAULT_NAME` | Yes | `ngb-agent-kv-prod` | Vault name used to resolve `https://<name>.vault.azure.net` |
 
-The application loads required secrets from Azure Key Vault at startup using
-`DefaultAzureCredential`.
+`./setup-env.sh --env` reads required secrets from Azure Key Vault using your
+Azure login context and materializes them into `.env`.
 
 Required secret names in the vault:
 
 - `JIRA-URL`
-- `JIRA-EMAIL`
-- `JIRA-API-TOKEN`
+- `JIRA-OAUTH-CLIENT-ID`
+- `JIRA-OAUTH-CLIENT-SECRET`
 - `AZURE-API-KEY`
 - `ANTHROPIC-API-KEY`
 - `GITHUB-APP-ID`
@@ -41,11 +43,14 @@ Required secret names in the vault:
 
 ### JIRA
 
-| Variable | Required | Example | Description |
-|---|---|---|---|
-| `JIRA_URL` | Yes | `https://mirandags.atlassian.net` | Loaded from Key Vault secret `JIRA-URL` |
-| `JIRA_EMAIL` | Yes | `user@example.com` | Loaded from Key Vault secret `JIRA-EMAIL` |
-| `JIRA_API_TOKEN` | Yes | `ATATxxx...` | Loaded from Key Vault secret `JIRA-API-TOKEN` |
+| Variable | Required | Example | Source | Description |
+|---|---|---|---|---|
+| `JIRA_URL` | Yes | `https://mirandags.atlassian.net` | Key Vault | Base URL for JIRA instance |
+| `JIRA_OAUTH_CLIENT_ID` | Yes | `jira-service-client-id` | Key Vault | OAuth client id for service-account integration |
+| `JIRA_OAUTH_CLIENT_SECRET` | Yes | `***` | Key Vault | OAuth client secret for service-account integration |
+| `JIRA_OAUTH_TOKEN_URL` | No | `https://your-jira-host/rest/oauth2/latest/token` | `.env` | OAuth token endpoint (defaults to `<JIRA_URL>/rest/oauth2/latest/token`) |
+| `JIRA_OAUTH_SCOPE` | No | `read:jira-work write:jira-work` | `.env` | Optional scope sent with token request |
+| `JIRA_OAUTH_AUDIENCE` | No | `api.atlassian.com` | `.env` | Optional audience sent with token request (provider-specific) |
 
 ### LiteLLM SDK (model routing)
 
@@ -62,9 +67,9 @@ No proxy server is required. Set `GOOSE_MODEL` to a LiteLLM model string — the
 
 | Variable | Provider | Example |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Anthropic | Loaded from Key Vault secret `ANTHROPIC-API-KEY` |
+| `ANTHROPIC_API_KEY` | Anthropic | Populated into `.env` from Key Vault secret `ANTHROPIC-API-KEY` |
 | `OPENAI_API_KEY` | OpenAI | `sk-...` |
-| `AZURE_API_KEY` | Azure AI Foundry | Loaded from Key Vault secret `AZURE-API-KEY` |
+| `AZURE_API_KEY` | Azure AI Foundry | Populated into `.env` from Key Vault secret `AZURE-API-KEY` |
 | `AZURE_API_BASE` | Azure AI Foundry | `https://your-resource.cognitiveservices.azure.com` |
 | `AZURE_API_VERSION` | Azure AI Foundry | `2024-12-01-preview` |
 | `AZURE_FOUNDRY_API_BASE` | Azure AI Foundry MaaS (only for `foundry/…` models) | `https://your-resource.services.ai.azure.com/openai/v1` |
@@ -81,12 +86,12 @@ All GitHub operations in the execute flow use a short-lived GitHub App installat
 
 | Variable | Required | Example | Description |
 |---|---|---|---|
-| `GITHUB_APP_ID` | Yes | `1234567` | Loaded from Key Vault secret `GITHUB-APP-ID` |
-| `GITHUB_APP_PRIVATE_KEY` | Yes | `<pem-content>` | Loaded from Key Vault secret `GITHUB-APP-PRIVATE-KEY` |
-| `GITHUB_APP_INSTALLATION_ID` | Yes | `98765432` | Loaded from Key Vault secret `GITHUB-APP-INSTALLATION-ID` |
+| `GITHUB_APP_ID` | Yes | `1234567` | Populated into `.env` from Key Vault secret `GITHUB-APP-ID` |
+| `GITHUB_APP_PRIVATE_KEY` | Yes | `<pem-content>` | Populated into `.env` from Key Vault secret `GITHUB-APP-PRIVATE-KEY` |
+| `GITHUB_APP_INSTALLATION_ID` | Yes | `98765432` | Populated into `.env` from Key Vault secret `GITHUB-APP-INSTALLATION-ID` |
 
 Notes:
-- Keep the private key in Key Vault; if the secret contains literal `\n` escapes, the GitHub client normalizes them at runtime.
+- Keep the private key in Key Vault; `setup-env.sh` writes it into `.env` and the GitHub client normalizes literal `\n` escapes at runtime.
 - The orchestrator clones and pushes via HTTPS using `x-access-token`, then resets the local remote URL back to the public HTTPS form after push.
 - `gh` is no longer required for PR creation or updates.
 

@@ -9,6 +9,7 @@ import os
 from dataclasses import dataclass
 from typing import List
 
+import requests
 from jira import JIRA
 from jira.exceptions import JIRAError
 
@@ -71,17 +72,23 @@ class JiraClient:
             JiraConfigurationError: If required environment variables are missing.
         """
         self.jira_url = os.getenv("JIRA_URL")
-        self.jira_email = os.getenv("JIRA_EMAIL")
-        self.jira_api_token = os.getenv("JIRA_API_TOKEN")
+        self.jira_oauth_client_id = os.getenv("JIRA_OAUTH_CLIENT_ID")
+        self.jira_oauth_client_secret = os.getenv("JIRA_OAUTH_CLIENT_SECRET")
+        self.jira_oauth_token_url = os.getenv("JIRA_OAUTH_TOKEN_URL") or self._default_token_url()
+        self.jira_oauth_scope = os.getenv("JIRA_OAUTH_SCOPE")
+        self.jira_oauth_audience = os.getenv("JIRA_OAUTH_AUDIENCE")
+        self.jira_api_base = self.jira_url
 
         # Validate configuration
         missing_vars = []
         if not self.jira_url:
             missing_vars.append("JIRA_URL")
-        if not self.jira_email:
-            missing_vars.append("JIRA_EMAIL")
-        if not self.jira_api_token:
-            missing_vars.append("JIRA_API_TOKEN")
+        if not self.jira_oauth_client_id:
+            missing_vars.append("JIRA_OAUTH_CLIENT_ID")
+        if not self.jira_oauth_client_secret:
+            missing_vars.append("JIRA_OAUTH_CLIENT_SECRET")
+        if not self.jira_oauth_token_url:
+            missing_vars.append("JIRA_OAUTH_TOKEN_URL")
 
         if missing_vars:
             raise JiraConfigurationError(
@@ -90,36 +97,170 @@ class JiraClient:
 
         # Detect unedited placeholder values from .env.example
         placeholder_vars = []
-        if self.jira_email and self.jira_email == "your.email@example.com":
-            placeholder_vars.append("JIRA_EMAIL")
-        if self.jira_api_token and self.jira_api_token == "your_api_token_here":
-            placeholder_vars.append("JIRA_API_TOKEN")
+        if self.jira_oauth_client_id and self.jira_oauth_client_id == "your-oauth-client-id":
+            placeholder_vars.append("JIRA_OAUTH_CLIENT_ID")
+        if (
+            self.jira_oauth_client_secret
+            and self.jira_oauth_client_secret == "your-oauth-client-secret"
+        ):
+            placeholder_vars.append("JIRA_OAUTH_CLIENT_SECRET")
         if placeholder_vars:
             raise JiraConfigurationError(
                 f"JIRA credentials contain placeholder values: {', '.join(placeholder_vars)}. "
-                "Please update your .env file with real credentials. "
-                "Generate an API token at: "
-                "https://id.atlassian.com/manage-profile/security/api-tokens"
+                "Please update your .env file or Azure Key Vault with real OAuth credentials."
             )
 
         try:
-            assert self.jira_email is not None and self.jira_api_token is not None
-            self.client = JIRA(
-                server=self.jira_url, basic_auth=(self.jira_email, self.jira_api_token)
-            )
-            # Eagerly validate credentials — /myself fails fast with 401/403
-            # if the email or API token is wrong.
-            self.client.myself()
+            token = self._fetch_oauth_access_token()
+            self.jira_api_base = self._resolve_jira_api_base(token)
+            self.client = JIRA(server=self.jira_api_base, token_auth=token)
         except JIRAError as e:
             if e.status_code in (401, 403):
+                err_text = str(e).lower()
+                if "scope" in err_text:
+                    raise JiraAuthenticationError(
+                        f"JIRA OAuth scope mismatch (HTTP {e.status_code}). "
+                        "Grant at least 'read:jira-work' "
+                        "(and 'write:jira-work' if posting comments)."
+                    ) from e
                 raise JiraAuthenticationError(
                     f"JIRA authentication failed (HTTP {e.status_code}). "
-                    "Check that JIRA_EMAIL and JIRA_API_TOKEN are correct. "
-                    "Generate a new token at: "
-                    "https://id.atlassian.com/manage-profile/security/api-tokens"
+                    "Check JIRA_OAUTH_CLIENT_ID and JIRA_OAUTH_CLIENT_SECRET and verify "
+                    "the service account has JIRA API permissions."
                 ) from e
             else:
                 raise JiraAPIError(f"Failed to connect to JIRA: {e}") from e
+
+    def _fetch_oauth_access_token(self) -> str:
+        """Fetch an OAuth access token using client credentials."""
+        assert self.jira_oauth_client_id is not None
+        assert self.jira_oauth_client_secret is not None
+        assert self.jira_oauth_token_url is not None
+
+        payload = {"grant_type": "client_credentials"}
+        if self.jira_oauth_scope:
+            payload["scope"] = self.jira_oauth_scope
+        if self.jira_oauth_audience:
+            payload["audience"] = self.jira_oauth_audience
+
+        try:
+            response = requests.post(
+                self.jira_oauth_token_url,
+                data=payload,
+                auth=(self.jira_oauth_client_id, self.jira_oauth_client_secret),
+                timeout=20,
+            )
+        except requests.RequestException as exc:
+            raise JiraAuthenticationError(f"Failed requesting OAuth token: {exc}") from exc
+
+        if response.status_code in (401, 403):
+            raise JiraAuthenticationError(
+                f"OAuth token request failed (HTTP {response.status_code}). "
+                "Check JIRA_OAUTH_CLIENT_ID/JIRA_OAUTH_CLIENT_SECRET and token endpoint."
+            )
+
+        if response.status_code == 404:
+            raise JiraConfigurationError(
+                f"OAuth token endpoint not found (HTTP 404): {self.jira_oauth_token_url}. "
+                "Set JIRA_OAUTH_TOKEN_URL explicitly. For Atlassian Cloud use: "
+                "https://auth.atlassian.com/oauth/token"
+            )
+
+        if response.status_code >= 400:
+            raise JiraAPIError(
+                f"OAuth token request failed (HTTP {response.status_code}): {response.text}"
+            )
+
+        try:
+            token = response.json().get("access_token", "")
+        except ValueError as exc:
+            raise JiraAuthenticationError("OAuth token response is not valid JSON.") from exc
+
+        if not token:
+            raise JiraAuthenticationError("OAuth token response does not include access_token.")
+
+        return token
+
+    def _default_token_url(self) -> str:
+        """Infer a sensible OAuth token endpoint from JIRA_URL."""
+        jira_url = (self.jira_url or "").lower()
+        if jira_url.endswith(".atlassian.net") or ".atlassian.net/" in jira_url:
+            return "https://auth.atlassian.com/oauth/token"
+
+        base = (self.jira_url or "").rstrip("/")
+        return f"{base}/rest/oauth2/latest/token"
+
+    def _resolve_jira_api_base(self, token: str) -> str:
+        """Resolve the proper Jira API base URL for OAuth access tokens."""
+        assert self.jira_url is not None
+
+        normalized = self.jira_url.rstrip("/")
+        if ".atlassian.net" not in normalized.lower():
+            return normalized
+
+        try:
+            response = requests.get(
+                "https://api.atlassian.com/oauth/token/accessible-resources",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=20,
+            )
+        except requests.RequestException as exc:
+            raise JiraAuthenticationError(
+                f"Failed discovering Atlassian accessible resources: {exc}"
+            ) from exc
+
+        if response.status_code in (401, 403):
+            raise JiraAuthenticationError(
+                "OAuth token cannot access Atlassian resources. "
+                "Check OAuth app scopes and audience."
+            )
+
+        if response.status_code >= 400:
+            raise JiraAPIError(
+                f"Failed loading Atlassian accessible resources (HTTP {response.status_code}): "
+                f"{response.text}"
+            )
+
+        try:
+            resources = response.json()
+        except ValueError as exc:
+            raise JiraAuthenticationError(
+                "Invalid JSON from Atlassian accessible-resources endpoint."
+            ) from exc
+
+        if not isinstance(resources, list) or not resources:
+            raise JiraAuthenticationError(
+                "OAuth token has no accessible Atlassian resources. "
+                "Check OAuth app installation and scopes."
+            )
+
+        matched_resources = []
+        for resource in resources:
+            url = str(resource.get("url", "")).rstrip("/")
+            if url.lower() == normalized.lower():
+                matched_resources.append(resource)
+
+        if not matched_resources:
+            raise JiraAuthenticationError(
+                f"OAuth token has no access to Jira site {normalized}. "
+                "Check app installation and granted scopes for this site."
+            )
+
+        scopes = set()
+        for resource in matched_resources:
+            scopes.update(resource.get("scopes", []))
+
+        if "read:jira-work" not in scopes:
+            raise JiraAuthenticationError(
+                "OAuth token is missing Jira scopes for issue reads. "
+                "Grant 'read:jira-work' (and 'write:jira-work' if posting comments)."
+            )
+
+        cloud_id = matched_resources[0].get("id")
+        if not cloud_id:
+            raise JiraAuthenticationError("Atlassian resource missing cloud id.")
+
+        return f"https://api.atlassian.com/ex/jira/{cloud_id}"
 
     def get_ticket(self, ticket_key: str) -> JiraTicket:
         """
@@ -158,8 +299,8 @@ class JiraClient:
             elif e.status_code in (401, 403):
                 raise JiraAuthenticationError(
                     f"Access denied fetching '{ticket_key}' (HTTP {e.status_code}). "
-                    "Check that JIRA_EMAIL and JIRA_API_TOKEN are correct "
-                    "and have access to this project."
+                    "Check OAuth credentials and ensure the service account has access "
+                    "to this project."
                 ) from e
             else:
                 raise JiraAPIError(f"Failed to fetch ticket '{ticket_key}': {e}") from e

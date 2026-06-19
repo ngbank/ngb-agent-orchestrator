@@ -78,15 +78,33 @@ def _handle_run(ticket: str, dry_run: bool) -> None:
 
     except TicketConfigError as e:
         click.echo(f"❌ JIRA configuration error: {e}", err=True)
-        click.echo("   Please check your environment variables:", err=True)
-        click.echo("     - JIRA_URL", err=True)
-        click.echo("     - JIRA_EMAIL", err=True)
-        click.echo("     - JIRA_API_TOKEN", err=True)
+        click.echo("   Required values:", err=True)
+        click.echo("     - JIRA_URL (from Azure Key Vault)", err=True)
+        click.echo("     - JIRA_OAUTH_CLIENT_ID (from Azure Key Vault)", err=True)
+        click.echo(
+            "     - JIRA_OAUTH_CLIENT_SECRET (from Azure Key Vault)",
+            err=True,
+        )
+        click.echo(
+            "     - Optional: JIRA_OAUTH_TOKEN_URL "
+            "(defaults to <JIRA_URL>/rest/oauth2/latest/token)",
+            err=True,
+        )
+        click.echo(
+            "     - Optional: JIRA_OAUTH_AUDIENCE (some providers require this)",
+            err=True,
+        )
+        click.echo(
+            "       Atlassian Cloud token URL: https://auth.atlassian.com/oauth/token", err=True
+        )
+        click.echo("   If this is a fresh shell, run: direnv reload", err=True)
         sys.exit(1)
 
     except TicketAuthError as e:
         click.echo(f"❌ JIRA authentication error: {e}", err=True)
-        click.echo("   Please verify your credentials are correct.", err=True)
+        click.echo(
+            "   Verify OAuth client credentials and service-account permissions in JIRA.", err=True
+        )
         sys.exit(1)
 
     except KeyboardInterrupt:
