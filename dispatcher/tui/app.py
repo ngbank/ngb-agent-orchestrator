@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from typing import Optional
 
+from dotenv import load_dotenv
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 from textual.timer import Timer
@@ -26,6 +27,7 @@ from dispatcher.tui.actions import (
 )
 from dispatcher.tui.modals import ConfirmModal, InputModal
 from dispatcher.tui.widgets import DetailPane, StatusBar, WorkflowList
+from orchestrator.runtime_secrets import load_runtime_secrets_from_keyvault
 from state.workflow_repository import list_workflows
 
 
@@ -280,5 +282,7 @@ class WorkflowTUI(App[None]):
 
 def run_tui() -> None:
     """Entry point for the TUI application."""
+    load_dotenv()
+    load_runtime_secrets_from_keyvault()
     app = WorkflowTUI()
     app.run()

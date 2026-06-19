@@ -25,8 +25,10 @@ import click
 from dotenv import load_dotenv
 
 from orchestrator.logging_setup import setup_logging
+from orchestrator.runtime_secrets import load_runtime_secrets_from_keyvault
 
 load_dotenv()
+load_runtime_secrets_from_keyvault()
 
 # Initialize logging based on LOG_LEVEL environment variable
 setup_logging()

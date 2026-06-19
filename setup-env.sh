@@ -6,7 +6,7 @@
 # Stages (all run by default; pass flags to run specific stages only):
 #   --python   Install Python 3.13.x via pyenv and pin .python-version
 #   --deps     Create/update the .venv and install pip dependencies
-#   --env      Fetch secrets from 1Password and generate .env
+#   --env      Validate Azure auth and generate non-secret .env configuration
 #   --clean    Remove .venv/ (and legacy venv/) and .env, then run all stages from scratch
 #
 # Examples:
@@ -14,13 +14,10 @@
 #   ./setup-env.sh --clean           # wipe and rebuild everything
 #   ./setup-env.sh --deps            # reinstall dependencies only
 #   ./setup-env.sh --python --deps   # reinstall Python + deps, skip .env
-#   ./setup-env.sh --env             # refresh .env from 1Password only
+#   ./setup-env.sh --env             # refresh non-secret .env values only
 #
 # Prerequisites for --env:
-#   export OP_SA_TOKEN="<your-service-account-token>"
-#
-# First-time 1Password setup (run once):
-#   ./scripts/bootstrap-1password.sh
+#   az login
 
 set -euo pipefail
 
@@ -28,8 +25,6 @@ set -euo pipefail
 # Configuration
 # ---------------------------------------------------------------------------
 PYTHON_MAJOR="3.13"
-OP_VAULT="NG Bank"
-OP_ITEM="NGB Agent Orchestrator"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -96,11 +91,10 @@ info "Checking prerequisites..."
 if $DO_ENV; then
     command -v direnv &>/dev/null \
         || error "'direnv' is not installed or not on PATH. Install from: https://direnv.net/docs/installation.html"
-    command -v op &>/dev/null \
-        || error "'op' CLI (1Password) is not installed or not on PATH. Install from: https://developer.1password.com/docs/cli/"
-    [[ -z "${OP_SA_TOKEN:-}" ]] \
-        && error "OP_SA_TOKEN is not set. Export your 1Password service account token and retry."
-    export OP_SERVICE_ACCOUNT_TOKEN="$OP_SA_TOKEN"
+    command -v az &>/dev/null \
+        || error "'az' CLI is not installed or not on PATH. Install from: https://learn.microsoft.com/cli/azure/install-azure-cli"
+    az account show &>/dev/null \
+        || error "Azure CLI is not authenticated. Run 'az login' and retry."
 fi
 
 if $DO_PYTHON; then
@@ -162,24 +156,10 @@ fi
 # Stage: env
 # ---------------------------------------------------------------------------
 if $DO_ENV; then
-    info "Fetching secrets from 1Password (vault: '${OP_VAULT}', item: '${OP_ITEM}')..."
+    info "Preparing non-secret .env values (Azure Key Vault runtime mode)..."
 
-    op_read() {
-        op read "op://${OP_VAULT}/${OP_ITEM}/$1" 2>/dev/null \
-            || error "Failed to read field '$1' from 1Password. Ensure the vault/item/field exist (run scripts/bootstrap-1password.sh first)."
-    }
-
-    JIRA_URL=$(op_read "JIRA_URL")
-    JIRA_EMAIL=$(op_read "JIRA_EMAIL")
-    JIRA_API_TOKEN=$(op_read "JIRA_API_TOKEN")
-    AZURE_API_KEY=$(op_read "AZURE_API_KEY")
-    ANTHROPIC_API_KEY=$(op_read "ANTHROPIC_API_KEY")
-    GITHUB_APP_ID=$(op_read "GITHUB_APP_ID")
-    GITHUB_APP_PRIVATE_KEY=$(op_read "GITHUB_APP_PRIVATE_KEY")
-    GITHUB_APP_INSTALLATION_ID=$(op_read "GITHUB_APP_INSTALLATION_ID")
     GOOSE_MCP_PYTHON="${VENV_DIR}/bin/python"
 
-    success "Secrets retrieved."
     info "Generating .env from .env.example..."
 
     # Escape characters that would break sed's | delimiter (& and \)
@@ -188,14 +168,6 @@ if $DO_ENV; then
     }
 
     sed \
-        -e "s|__JIRA_URL__|$(escape_sed "$JIRA_URL")|g" \
-        -e "s|__JIRA_EMAIL__|$(escape_sed "$JIRA_EMAIL")|g" \
-        -e "s|__JIRA_API_TOKEN__|$(escape_sed "$JIRA_API_TOKEN")|g" \
-        -e "s|__AZURE_API_KEY__|$(escape_sed "$AZURE_API_KEY")|g" \
-        -e "s|__ANTHROPIC_API_KEY__|$(escape_sed "$ANTHROPIC_API_KEY")|g" \
-        -e "s|__GITHUB_APP_ID__|$(escape_sed "$GITHUB_APP_ID")|g" \
-        -e "s|__GITHUB_APP_PRIVATE_KEY__|$(escape_sed "$GITHUB_APP_PRIVATE_KEY")|g" \
-        -e "s|__GITHUB_APP_INSTALLATION_ID__|$(escape_sed "$GITHUB_APP_INSTALLATION_ID")|g" \
         -e "s|__GOOSE_MCP_PYTHON__|$(escape_sed "$GOOSE_MCP_PYTHON")|g" \
         .env.example > .env
 
@@ -219,6 +191,7 @@ if $DO_ENV; then
     upsert_env_var "OTEL_EXPORTERS" "console"
     upsert_env_var "OTEL_DEBUG_LOCAL" "false"
     upsert_env_var "LOG_LEVEL" "INFO"
+    upsert_env_var "AZURE_KEYVAULT_NAME" "your-key-vault-name"
 
     info "Allowing direnv to load .env..."
     direnv allow .

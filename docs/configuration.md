@@ -1,23 +1,44 @@
 # Configuration
 
-All runtime configuration is managed through a `.env` file at the project root. **Never commit this file.**
+Runtime configuration is managed through a `.env` file at the project root, but
+secrets are loaded at process startup from Azure Key Vault. **Never commit this file.**
 
 ```bash
 cp .env.example .env
-# Edit .env with your credentials
+# Edit .env with non-secret settings
 ```
 
 ---
 
 ## Environment Variables
 
+### Azure Key Vault
+
+| Variable | Required | Example | Description |
+|---|---|---|---|
+| `AZURE_KEYVAULT_NAME` | Yes | `ngb-agent-kv-prod` | Vault name used to resolve `https://<name>.vault.azure.net` |
+
+The application loads required secrets from Azure Key Vault at startup using
+`DefaultAzureCredential`.
+
+Required secret names in the vault:
+
+- `JIRA-URL`
+- `JIRA-EMAIL`
+- `JIRA-API-TOKEN`
+- `AZURE-API-KEY`
+- `ANTHROPIC-API-KEY`
+- `GITHUB-APP-ID`
+- `GITHUB-APP-PRIVATE-KEY`
+- `GITHUB-APP-INSTALLATION-ID`
+
 ### JIRA
 
 | Variable | Required | Example | Description |
 |---|---|---|---|
-| `JIRA_URL` | Yes | `https://mirandags.atlassian.net` | Your JIRA Cloud instance URL |
-| `JIRA_EMAIL` | Yes | `user@example.com` | Your Atlassian account email |
-| `JIRA_API_TOKEN` | Yes | `ATATxxx...` | JIRA API token (see below) |
+| `JIRA_URL` | Yes | `https://mirandags.atlassian.net` | Loaded from Key Vault secret `JIRA-URL` |
+| `JIRA_EMAIL` | Yes | `user@example.com` | Loaded from Key Vault secret `JIRA-EMAIL` |
+| `JIRA_API_TOKEN` | Yes | `ATATxxx...` | Loaded from Key Vault secret `JIRA-API-TOKEN` |
 
 ### LiteLLM SDK (model routing)
 
@@ -34,9 +55,9 @@ No proxy server is required. Set `GOOSE_MODEL` to a LiteLLM model string — the
 
 | Variable | Provider | Example |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Anthropic | `sk-ant-...` |
+| `ANTHROPIC_API_KEY` | Anthropic | Loaded from Key Vault secret `ANTHROPIC-API-KEY` |
 | `OPENAI_API_KEY` | OpenAI | `sk-...` |
-| `AZURE_API_KEY` | Azure AI Foundry | — |
+| `AZURE_API_KEY` | Azure AI Foundry | Loaded from Key Vault secret `AZURE-API-KEY` |
 | `AZURE_API_BASE` | Azure AI Foundry | `https://your-resource.cognitiveservices.azure.com` |
 | `AZURE_API_VERSION` | Azure AI Foundry | `2024-12-01-preview` |
 | `AZURE_FOUNDRY_API_BASE` | Azure AI Foundry MaaS (only for `foundry/…` models) | `https://your-resource.services.ai.azure.com/openai/v1` |
@@ -53,12 +74,12 @@ All GitHub operations in the execute flow use a short-lived GitHub App installat
 
 | Variable | Required | Example | Description |
 |---|---|---|---|
-| `GITHUB_APP_ID` | Yes | `1234567` | GitHub App ID used as the JWT issuer |
-| `GITHUB_APP_PRIVATE_KEY` | Yes | `<inline-pem-with-escaped-newlines>` | Full PEM content for the app private key, stored inline with `\n` escapes preserved |
-| `GITHUB_APP_INSTALLATION_ID` | Yes | `98765432` | Installation ID for the target org or repository |
+| `GITHUB_APP_ID` | Yes | `1234567` | Loaded from Key Vault secret `GITHUB-APP-ID` |
+| `GITHUB_APP_PRIVATE_KEY` | Yes | `<pem-content>` | Loaded from Key Vault secret `GITHUB-APP-PRIVATE-KEY` |
+| `GITHUB_APP_INSTALLATION_ID` | Yes | `98765432` | Loaded from Key Vault secret `GITHUB-APP-INSTALLATION-ID` |
 
 Notes:
-- Keep the private key inline in `.env`; the loader normalizes literal `\n` sequences back to newlines at runtime.
+- Keep the private key in Key Vault; if the secret contains literal `\n` escapes, the GitHub client normalizes them at runtime.
 - The orchestrator clones and pushes via HTTPS using `x-access-token`, then resets the local remote URL back to the public HTTPS form after push.
 - `gh` is no longer required for PR creation or updates.
 
@@ -153,14 +174,14 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 
 ---
 
-## Obtaining JIRA Credentials
+## Configuring Azure Key Vault Access
 
-1. Log in to [id.atlassian.com](https://id.atlassian.com/manage-profile/security/api-tokens)
-2. Click **Create API token**
-3. Give it a label (e.g. `ngb-agent-orchestrator`)
-4. Copy the token into `JIRA_API_TOKEN` in your `.env`
+1. Ensure your identity has Key Vault data-plane access (for example `Key Vault Secrets User`).
+2. For local development, authenticate Azure CLI with `az login`.
+3. Ensure `.env` has `AZURE_KEYVAULT_NAME=<your-vault-name>`.
+4. Create required secret names in the vault (see the list above).
 
-The `JIRA_EMAIL` must exactly match your Atlassian account email.
+For server deployments, prefer Managed Identity and grant that identity access to the same secret set.
 
 ---
 

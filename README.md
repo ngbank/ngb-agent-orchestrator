@@ -61,9 +61,9 @@ See [docs/architecture.md](docs/architecture.md) for a full sequence diagram and
 - Python 3.12+
 - [Goose CLI](https://github.com/block/goose) (`~/.local/bin/goose`)
 - `acli` (Atlassian CLI) configured with JIRA credentials
+- Azure CLI (`az`) authenticated with `az login` (or equivalent workload identity on server)
 - A JIRA account on `mirandags.atlassian.net`
-- GitHub App credentials for repository access (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_INSTALLATION_ID`)
-- An LLM provider API key (Anthropic, OpenAI, or Azure) — set as `GOOSE_MODEL` with provider prefix
+- Azure Key Vault containing runtime secrets for JIRA, GitHub App, and provider API keys
 
 ### Installation
 
@@ -83,7 +83,11 @@ pip install -r requirements-dev.txt   # for development (pre-commit, pytest, etc
 
 # 4. Set up environment variables
 cp .env.example .env
-# Edit .env — see docs/configuration.md for all required variables
+# Edit .env with non-secret settings (including AZURE_KEYVAULT_NAME)
+# Secrets are loaded from Azure Key Vault at runtime
+
+# 4.1 Authenticate Azure CLI for local development
+az login
 
 # 5. (Recommended) Auto-load .env with direnv
 brew install direnv
