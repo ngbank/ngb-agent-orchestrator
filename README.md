@@ -61,9 +61,9 @@ See [docs/architecture.md](docs/architecture.md) for a full sequence diagram and
 - Python 3.12+
 - [Goose CLI](https://github.com/block/goose) (`~/.local/bin/goose`)
 - `acli` (Atlassian CLI) configured with JIRA credentials
+- Azure CLI (`az`) authenticated with `az login` (or equivalent workload identity on server)
 - A JIRA account on `mirandags.atlassian.net`
-- GitHub App credentials for repository access (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_INSTALLATION_ID`)
-- An LLM provider API key (Anthropic, OpenAI, or Azure) — set as `GOOSE_MODEL` with provider prefix
+- Azure Key Vault containing runtime secrets for JIRA, GitHub App, and provider API keys
 
 ### Installation
 
@@ -81,19 +81,25 @@ pip install -r requirements.txt
 pip install -e .                      # registers the `dispatcher` CLI command
 pip install -r requirements-dev.txt   # for development (pre-commit, pytest, etc.)
 
-# 4. Set up environment variables
-cp .env.example .env
-# Edit .env — see docs/configuration.md for all required variables
+# 4. Authenticate Azure CLI (required before setup-env --env)
+az login
 
-# 5. (Recommended) Auto-load .env with direnv
+# 5. Set up environment variables
+cp .env.example .env
+# Edit .env minimally (for example AZURE_KEYVAULT_NAME if needed)
+
+# 5.1 Fetch secrets from Azure Key Vault and write them into .env
+./setup-env.sh --env
+
+# 6. (Recommended) Auto-load .env with direnv
 brew install direnv
 echo 'eval "$(direnv hook zsh)"' >> ~/.zshrc  # or ~/.bashrc
 direnv allow .
 
-# 6. Install pre-commit hooks
+# 7. Install pre-commit hooks
 pre-commit install
 
-# 7. Verify setup
+# 8. Verify setup
 dispatcher --help
 ```
 

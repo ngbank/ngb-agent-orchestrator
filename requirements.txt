@@ -10,6 +10,10 @@ python-dotenv>=1.2.2
 pydantic>=2.13.4
 jsonschema>=4.26.0
 
+# Azure Key Vault runtime secrets
+azure-identity>=1.24.0
+azure-keyvault-secrets>=4.10.0
+
 # Database
 sqlalchemy>=2.0.50
 
