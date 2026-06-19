@@ -34,6 +34,7 @@ Graph topology:
 from langgraph.graph import END, StateGraph
 
 from orchestrator.shared.repo_setup import build_repo_setup_subgraph
+from orchestrator.shared.repo_setup.nodes import build_cleanup_node
 from orchestrator.work_planner.edges import (
     route_after_check_duplicate,
     route_after_cleanup,
@@ -48,7 +49,6 @@ from orchestrator.work_planner.nodes.await_workplan_clarification import (
     await_workplan_clarification,
 )
 from orchestrator.work_planner.nodes.check_duplicate import check_duplicate
-from orchestrator.work_planner.nodes.cleanup import cleanup
 from orchestrator.work_planner.nodes.create_workflow_record import create_workflow_record
 from orchestrator.work_planner.nodes.error_handler import error_handler
 from orchestrator.work_planner.nodes.fetch_ticket import fetch_ticket
@@ -85,7 +85,7 @@ def build_work_planner(checkpointer=None):
     builder.add_node("await_workplan_clarification", await_workplan_clarification)
     builder.add_node("store_plan", store_plan)
     builder.add_node("post_to_jira", post_to_jira)
-    builder.add_node("cleanup", cleanup)
+    builder.add_node("cleanup", build_cleanup_node())
     builder.add_node("error_handler", error_handler)
 
     # --- entry point ---
