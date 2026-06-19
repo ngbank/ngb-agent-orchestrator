@@ -191,7 +191,7 @@ if $DO_ENV; then
     upsert_env_var "OTEL_EXPORTERS" "console"
     upsert_env_var "OTEL_DEBUG_LOCAL" "false"
     upsert_env_var "LOG_LEVEL" "INFO"
-    upsert_env_var "AZURE_KEYVAULT_NAME" "your-key-vault-name"
+    upsert_env_var "AZURE_KEYVAULT_NAME" "agent-os-kv"
 
     info "Allowing direnv to load .env..."
     direnv allow .
