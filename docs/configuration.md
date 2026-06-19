@@ -3,6 +3,13 @@
 Runtime configuration is managed through a `.env` file at the project root, but
 secrets are loaded at process startup from Azure Key Vault. **Never commit this file.**
 
+For local development, authenticate Azure CLI before running setup scripts or dispatcher commands:
+
+```bash
+az login
+az account show
+```
+
 ```bash
 cp .env.example .env
 # Edit .env with non-secret settings

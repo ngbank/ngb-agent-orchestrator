@@ -81,23 +81,26 @@ pip install -r requirements.txt
 pip install -e .                      # registers the `dispatcher` CLI command
 pip install -r requirements-dev.txt   # for development (pre-commit, pytest, etc.)
 
-# 4. Set up environment variables
+# 4. Authenticate Azure CLI (required before setup-env --env)
+az login
+
+# 5. Set up environment variables
 cp .env.example .env
 # Edit .env with non-secret settings (including AZURE_KEYVAULT_NAME)
 # Secrets are loaded from Azure Key Vault at runtime
 
-# 4.1 Authenticate Azure CLI for local development
-az login
+# 5.1 Generate non-secret local env values
+./setup-env.sh --env
 
-# 5. (Recommended) Auto-load .env with direnv
+# 6. (Recommended) Auto-load .env with direnv
 brew install direnv
 echo 'eval "$(direnv hook zsh)"' >> ~/.zshrc  # or ~/.bashrc
 direnv allow .
 
-# 6. Install pre-commit hooks
+# 7. Install pre-commit hooks
 pre-commit install
 
-# 7. Verify setup
+# 8. Verify setup
 dispatcher --help
 ```
 

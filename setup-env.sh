@@ -17,7 +17,7 @@
 #   ./setup-env.sh --env             # refresh non-secret .env values only
 #
 # Prerequisites for --env:
-#   az login
+#   az login   # REQUIRED before running --env locally
 
 set -euo pipefail
 
@@ -94,7 +94,7 @@ if $DO_ENV; then
     command -v az &>/dev/null \
         || error "'az' CLI is not installed or not on PATH. Install from: https://learn.microsoft.com/cli/azure/install-azure-cli"
     az account show &>/dev/null \
-        || error "Azure CLI is not authenticated. Run 'az login' and retry."
+        || error "Azure CLI is not authenticated. Run 'az login' first, then retry."
 fi
 
 if $DO_PYTHON; then
