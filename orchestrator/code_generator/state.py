@@ -11,6 +11,23 @@ from typing import Optional
 from typing_extensions import TypedDict
 
 
+class PrepareWorkspaceInputState(TypedDict, total=False):
+    """Input required by prepare_workspace node."""
+
+    workflow_id: str
+    ticket_key: str
+    work_plan_data: dict
+
+
+class PrepareWorkspaceOutputState(TypedDict, total=False):
+    """Output produced by prepare_workspace node."""
+
+    work_plan_path: str
+    summary_path: str
+    reasoning_path: str
+    exec_log_path: str
+
+
 class RunGooseInputState(TypedDict, total=False):
     """Input required by run_goose node."""
 
@@ -105,8 +122,8 @@ class CodeGeneratorState(TypedDict, total=False):
     pr_comments: Optional[str]
 
     # --- subgraph-internal routing signal ---
-    # Set by resolve_repo or clone_repo on failure so that edges can skip
-    # straight to persist_results without running the Goose step.
+    # Set by repo_setup on failure so edges can skip straight to
+    # persist_results without running the Goose step.
     exec_error: Optional[str]
 
     # --- GitHub App token (ephemeral, subgraph-local) ---

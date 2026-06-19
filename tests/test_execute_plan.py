@@ -95,6 +95,40 @@ def test_log_path_honors_logs_dir_override(monkeypatch, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# prepare_workspace node
+# ---------------------------------------------------------------------------
+
+
+def test_prepare_workspace_creates_workspace_paths(monkeypatch, tmp_path):
+    """prepare_workspace must populate all four workspace paths in state."""
+    import json
+    import os
+
+    from orchestrator.code_generator.nodes.prepare_workspace import prepare_workspace
+
+    monkeypatch.setenv("LOGS_DIR", str(tmp_path / "logs"))
+    state = {
+        "workflow_id": "wf-prep",
+        "ticket_key": "AOS-94",
+        "work_plan_data": {"tasks": [{"id": 1, "title": "do thing"}]},
+    }
+
+    result = prepare_workspace(state)
+
+    for key in ("work_plan_path", "summary_path", "reasoning_path", "exec_log_path"):
+        assert result.get(key), f"{key} missing or empty"
+    assert os.path.isfile(result["work_plan_path"])
+    with open(result["work_plan_path"]) as f:
+        assert json.load(f) == state["work_plan_data"]
+    assert os.path.isfile(result["summary_path"])
+    assert os.path.isfile(result["reasoning_path"])
+    assert result["exec_log_path"].endswith("AOS-94_wf-prep_execute.log")
+
+    for p in (result["work_plan_path"], result["summary_path"], result["reasoning_path"]):
+        os.unlink(p)
+
+
+# ---------------------------------------------------------------------------
 # run_goose node
 # ---------------------------------------------------------------------------
 

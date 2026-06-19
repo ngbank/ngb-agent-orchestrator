@@ -7,6 +7,8 @@ into focused, single-responsibility nodes.
 Graph topology:
     repo_setup
         ↓ (error → persist_results)
+    prepare_workspace
+        ↓
     run_goose
         ↓
     process_results
@@ -30,6 +32,7 @@ from orchestrator.code_generator.edges import (
 )
 from orchestrator.code_generator.nodes.cleanup import cleanup
 from orchestrator.code_generator.nodes.persist_results import persist_results
+from orchestrator.code_generator.nodes.prepare_workspace import prepare_workspace
 from orchestrator.code_generator.nodes.process_results import process_results
 from orchestrator.code_generator.nodes.push_and_create_pr import push_and_create_pr
 from orchestrator.code_generator.nodes.run_goose import run_goose
@@ -48,6 +51,7 @@ def build_code_generator():
     repo_setup_subgraph = build_repo_setup_subgraph("code_generator")
 
     builder.add_node("repo_setup", repo_setup_subgraph)
+    builder.add_node("prepare_workspace", prepare_workspace)
     builder.add_node("run_goose", run_goose)
     builder.add_node("process_results", process_results)
     builder.add_node("push_and_create_pr", push_and_create_pr)
@@ -59,8 +63,9 @@ def build_code_generator():
     builder.add_conditional_edges(
         "repo_setup",
         route_after_repo_setup,
-        {"run_goose": "run_goose", "persist_results": "persist_results"},
+        {"run_goose": "prepare_workspace", "persist_results": "persist_results"},
     )
+    builder.add_edge("prepare_workspace", "run_goose")
     builder.add_edge("run_goose", "process_results")
     builder.add_edge("process_results", "push_and_create_pr")
     builder.add_edge("push_and_create_pr", "persist_results")
