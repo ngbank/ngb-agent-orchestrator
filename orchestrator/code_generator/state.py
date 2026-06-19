@@ -11,60 +11,6 @@ from typing import Optional
 from typing_extensions import TypedDict
 
 
-class ResolveRepoInputState(TypedDict):
-    """Input required by resolve_repo node."""
-
-    ticket_key: str
-
-
-class FetchGithubTokenInputState(TypedDict, total=False):
-    """Input required by fetch_github_token node."""
-
-    ticket_key: str
-    repo_url: str
-
-
-class FetchGithubTokenOutputState(TypedDict, total=False):
-    """Output produced by fetch_github_token node."""
-
-    github_token: str
-    execution_summary: Optional[dict]
-    exec_error: Optional[str]
-    failed_node: Optional[str]
-
-
-class ResolveRepoOutputState(TypedDict, total=False):
-    """Output produced by resolve_repo node."""
-
-    repo_url: str
-    execution_summary: Optional[dict]
-    exec_error: Optional[str]
-    failed_node: Optional[str]
-
-
-class CloneRepoInputState(TypedDict, total=False):
-    """Input required by clone_repo node."""
-
-    workflow_id: str
-    ticket_key: str
-    repo_url: str
-    github_token: str
-    work_plan_data: dict
-
-
-class CloneRepoOutputState(TypedDict, total=False):
-    """Output produced by clone_repo node."""
-
-    working_dir: str
-    work_plan_path: str
-    summary_path: str
-    reasoning_path: str
-    exec_log_path: str
-    execution_summary: Optional[dict]
-    exec_error: Optional[str]
-    failed_node: Optional[str]
-
-
 class RunGooseInputState(TypedDict, total=False):
     """Input required by run_goose node."""
 

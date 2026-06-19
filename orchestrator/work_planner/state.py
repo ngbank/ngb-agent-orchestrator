@@ -63,53 +63,6 @@ class FetchTicketOutputState(TypedDict, total=False):
     ticket: Optional[Any]  # dispatcher.jira_client.JiraTicket
 
 
-class ResolveRepoInputState(TypedDict, total=False):
-    """Input required by resolve_repo node."""
-
-    ticket_key: str
-    repo_url: Optional[str]
-
-
-class ResolveRepoOutputState(TypedDict, total=False):
-    """Output produced by resolve_repo node."""
-
-    repo_url: Optional[str]
-    error: Optional[str]
-    failed_node: Optional[str]
-
-
-class FetchGithubTokenInputState(TypedDict, total=False):
-    """Input required by fetch_github_token node."""
-
-    ticket_key: str
-    repo_url: Optional[str]
-
-
-class FetchGithubTokenOutputState(TypedDict, total=False):
-    """Output produced by fetch_github_token node."""
-
-    github_token: Optional[str]
-    error: Optional[str]
-    failed_node: Optional[str]
-
-
-class CloneRepoInputState(TypedDict, total=False):
-    """Input required by clone_repo node."""
-
-    workflow_id: Optional[str]
-    ticket_key: str
-    repo_url: Optional[str]
-    github_token: Optional[str]
-
-
-class CloneRepoOutputState(TypedDict, total=False):
-    """Output produced by clone_repo node."""
-
-    working_dir: Optional[str]
-    error: Optional[str]
-    failed_node: Optional[str]
-
-
 class GeneratePlanInputState(TypedDict, total=False):
     """Input required by generate_plan node."""
 

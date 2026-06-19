@@ -1,7 +1,6 @@
-"""Tests for the code_generator subgraph nodes (replaces the old monolithic execute_plan tests)."""
+"""Tests for code_generator subgraph nodes and shared execution helpers."""
 
 from contextlib import contextmanager
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -24,14 +23,14 @@ def mock_goose_session():
 
 
 # ---------------------------------------------------------------------------
-# _failure_summary
+# execution_failure_summary (shared helper)
 # ---------------------------------------------------------------------------
 
 
-def test_failure_summary_helper_semantics():
-    from orchestrator.code_generator.nodes.resolve_repo import _failure_summary
+def test_execution_failure_summary_semantics():
+    from orchestrator.shared.repo_setup.nodes.common import execution_failure_summary
 
-    summary = _failure_summary("AOS-63", "boom")
+    summary = execution_failure_summary("AOS-63", "boom")
 
     assert summary == {
         "ticket_key": "AOS-63",
@@ -47,7 +46,7 @@ def test_failure_summary_helper_semantics():
 
 
 # ---------------------------------------------------------------------------
-# log_path utility (unchanged, lives in orchestrator/utils.py)
+# log_path utility (orchestrator/utils.py)
 # ---------------------------------------------------------------------------
 
 
@@ -93,99 +92,6 @@ def test_log_path_honors_logs_dir_override(monkeypatch, tmp_path):
 
     expected_prefix = (tmp_path / "logs-override") / workflow_id
     assert str(lp).startswith(str(expected_prefix))
-
-
-# ---------------------------------------------------------------------------
-# clone_repo node
-# ---------------------------------------------------------------------------
-
-
-def test_clone_repo_uses_mkdtemp_for_working_dir():
-    """mkdtemp is used so re-runs with the same workflow_id never collide."""
-    from orchestrator.code_generator.nodes.clone_repo import clone_repo
-
-    workflow_id = "test-workflow-123"
-    state = {
-        "workflow_id": workflow_id,
-        "ticket_key": "AOS-61",
-        "repo_url": "https://github.com/org/repo.git",
-        "work_plan_data": {"tasks": []},
-    }
-
-    with (
-        patch(
-            "orchestrator.code_generator.nodes.clone_repo.tempfile.mkdtemp",
-            return_value="/tmp/test-dir",
-        ) as mock_mkdtemp,
-        patch("orchestrator.code_generator.nodes.clone_repo.run_and_tee") as mock_run,
-        patch(
-            "orchestrator.code_generator.nodes.clone_repo.log_path",
-            return_value=Path("/tmp/test.log"),
-        ),
-        patch("builtins.open", MagicMock()),
-    ):
-        mock_run.return_value = MagicMock(returncode=1)  # clone fails — early return
-        clone_repo(state)
-
-        mock_mkdtemp.assert_called_once()
-        prefix_arg = mock_mkdtemp.call_args[1].get("prefix", "")
-        assert workflow_id in prefix_arg
-
-
-def test_clone_repo_no_hardcoded_tmp_path():
-    """Structural: no hardcoded /tmp/ngb-execute path in clone_repo source."""
-    import inspect
-
-    import orchestrator.code_generator.nodes.clone_repo as module
-
-    source = inspect.getsource(module)
-    assert (
-        "/tmp/ngb-execute-" not in source
-    ), "Hardcoded /tmp path found — replace with tempfile.mkdtemp()"
-
-
-def test_clone_repo_returns_workspace_paths_even_on_failure():
-    """cleanup node must have access to working_dir even when clone fails."""
-    from orchestrator.code_generator.nodes.clone_repo import clone_repo
-
-    state = {
-        "workflow_id": "wf-fail",
-        "ticket_key": "AOS-61",
-        "repo_url": "https://github.com/org/repo.git",
-        "work_plan_data": {"tasks": []},
-    }
-
-    with (
-        patch(
-            "orchestrator.code_generator.nodes.clone_repo.tempfile.mkdtemp",
-            return_value="/tmp/test-dir",
-        ),
-        patch("orchestrator.code_generator.nodes.clone_repo.run_and_tee") as mock_run,
-        patch(
-            "orchestrator.code_generator.nodes.clone_repo.log_path",
-            return_value=Path("/tmp/test.log"),
-        ),
-        patch("builtins.open", MagicMock()),
-        patch(
-            "orchestrator.code_generator.nodes.clone_repo.tempfile.mkstemp",
-            side_effect=[
-                (0, "/tmp/summary.json"),
-                (0, "/tmp/reasoning.txt"),
-            ],
-        ),
-        patch("os.close"),
-        patch(
-            "orchestrator.code_generator.nodes.clone_repo.tempfile.NamedTemporaryFile",
-        ) as mock_ntf,
-    ):
-        mock_ntf.return_value.__enter__ = lambda s: MagicMock(name="/tmp/wp.json")
-        mock_ntf.return_value.__exit__ = MagicMock(return_value=False)
-        mock_run.return_value = MagicMock(returncode=1)  # clone fails
-        result = clone_repo(state)
-
-        assert "working_dir" in result
-        assert "exec_error" in result
-        assert result["exec_error"]
 
 
 # ---------------------------------------------------------------------------
