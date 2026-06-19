@@ -183,197 +183,26 @@ def _stream_with_node_spans(
     tracer: trace.Tracer,
     root_span: Span,
 ) -> Generator[dict[str, Any], None, None]:
-    """Inner generator: yields events and manages per-node spans.
-
-    When the caller uses the default ``stream_mode="updates"``, this
-    function asks LangGraph for ``["updates", "debug"]`` with
-    ``subgraphs=True``.  The debug-stream ``task`` / ``task_result``
-    events drive the lifecycle of one ``graph.node.<name>`` span per
-    actual node dispatch — including nodes that return no state delta
-    (which never appear in ``updates``) and nodes inside subgraphs.
-
-    Caller-visible behaviour is preserved: only top-level (namespace
-    ``()``) ``updates`` events are forwarded, as plain dicts.
-
-    The legacy code path (synthesising one span per key of each yielded
-    ``updates`` dict) is kept as a fallback so test fixtures that mock
-    ``graph.stream`` to yield bare dicts still produce node spans.
-    """
-    from opentelemetry import trace as _trace_api
-
-    # Per-namespace parent context so a subgraph's nodes nest under the
-    # span we opened for the subgraph host node (e.g. graph.node.work_planner
-    # → graph.node.validate_input).  The empty tuple namespace = top-level,
-    # parented under workflow.run.
-    root_ctx = _trace_api.set_span_in_context(root_span)
-    namespace_parents: dict[tuple[str, ...], Any] = {(): root_ctx}
-
-    # task_id -> (namespace, span) — open node spans not yet closed by
-    # their matching task_result event.
-    inflight: dict[str, tuple[tuple[str, ...], Span]] = {}
-
-    # Flip to True as soon as we see any debug event.  When True, the
-    # synthetic-span fallback below is skipped (debug already produced
-    # the span for the node).
-    debug_active = False
-
-    effective_mode: Any = stream_mode
-    use_subgraphs = False
-    if isinstance(stream_mode, str) and stream_mode == "updates":
-        effective_mode = ["updates", "debug"]
-        use_subgraphs = True
-
-    stream_kwargs: dict[str, Any] = {"stream_mode": effective_mode}
-    if use_subgraphs:
-        stream_kwargs["subgraphs"] = True
-
-    try:
-        stream_iter = graph.stream(initial_state, config, **stream_kwargs)
-    except TypeError:
-        # Older LangGraph or test mocks that don't accept subgraphs / multi-mode
-        stream_iter = graph.stream(initial_state, config, stream_mode=stream_mode)
-        effective_mode = stream_mode
-        use_subgraphs = False
-
-    for raw in stream_iter:
-        ns, mode, chunk = _classify_stream_item(raw, use_subgraphs)
-
-        if mode == "debug" and isinstance(chunk, dict):
-            debug_active = True
-            _handle_debug_event(chunk, ns, tracer, namespace_parents, inflight)
-            continue
-
-        # Legacy / mocked path: when no debug events are driving span
-        # lifecycle, synthesise spans from update keys (preserves test
-        # behaviour and any caller that overrides stream_mode).
-        if not debug_active and mode == "updates" and isinstance(chunk, dict):
-            for node_name, node_output in chunk.items():
+    """Inner generator: yields events and manages per-node spans."""
+    for event in graph.stream(initial_state, config, stream_mode=stream_mode):
+        # LangGraph emits dicts keyed by node name in "updates" mode.
+        # Each key is a node name; the value is the state delta from that node.
+        if isinstance(event, dict):
+            for node_name, node_output in event.items():
+                # Node finished — record as a span.
                 set_node_context(node_name)
                 ctx = OtelContext.capture()
+
+                span_name = f"graph.node.{node_name}"
                 with tracer.start_as_current_span(
-                    f"graph.node.{node_name}",
+                    span_name,
                     attributes=ctx.as_attributes(),
                 ) as node_span:
                     _record_node_output(node_span, node_name, node_output)
 
-        # Only surface top-level updates to the caller (matches the prior
-        # contract — subgraph deltas were never visible at this layer).
-        if mode == "updates" and ns == ():
-            yield chunk
-
-    # Close any spans that never received a task_result (interrupted etc.)
-    for _ns, span in list(inflight.values()):
-        try:
-            span.end()
-        except Exception:
-            pass
+        yield event
 
     set_node_context(None)
-
-
-def _classify_stream_item(raw: Any, use_subgraphs: bool) -> tuple[tuple[str, ...], str, Any]:
-    """Normalise a LangGraph stream item to ``(namespace, mode, chunk)``.
-
-    Real LangGraph yields:
-      - 3-tuples ``(namespace, mode, chunk)`` when ``subgraphs=True`` and
-        ``stream_mode`` is a list.
-      - 2-tuples ``(mode, chunk)`` when only ``stream_mode`` is a list.
-      - bare ``chunk`` otherwise (used by test mocks).
-    """
-    if (
-        use_subgraphs
-        and isinstance(raw, tuple)
-        and len(raw) == 3
-        and isinstance(raw[0], tuple)
-        and isinstance(raw[1], str)
-    ):
-        ns, mode, chunk = raw
-        return tuple(str(p) for p in ns), mode, chunk
-    if isinstance(raw, tuple) and len(raw) == 2 and isinstance(raw[0], str):
-        mode, chunk = raw
-        return (), mode, chunk
-    return (), "updates", raw
-
-
-def _handle_debug_event(
-    chunk: dict[str, Any],
-    ns: tuple[str, ...],
-    tracer: trace.Tracer,
-    namespace_parents: dict[tuple[str, ...], Any],
-    inflight: dict[str, tuple[tuple[str, ...], Span]],
-) -> None:
-    """Drive ``graph.node.<name>`` span lifecycle from a debug-stream event.
-
-    Recognises ``type: "task"`` (opens a span) and ``type: "task_result"``
-    (closes it and records output / error).  Other debug event types
-    (e.g. ``checkpoint``) are ignored — those are emitted as separate
-    ``graph.checkpoint`` spans by the langgraph instrumentation
-    elsewhere in this module.
-    """
-    from opentelemetry import trace as _trace_api
-
-    event_type = chunk.get("type")
-    inner = chunk.get("payload") or {}
-    task_id = str(inner.get("id") or "")
-    node_name = str(inner.get("name") or "")
-    if not node_name:
-        return
-
-    if event_type == "task":
-        parent_ctx = namespace_parents.get(ns) or namespace_parents[()]
-        set_node_context(node_name)
-        ctx = OtelContext.capture()
-        attrs: dict[str, Any] = {**ctx.as_attributes()}
-        step = chunk.get("step")
-        if step is not None:
-            attrs["graph.step"] = step
-        if task_id:
-            attrs["graph.task_id"] = task_id
-        if ns:
-            attrs["graph.namespace"] = "/".join(ns)
-        triggers = inner.get("triggers")
-        if triggers:
-            attrs["graph.triggers"] = [str(t) for t in triggers]
-
-        span = tracer.start_span(
-            f"graph.node.{node_name}",
-            context=parent_ctx,
-            attributes=attrs,
-        )
-        key = task_id or f"{node_name}:{len(inflight)}"
-        inflight[key] = (ns, span)
-        # Any subgraph spawned by this node will use this span as its parent.
-        child_ns = ns + (f"{node_name}:{task_id}",)
-        namespace_parents[child_ns] = _trace_api.set_span_in_context(span, context=parent_ctx)
-
-    elif event_type == "task_result":
-        match_key: str | None = task_id if task_id and task_id in inflight else None
-        if match_key is None:
-            # Best-effort: find by node name when task_id missing.
-            for k, (_ns, sp) in list(inflight.items()):
-                if k.startswith(f"{node_name}:"):
-                    match_key = k
-                    break
-        if match_key is None:
-            return
-        _ns, span = inflight.pop(match_key)
-        result = inner.get("result")
-        if isinstance(result, dict):
-            _record_node_output(span, node_name, result)
-        error = inner.get("error")
-        if error:
-            span.set_status(Status(StatusCode.ERROR, str(error)))
-            span.set_attribute("graph.node.error", str(error))
-        interrupts = inner.get("interrupts") or []
-        if interrupts:
-            span.set_attribute("graph.interrupts_count", len(interrupts))
-        try:
-            span.end()
-        except Exception:
-            pass
-        # Drop the subgraph parent registration we may have added.
-        child_ns = ns + (f"{node_name}:{task_id}",)
-        namespace_parents.pop(child_ns, None)
 
 
 def _record_node_output(span: Span, node_name: str, output: Any) -> None:
@@ -381,8 +210,8 @@ def _record_node_output(span: Span, node_name: str, output: Any) -> None:
     if not isinstance(output, dict):
         return
 
-    # Surface which state keys this node produced (no values, avoids any
-    # redaction concern) and a rough size signal.
+    # AOS-117 enrichment: surface which state keys this node produced (no values,
+    # avoids any redaction concern) and a rough size signal.
     keys = sorted(str(k) for k in output.keys())
     if keys:
         span.set_attribute("graph.node.state_keys_changed", keys)
