@@ -238,7 +238,7 @@ def create_exporter() -> SpanExporter:
             # Lazily imported so the OTLP gRPC dependency is only required when
             # explicitly configured — keeps the file-only path dependency-free.
             try:
-                from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
+                from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (  # noqa: E501  # pyright: ignore[reportMissingImports]
                     OTLPSpanExporter,
                 )
             except ImportError as exc:

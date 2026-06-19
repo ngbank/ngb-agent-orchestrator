@@ -9,8 +9,8 @@ import json
 
 import click
 
-from orchestrator.code_generator.nodes.resolve_repo import _failure_summary
 from orchestrator.code_generator.state import ProcessResultsInputState, ProcessResultsOutputState
+from orchestrator.shared.repo_setup.nodes.common import execution_failure_summary
 
 
 def process_results(state: ProcessResultsInputState) -> ProcessResultsOutputState:
@@ -27,7 +27,7 @@ def process_results(state: ProcessResultsInputState) -> ProcessResultsOutputStat
             execution_summary = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError) as exc:
         click.echo(f"⚠️  Could not read execution summary: {exc}", err=True)
-        execution_summary = _failure_summary(
+        execution_summary = execution_failure_summary(
             ticket_key,
             f"Execution summary not written by recipe: {exc}",
         )
