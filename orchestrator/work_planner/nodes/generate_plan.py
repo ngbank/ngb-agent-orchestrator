@@ -3,6 +3,7 @@
 import json
 import os
 import tempfile
+from typing import Any
 
 import click
 
@@ -83,7 +84,7 @@ def generate_plan(state: GeneratePlanInputState) -> GeneratePlanOutputState:
             with goose_session(
                 workflow_id=workflow_id, stage="plan", ticket_key=ticket_key
             ) as goose_env:
-                run_kwargs = {"env": goose_env}
+                run_kwargs: dict[str, Any] = {"env": goose_env}
                 if working_dir:
                     run_kwargs["cwd"] = working_dir
                 result = run_and_tee(cmd, log_file, **run_kwargs)
