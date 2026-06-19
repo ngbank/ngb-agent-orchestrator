@@ -202,6 +202,7 @@ You should see `(venv)` in your prompt.
 1. Verify `JIRA_OAUTH_CLIENT_ID` and `JIRA_OAUTH_CLIENT_SECRET` are set and non-empty
 2. Verify the OAuth client has permission to read/post in your JIRA project
 3. If your JIRA uses a custom token endpoint, set `JIRA_OAUTH_TOKEN_URL` explicitly in `.env`
+4. For Atlassian Cloud, ensure the app has Jira scopes such as `read:jira-work` (and `write:jira-work` if posting comments)
 
 ### Goose command not found
 

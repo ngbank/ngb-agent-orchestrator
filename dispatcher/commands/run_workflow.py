@@ -87,7 +87,7 @@ def _handle_run(ticket: str, dry_run: bool) -> None:
         )
         click.echo(
             "     - Optional: JIRA_OAUTH_TOKEN_URL "
-            "(defaults to <JIRA_URL>/rest/oauth2/latest/token)",
+            "(Atlassian Cloud default: https://auth.atlassian.com/oauth/token)",
             err=True,
         )
         click.echo(

@@ -48,7 +48,7 @@ Required secret names in the vault:
 | `JIRA_URL` | Yes | `https://mirandags.atlassian.net` | Key Vault | Base URL for JIRA instance |
 | `JIRA_OAUTH_CLIENT_ID` | Yes | `jira-service-client-id` | Key Vault | OAuth client id for service-account integration |
 | `JIRA_OAUTH_CLIENT_SECRET` | Yes | `***` | Key Vault | OAuth client secret for service-account integration |
-| `JIRA_OAUTH_TOKEN_URL` | No | `https://your-jira-host/rest/oauth2/latest/token` | `.env` | OAuth token endpoint (defaults to `<JIRA_URL>/rest/oauth2/latest/token`) |
+| `JIRA_OAUTH_TOKEN_URL` | No | `https://your-jira-host/rest/oauth2/latest/token` | `.env` | OAuth token endpoint override. Default: Atlassian Cloud uses `https://auth.atlassian.com/oauth/token`; otherwise `<JIRA_URL>/rest/oauth2/latest/token` |
 | `JIRA_OAUTH_SCOPE` | No | `read:jira-work write:jira-work` | `.env` | Optional scope sent with token request |
 | `JIRA_OAUTH_AUDIENCE` | No | `api.atlassian.com` | `.env` | Optional audience sent with token request (provider-specific) |
 
