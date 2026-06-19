@@ -1,14 +1,14 @@
 """Cleanup node factory shared by planner and executor subgraphs."""
 
 import os
-from typing import Callable, Sequence
+from typing import Any, Sequence
 
 import click
 
 from orchestrator.shared.repo_setup.repo_operations import cleanup_working_dir
 
 
-def build_cleanup_node(*, temp_file_keys: Sequence[str] = ()) -> Callable[[dict], dict]:
+def build_cleanup_node(*, temp_file_keys: Sequence[str] = ()):
     """Build a cleanup node.
 
     Args:
@@ -16,7 +16,7 @@ def build_cleanup_node(*, temp_file_keys: Sequence[str] = ()) -> Callable[[dict]
             before working_dir cleanup.
     """
 
-    def _node(state: dict) -> dict:
+    def _node(state: Any) -> dict:
         for key in temp_file_keys:
             path = state.get(key)
             if path:
