@@ -168,10 +168,6 @@ prompt: |
   - `vcs.commit_template` — commit message template; use in Step 6
   - `vcs.files_changed_command` — command to list changed files; use in Step 5
 
-  Note: do NOT use `vcs.branch_pattern` for branch naming. The branch name is
-  pre-computed by the orchestrator and passed as `{{ branch_name }}` — use that
-  exactly in Step 3.
-
   Run each command in `setup_commands` in order, exactly as returned.
 
   ## Step 3: Create or Checkout Feature Branch
