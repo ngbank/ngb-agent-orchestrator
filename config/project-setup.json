@@ -11,7 +11,6 @@
     "test_command": ". venv/bin/activate && python3 -m pytest tests/ -q --tb=short",
     "lint_command": ". venv/bin/activate && pre-commit run --all-files",
     "vcs": {
-      "branch_pattern": "feature/{ticket_key}+{slug}",
       "commit_template": "feat({ticket_key}): {summary}\n\nImplements WorkPlan tasks for {ticket_key}.",
       "files_changed_command": "git diff --name-only HEAD && git ls-files --others --exclude-standard"
     }

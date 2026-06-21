@@ -126,7 +126,7 @@ def get_project_setup(project_key: str) -> dict:
       - test_command: shell command to run the full test suite
       - lint_command: shell command to run the linter / pre-commit hooks
       - vcs: version control workflow config with keys:
-                    branch_pattern, commit_template, files_changed_command
+                    commit_template, files_changed_command
 
     All commands include any required environment activation (e.g. venv) as a
     prefix so they can be run directly without prior activation.
