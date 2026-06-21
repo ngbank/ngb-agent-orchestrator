@@ -166,6 +166,105 @@ def test_run_goose_passes_existing_branch_and_comments():
 
 
 # ---------------------------------------------------------------------------
+# infer_branch_prefix node
+# ---------------------------------------------------------------------------
+
+
+def test_infer_branch_prefix_returns_correct_prefix(monkeypatch):
+    """infer_branch_prefix returns the prefix the LLM classifies."""
+    from orchestrator.code_generator.nodes.infer_branch_prefix import infer_branch_prefix
+
+    monkeypatch.setenv("GOOSE_MODEL", "openai/gpt-4o")
+    state = {
+        "work_plan_data": {
+            "summary": "Fix null pointer in payment processor",
+            "approach": "Add null check before dereferencing",
+            "tasks": [{"description": "Add guard clause in payment_processor.py"}],
+        }
+    }
+
+    mock_response = MagicMock()
+    mock_response.content = '{"prefix": "bugfix"}'
+
+    with patch("orchestrator.code_generator.nodes.infer_branch_prefix.ChatLiteLLM") as MockLLM:
+        MockLLM.return_value.invoke.return_value = mock_response
+        result = infer_branch_prefix(state)
+
+    assert result == {"branch_prefix": "bugfix"}
+
+
+def test_infer_branch_prefix_fallback_on_invalid_response(monkeypatch):
+    """infer_branch_prefix defaults to 'feature' when LLM returns an unrecognised prefix."""
+    from orchestrator.code_generator.nodes.infer_branch_prefix import infer_branch_prefix
+
+    monkeypatch.setenv("GOOSE_MODEL", "openai/gpt-4o")
+    state = {"work_plan_data": {"summary": "Do something", "approach": "", "tasks": []}}
+
+    mock_response = MagicMock()
+    mock_response.content = '{"prefix": "hotfix"}'
+
+    with patch("orchestrator.code_generator.nodes.infer_branch_prefix.ChatLiteLLM") as MockLLM:
+        MockLLM.return_value.invoke.return_value = mock_response
+        result = infer_branch_prefix(state)
+
+    assert result == {"branch_prefix": "feature"}
+
+
+def test_infer_branch_prefix_fallback_on_exception(monkeypatch):
+    """infer_branch_prefix defaults to 'feature' when the LLM call raises."""
+    from orchestrator.code_generator.nodes.infer_branch_prefix import infer_branch_prefix
+
+    monkeypatch.setenv("GOOSE_MODEL", "openai/gpt-4o")
+    state = {"work_plan_data": {"summary": "Do something", "approach": "", "tasks": []}}
+
+    with patch("orchestrator.code_generator.nodes.infer_branch_prefix.ChatLiteLLM") as MockLLM:
+        MockLLM.return_value.invoke.side_effect = RuntimeError("connection timeout")
+        result = infer_branch_prefix(state)
+
+    assert result == {"branch_prefix": "feature"}
+
+
+def test_infer_branch_prefix_fallback_when_no_model(monkeypatch):
+    """infer_branch_prefix defaults to 'feature' when GOOSE_MODEL is not set."""
+    from orchestrator.code_generator.nodes.infer_branch_prefix import infer_branch_prefix
+
+    monkeypatch.delenv("GOOSE_MODEL", raising=False)
+    state = {"work_plan_data": {"summary": "something", "approach": "", "tasks": []}}
+
+    result = infer_branch_prefix(state)
+
+    assert result == {"branch_prefix": "feature"}
+
+
+def test_run_goose_uses_inferred_branch_prefix():
+    """run_goose uses branch_prefix from state when building branch_name."""
+    from orchestrator.code_generator.nodes.run_goose import run_goose
+
+    state = {
+        "workflow_id": "wf-456",
+        "ticket_key": "AOS-99",
+        "working_dir": "/tmp/test-dir",
+        "work_plan_path": "/tmp/workplan.json",
+        "summary_path": "/tmp/summary.json",
+        "reasoning_path": "/tmp/reasoning.txt",
+        "exec_log_path": "/tmp/test.log",
+        "branch_prefix": "bugfix",
+    }
+
+    work_plan_json = json.dumps({"summary": "fix null pointer in processor"})
+    with (
+        patch("orchestrator.code_generator.nodes.run_goose.run_and_tee") as mock_run,
+        patch("builtins.open", mock_open(read_data=work_plan_json)),
+        patch("os.path.exists", return_value=False),
+    ):
+        mock_run.return_value = MagicMock(returncode=0)
+        run_goose(state)
+
+        cmd = mock_run.call_args[0][0]
+        assert any(arg.startswith("branch_name=bugfix/AOS-99+") for arg in cmd)
+
+
+# ---------------------------------------------------------------------------
 # persist_results node
 # ---------------------------------------------------------------------------
 
