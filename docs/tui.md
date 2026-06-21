@@ -109,4 +109,11 @@ The TUI is organised under `dispatcher/tui/`:
 | `actions.py` | Thin wrappers that import and call existing CLI handlers |
 | `screens.py` | Placeholder for future full-screen views |
 
-The TUI reads workflow state directly from the SQLite store (`state.workflow_repository.list_workflows`) and delegates all mutating actions to the handler functions in `dispatcher/commands/`.
+The TUI reads workflow state exclusively through the `WorkflowService` Protocol
+(`orchestrator.workflow_service.WorkflowService`). A single
+`LocalWorkflowService` instance is built in `run_tui()` via
+`build_local_workflow_service()` and passed into `WorkflowTUI(...)`; the same
+service is forwarded to every action handler. The TUI does not import from
+`state.workflow_repository` or read log files directly — those concerns live
+behind the service boundary and can be swapped to a remote transport without
+TUI changes.
