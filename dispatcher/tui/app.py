@@ -28,7 +28,12 @@ from dispatcher.tui.actions import (
 from dispatcher.tui.modals import ConfirmModal, InputModal
 from dispatcher.tui.widgets import DetailPane, StatusBar, WorkflowList
 from orchestrator.runtime_secrets import load_runtime_secrets_from_keyvault
-from state.workflow_repository import list_workflows
+from orchestrator.workflow_service import (
+    WorkflowDetail,
+    WorkflowService,
+    WorkflowSummary,
+    build_local_workflow_service,
+)
 
 
 class WorkflowTUI(App[None]):
@@ -59,8 +64,9 @@ class WorkflowTUI(App[None]):
         ("d", "clear_db", "Clear DB"),
     ]
 
-    def __init__(self) -> None:
+    def __init__(self, service: WorkflowService) -> None:
         super().__init__()
+        self._service = service
         self._refresh_timer: Optional[Timer] = None
         self._poll_interval = float(os.environ.get("DISPATCHER_TUI_POLL", "2"))
 
@@ -81,16 +87,24 @@ class WorkflowTUI(App[None]):
 
     def _refresh_workflows(self) -> None:
         try:
-            workflows = list_workflows(limit=100)
+            workflows = self._service.list(limit=100)
         except Exception:
             workflows = []
         workflow_list = self.query_one(WorkflowList)
         workflow_list.update_workflows(workflows)
         detail = self.query_one(DetailPane)
         selected = workflow_list.get_selected_workflow()
-        detail.update_workflow(selected)
+        detail.update_workflow(self._fetch_detail(selected))
 
-    def _get_selected(self) -> Optional[dict]:
+    def _fetch_detail(self, summary: Optional[WorkflowSummary]) -> Optional[WorkflowDetail]:
+        if summary is None:
+            return None
+        try:
+            return self._service.get(summary.id)
+        except Exception:
+            return None
+
+    def _get_selected(self) -> Optional[WorkflowSummary]:
         return self.query_one(WorkflowList).get_selected_workflow()
 
     def _notify(self, message: str, severity: str = "information") -> None:
@@ -112,7 +126,7 @@ class WorkflowTUI(App[None]):
                 return
 
             try:
-                msg = run_workflow(ticket_key, dry_run=False)
+                msg = run_workflow(self._service, ticket_key, dry_run=False)
                 self._notify(msg, "information")
             except ActionError as e:
                 self._notify(str(e), "error")
@@ -129,7 +143,7 @@ class WorkflowTUI(App[None]):
             self._notify("No workflow selected.", "warning")
             return
         try:
-            msg = approve_workflow(wf.get("ticket_key"), wf["id"])
+            msg = approve_workflow(self._service, wf.ticket_key, wf.id)
             self._notify(msg, "information")
         except ActionError as e:
             self._notify(str(e), "error")
@@ -145,7 +159,7 @@ class WorkflowTUI(App[None]):
             if reason is None:
                 return
             try:
-                msg = reject_workflow(wf.get("ticket_key"), wf["id"], reason)
+                msg = reject_workflow(self._service, wf.ticket_key, wf.id, reason)
                 self._notify(msg, "information")
             except ActionError as e:
                 self._notify(str(e), "error")
@@ -162,7 +176,7 @@ class WorkflowTUI(App[None]):
             self._notify("No workflow selected.", "warning")
             return
         try:
-            msg = clarify_workflow(wf.get("ticket_key"), wf["id"])
+            msg = clarify_workflow(self._service, wf.ticket_key, wf.id)
             self._notify(msg, "information")
         except ActionError as e:
             self._notify(str(e), "error")
@@ -174,7 +188,7 @@ class WorkflowTUI(App[None]):
             self._notify("No workflow selected.", "warning")
             return
         try:
-            msg = retry_workflow(wf.get("ticket_key"), wf["id"])
+            msg = retry_workflow(self._service, wf.ticket_key, wf.id)
             self._notify(msg, "information")
         except ActionError as e:
             self._notify(str(e), "error")
@@ -190,7 +204,7 @@ class WorkflowTUI(App[None]):
             if reason is None:
                 return
             try:
-                msg = cancel_workflow(wf.get("ticket_key"), wf["id"], reason)
+                msg = cancel_workflow(self._service, wf.ticket_key, wf.id, reason)
                 self._notify(msg, "information")
             except ActionError as e:
                 self._notify(str(e), "error")
@@ -207,7 +221,7 @@ class WorkflowTUI(App[None]):
             self._notify("No workflow selected.", "warning")
             return
         try:
-            msg = approve_pr(wf.get("ticket_key"), wf["id"])
+            msg = approve_pr(self._service, wf.ticket_key, wf.id)
             self._notify(msg, "information")
         except ActionError as e:
             self._notify(str(e), "error")
@@ -219,7 +233,7 @@ class WorkflowTUI(App[None]):
             self._notify("No workflow selected.", "warning")
             return
         try:
-            msg = comment_pr(wf.get("ticket_key"), wf["id"])
+            msg = comment_pr(self._service, wf.ticket_key, wf.id)
             self._notify(msg, "information")
         except ActionError as e:
             self._notify(str(e), "error")
@@ -235,7 +249,7 @@ class WorkflowTUI(App[None]):
             if reason is None:
                 return
             try:
-                msg = reject_pr(wf.get("ticket_key"), wf["id"], reason)
+                msg = reject_pr(self._service, wf.ticket_key, wf.id, reason)
                 self._notify(msg, "information")
             except ActionError as e:
                 self._notify(str(e), "error")
@@ -252,7 +266,7 @@ class WorkflowTUI(App[None]):
             self._notify("No workflow selected.", "warning")
             return
         try:
-            msg = show_logs(wf.get("ticket_key"), wf["id"])
+            msg = show_logs(self._service, wf.ticket_key, wf.id)
             self._notify(msg, "information")
         except ActionError as e:
             self._notify(str(e), "error")
@@ -262,7 +276,7 @@ class WorkflowTUI(App[None]):
             if not confirmed:
                 return
             try:
-                msg = clear_database()
+                msg = clear_database(self._service)
                 self._notify(msg, "information")
             except ActionError as e:
                 self._notify(str(e), "error")
@@ -277,12 +291,13 @@ class WorkflowTUI(App[None]):
         workflow_list = self.query_one(WorkflowList)
         selected = workflow_list.get_selected_workflow()
         detail = self.query_one(DetailPane)
-        detail.update_workflow(selected)
+        detail.update_workflow(self._fetch_detail(selected))
 
 
 def run_tui() -> None:
     """Entry point for the TUI application."""
     load_dotenv()
     load_runtime_secrets_from_keyvault()
-    app = WorkflowTUI()
+    service = build_local_workflow_service()
+    app = WorkflowTUI(service)
     app.run()
