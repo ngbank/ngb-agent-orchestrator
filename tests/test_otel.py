@@ -433,6 +433,99 @@ class TestOtelLiteLLMCallback:
         usage = cb._extract_usage(mock_response)
         assert usage["prompt_tokens"] == 3
 
+    # ------------------------------------------------------------------
+    # Sync handlers (direct litellm.completion() calls)
+    # ------------------------------------------------------------------
+
+    def test_sync_success_emits_llm_call_span(self, monkeypatch):
+        provider, exporter = _make_in_memory_provider()
+        cb = self._patched_cb(monkeypatch, provider)
+        cb.log_success_event(_make_kwargs(), _make_response(), _now(), _now())
+
+        spans = [s for s in exporter.get_finished_spans() if s.name == "llm.call"]
+        assert len(spans) == 1
+        assert spans[0].attributes["llm.model"] == "gpt-4o"
+        assert spans[0].attributes["llm.input_tokens"] == 10
+        assert spans[0].status.status_code.name == "OK"
+
+    def test_sync_failure_emits_error_span(self, monkeypatch):
+        from opentelemetry.trace import StatusCode
+
+        provider, exporter = _make_in_memory_provider()
+        cb = self._patched_cb(monkeypatch, provider)
+        kwargs = {**_make_kwargs(), "exception": RuntimeError("timeout")}
+        cb.log_failure_event(kwargs, None, _now(), _now())
+
+        span = next(s for s in exporter.get_finished_spans() if s.name == "llm.call")
+        assert span.status.status_code == StatusCode.ERROR
+        assert span.attributes.get("llm.error_type") == "RuntimeError"
+
+    # ------------------------------------------------------------------
+    # Response metadata attributes
+    # ------------------------------------------------------------------
+
+    def _make_model_response(
+        self,
+        prompt_tokens=10,
+        completion_tokens=5,
+        finish_reason="stop",
+        reasoning_content=None,
+        tool_calls=None,
+    ):
+        """Build a mock ModelResponse with choice metadata."""
+        msg = MagicMock()
+        msg.content = '{"prefix": "feature"}'
+        msg.reasoning_content = reasoning_content
+        msg.tool_calls = tool_calls
+        choice = MagicMock()
+        choice.finish_reason = finish_reason
+        choice.message = msg
+        response = MagicMock()
+        response.choices = [choice]
+        response.usage = MagicMock()
+        response.usage.model_dump.return_value = {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+        }
+        return response
+
+    def test_finish_reason_captured_in_span(self, monkeypatch):
+        provider, exporter = _make_in_memory_provider()
+        cb = self._patched_cb(monkeypatch, provider)
+        response = self._make_model_response(finish_reason="stop")
+        cb.log_success_event(_make_kwargs(), response, _now(), _now())
+
+        span = next(s for s in exporter.get_finished_spans() if s.name == "llm.call")
+        assert span.attributes.get("llm.finish_reason") == "stop"
+
+    def test_reasoning_content_captured_in_span(self, monkeypatch):
+        provider, exporter = _make_in_memory_provider()
+        cb = self._patched_cb(monkeypatch, provider)
+        response = self._make_model_response(reasoning_content='{"prefix": "bugfix"}')
+        cb.log_success_event(_make_kwargs(), response, _now(), _now())
+
+        span = next(s for s in exporter.get_finished_spans() if s.name == "llm.call")
+        assert span.attributes.get("llm.reasoning_content") == '{"prefix": "bugfix"}'
+
+    def test_has_tool_calls_false_when_none(self, monkeypatch):
+        provider, exporter = _make_in_memory_provider()
+        cb = self._patched_cb(monkeypatch, provider)
+        response = self._make_model_response(tool_calls=None)
+        cb.log_success_event(_make_kwargs(), response, _now(), _now())
+
+        span = next(s for s in exporter.get_finished_spans() if s.name == "llm.call")
+        assert span.attributes.get("llm.has_tool_calls") is False
+
+    def test_reasoning_content_omitted_when_none(self, monkeypatch):
+        provider, exporter = _make_in_memory_provider()
+        cb = self._patched_cb(monkeypatch, provider)
+        response = self._make_model_response(reasoning_content=None)
+        cb.log_success_event(_make_kwargs(), response, _now(), _now())
+
+        span = next(s for s in exporter.get_finished_spans() if s.name == "llm.call")
+        assert "llm.reasoning_content" not in span.attributes
+
 
 # ---------------------------------------------------------------------------
 # graph/utils.py — run_and_tee goose.run span

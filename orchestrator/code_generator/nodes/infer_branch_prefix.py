@@ -77,12 +77,7 @@ def infer_branch_prefix(state: CodeGeneratorState) -> dict:
         msg = choice.message
         raw = (msg.content or "").strip()
         if not raw:
-            raise ValueError(
-                f"LLM returned empty content — "
-                f"finish_reason={choice.finish_reason!r}, "
-                f"reasoning_content={getattr(msg, 'reasoning_content', None)!r}, "
-                f"tool_calls={getattr(msg, 'tool_calls', None)!r}"
-            )
+            raise ValueError("LLM returned empty content")
         # Strip markdown fences if present
         if raw.startswith("```"):
             raw = raw.split("```")[1].lstrip("json").strip()
