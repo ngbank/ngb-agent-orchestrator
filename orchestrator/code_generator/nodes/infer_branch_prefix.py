@@ -75,17 +75,14 @@ def infer_branch_prefix(state: CodeGeneratorState) -> dict:
         response = cast(ModelResponse, raw_response)
         choice = response.choices[0]
         msg = choice.message
-        # Temporary diagnostic: surface the full response structure
-        click.echo(
-            f"[infer_branch_prefix] finish_reason={choice.finish_reason!r} "
-            f"content={msg.content!r} "
-            f"tool_calls={getattr(msg, 'tool_calls', None)!r} "
-            f"reasoning_content={getattr(msg, 'reasoning_content', None)!r}",
-            err=True,
-        )
         raw = (msg.content or "").strip()
         if not raw:
-            raise ValueError("LLM returned empty content")
+            raise ValueError(
+                f"LLM returned empty content — "
+                f"finish_reason={choice.finish_reason!r}, "
+                f"reasoning_content={getattr(msg, 'reasoning_content', None)!r}, "
+                f"tool_calls={getattr(msg, 'tool_calls', None)!r}"
+            )
         # Strip markdown fences if present
         if raw.startswith("```"):
             raw = raw.split("```")[1].lstrip("json").strip()
