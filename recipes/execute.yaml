@@ -165,9 +165,12 @@ prompt: |
   - `setup_commands` — environment install commands; run each in order, exactly as returned
   - `test_command` — test suite command; use verbatim in Step 5
   - `lint_command` — linter/hooks command; use verbatim in Step 6
-  - `vcs.branch_pattern` — branch naming template; use in Step 3
   - `vcs.commit_template` — commit message template; use in Step 6
   - `vcs.files_changed_command` — command to list changed files; use in Step 5
+
+  Note: do NOT use `vcs.branch_pattern` for branch naming. The branch name is
+  pre-computed by the orchestrator and passed as `{{ branch_name }}` — use that
+  exactly in Step 3.
 
   Run each command in `setup_commands` in order, exactly as returned.
 
