@@ -85,6 +85,17 @@ DTOs (`dtos.py`), and the in-process implementation `LocalWorkflowService`
 (usually `orchestrator.builder.build_orchestrator`). `build_local_workflow_service()`
 returns a ready-to-use instance.
 
+### `orchestrator/server/`
+
+Optional FastAPI HTTP surface that exposes the non-streaming subset of
+`WorkflowService` as REST endpoints (`POST /workflows`, `GET /workflows`,
+`GET /workflows/{id}`, `POST /workflows/{id}/cancel`, `GET /healthz`).
+Routes delegate to an injected `WorkflowService` so tests can wire in a
+fake. Defaults to `LocalWorkflowService` for production. Bearer-token
+auth is read from `ORCHESTRATOR_API_TOKEN` (disabled when unset).
+OpenAPI is exposed at `/openapi.json` and Swagger UI at `/docs`. See
+[docs/server.md](server.md) for the run story.
+
 ### `graph/`
 
 LangGraph state machine. Two levels:

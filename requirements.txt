@@ -55,6 +55,8 @@ opentelemetry-api>=1.27.0
 opentelemetry-sdk>=1.27.0
 # Optional: install opentelemetry-exporter-otlp-proto-grpc for OTLP export
 # pip install opentelemetry-exporter-otlp-proto-grpc
+# Optional: per-request HTTP spans on the orchestrator server
+# pip install opentelemetry-instrumentation-fastapi
 
 # Goose Integration
 # Note: Install Goose separately following official documentation

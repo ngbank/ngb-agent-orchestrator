@@ -43,6 +43,7 @@ See [docs/architecture.md](docs/architecture.md) for a full sequence diagram and
 | Component | Description |
 |---|-----------|
 | `dispatcher/run.py` | CLI entry point — orchestrates the full lifecycle |
+| `orchestrator/server/` | Optional FastAPI HTTP surface for `WorkflowService` (see [docs/server.md](docs/server.md)) |
 | `graph/` | LangGraph state machine — nodes, edges, approval interrupt |
 | `otel/` | OpenTelemetry instrumentation — tracing, exporters, LiteLLM callback |
 | `recipes/plan.yaml` | Goose recipe: JIRA ticket → WorkPlan JSON |
@@ -171,6 +172,7 @@ dispatcher --clear-db
 | Goose recipes (plan & execute) | [docs/recipes.md](docs/recipes.md) |
 | SQLite state store & migrations | [docs/state-store.md](docs/state-store.md) |
 | MCP server setup & repo mapping | [docs/mcp-server.md](docs/mcp-server.md) |
+| Orchestrator HTTP server (FastAPI) | [docs/server.md](docs/server.md) |
 | Development guide (tests, pre-commit, contributing) | [docs/development.md](docs/development.md) |
 
 ---

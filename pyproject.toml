@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 [project.scripts]
 dispatcher = "dispatcher.run:run"
 dispatcher-tui = "dispatcher.tui.app:run_tui"
+orchestrator-server = "orchestrator.server.app:run"
 
 [tool.setuptools.packages.find]
 include = ["dispatcher*", "orchestrator*", "otel*", "state*", "mcp_server*"]
