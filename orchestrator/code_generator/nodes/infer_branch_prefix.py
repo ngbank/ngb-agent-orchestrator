@@ -2,15 +2,16 @@
 
 import json
 import os
+from typing import cast
 
 import click
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_litellm import ChatLiteLLM
+import litellm
+from litellm import ModelResponse
 
 from orchestrator.code_generator.state import CodeGeneratorState
+from orchestrator.utils import litellm_call_kwargs
 
 _VALID_PREFIXES = {"feature", "bugfix", "chore", "docs"}
-_FALLBACK = "feature"
 
 _SYSTEM = """\
 You classify software work into exactly one git branch namespace.
@@ -37,8 +38,7 @@ def infer_branch_prefix(state: CodeGeneratorState) -> dict:
     """Call an LLM to classify the work plan into a branch namespace.
 
     Reads:  work_plan_data
-    Writes: branch_prefix
-    Falls back to 'feature' on any error or unexpected response.
+    Writes: branch_prefix on success; exec_error + failed_node on failure.
     """
     work_plan = state.get("work_plan_data") or {}
     summary = work_plan.get("summary", "")
@@ -49,33 +49,49 @@ def infer_branch_prefix(state: CodeGeneratorState) -> dict:
 
     model = os.environ.get("GOOSE_MODEL", "")
     if not model:
-        click.echo("⚠️  GOOSE_MODEL not set — defaulting branch prefix to 'feature'")
-        return {"branch_prefix": _FALLBACK}
+        return {
+            "exec_error": "GOOSE_MODEL is not set — cannot infer branch prefix",
+            "failed_node": "infer_branch_prefix",
+        }
 
     try:
-        llm = ChatLiteLLM(model=model, max_tokens=64, temperature=0)
-        response = llm.invoke(
-            [
-                SystemMessage(content=_SYSTEM),
-                HumanMessage(
-                    content=_HUMAN_TEMPLATE.format(
+        kwargs = litellm_call_kwargs(model)
+        raw_response = litellm.completion(
+            **kwargs,
+            messages=[
+                {"role": "system", "content": _SYSTEM},
+                {
+                    "role": "user",
+                    "content": _HUMAN_TEMPLATE.format(
                         summary=summary, approach=approach, tasks=task_lines
-                    )
-                ),
-            ]
+                    ),
+                },
+            ],
+            max_tokens=64,
+            temperature=0,
+            response_format={"type": "json_object"},
         )
-        content = response.content
-        raw = (content if isinstance(content, str) else str(content)).strip()
+        if not hasattr(raw_response, "choices"):
+            raise TypeError(f"Unexpected litellm response type: {type(raw_response)}")
+        response = cast(ModelResponse, raw_response)
+        raw = (response.choices[0].message.content or "").strip()
         # Strip markdown fences if present
         if raw.startswith("```"):
             raw = raw.split("```")[1].lstrip("json").strip()
         data = json.loads(raw)
         prefix = data.get("prefix", "").lower().strip()
         if prefix not in _VALID_PREFIXES:
-            click.echo(f"⚠️  LLM returned unexpected prefix '{prefix}' — defaulting to 'feature'")
-            return {"branch_prefix": _FALLBACK}
+            return {
+                "exec_error": (
+                    f"LLM returned unrecognised branch prefix '{prefix}'"
+                    f" — expected one of {sorted(_VALID_PREFIXES)}"
+                ),
+                "failed_node": "infer_branch_prefix",
+            }
         click.echo(f"🌿 Branch prefix inferred: {prefix}")
         return {"branch_prefix": prefix}
     except Exception as exc:  # noqa: BLE001
-        click.echo(f"⚠️  Branch prefix inference failed ({exc}) — defaulting to 'feature'")
-        return {"branch_prefix": _FALLBACK}
+        return {
+            "exec_error": f"Branch prefix inference failed: {exc}",
+            "failed_node": "infer_branch_prefix",
+        }

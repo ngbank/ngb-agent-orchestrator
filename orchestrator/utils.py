@@ -45,6 +45,46 @@ _AZURE_API_VERSIONS: dict[str, str] = {
 }
 
 
+def litellm_call_kwargs(model_string: str) -> dict:
+    """Return kwargs for a direct litellm.completion() call for the given model string.
+
+    Handles provider-specific translation that mirrors _litellm_config_yaml so that
+    nodes calling litellm directly (without going through the proxy) use the same
+    credentials and API base URLs as Goose sessions.
+    """
+    if "/" in model_string:
+        provider, model_name = model_string.split("/", 1)
+        provider = provider.lower()
+    else:
+        provider, model_name = "openai", model_string
+
+    if provider == "azure":
+        api_version = _AZURE_API_VERSIONS.get(model_name, os.environ.get("AZURE_API_VERSION", ""))
+        return {
+            "model": model_string,
+            "api_key": os.environ.get("AZURE_API_KEY", ""),
+            "api_base": os.environ.get("AZURE_API_BASE", ""),
+            "api_version": api_version,
+        }
+    elif provider == "foundry":
+        # Azure AI Foundry: translate to openai/ provider with the Foundry endpoint.
+        return {
+            "model": f"openai/{model_name}",
+            "api_key": os.environ.get("AZURE_API_KEY", ""),
+            "api_base": os.environ.get("AZURE_FOUNDRY_API_BASE", ""),
+        }
+    elif provider == "anthropic":
+        return {
+            "model": model_string,
+            "api_key": os.environ.get("ANTHROPIC_API_KEY", ""),
+        }
+    else:
+        return {
+            "model": model_string,
+            "api_key": os.environ.get("OPENAI_API_KEY", ""),
+        }
+
+
 def _free_port() -> int:
     """Return a free TCP port on localhost."""
     with socket.socket() as s:
