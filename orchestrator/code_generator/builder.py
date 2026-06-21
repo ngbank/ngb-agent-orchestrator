@@ -29,6 +29,7 @@ from langgraph.graph import END, StateGraph
 
 from orchestrator.code_generator.edges import (
     route_after_infer_branch_prefix,
+    route_after_prepare_workspace,
     route_after_repo_setup,
 )
 from orchestrator.code_generator.nodes.cleanup import cleanup
@@ -68,7 +69,11 @@ def build_code_generator():
         route_after_repo_setup,
         {"run_goose": "prepare_workspace", "persist_results": "persist_results"},
     )
-    builder.add_edge("prepare_workspace", "infer_branch_prefix")
+    builder.add_conditional_edges(
+        "prepare_workspace",
+        route_after_prepare_workspace,
+        {"infer_branch_prefix": "infer_branch_prefix", "run_goose": "run_goose"},
+    )
     builder.add_conditional_edges(
         "infer_branch_prefix",
         route_after_infer_branch_prefix,

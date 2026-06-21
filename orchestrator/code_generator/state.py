@@ -122,6 +122,9 @@ class CodeGeneratorState(TypedDict, total=False):
     pr_url: Optional[str]
     pr_comments: Optional[str]
 
+    # --- shared with OrchestratorState (routing) ---
+    pr_approval_decision: Optional[str]  # "approved" | "rejected" | "commented"
+
     # --- subgraph-internal routing signal ---
     # Set by repo_setup on failure so edges can skip straight to
     # persist_results without running the Goose step.
