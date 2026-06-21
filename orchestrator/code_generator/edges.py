@@ -41,6 +41,15 @@ def route_after_infer_branch_prefix(
     return "run_goose"
 
 
+def route_after_prepare_workspace(
+    state: CodeGeneratorState,
+) -> Literal["infer_branch_prefix", "run_goose"]:
+    """Skip infer_branch_prefix on comment-pr re-executions."""
+    if state.get("pr_approval_decision") == "commented":
+        return "run_goose"
+    return "infer_branch_prefix"
+
+
 def route_after_repo_setup(
     state: CodeGeneratorState,
 ) -> Literal["run_goose", "persist_results"]:
