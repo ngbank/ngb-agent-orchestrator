@@ -552,14 +552,18 @@ class LocalWorkflowService:
                 actor=actor,
                 reason="Execution completed — awaiting PR approval",
             )
-        elif execution_summary:
+        else:
+            # No success/partial → either an explicit failure summary, or no
+            # summary at all (execute_plan never wrote one).  Both must mark
+            # the workflow FAILED so the dispatcher doesn't leave it stuck in
+            # PENDING_APPROVAL after a degenerate run.
             self._repo.update_status(
                 wf_id,
                 WorkflowStatus.FAILED,
                 actor=actor,
                 reason=(
                     f"Execution failed: "
-                    f"{execution_summary.get('error', exec_status or 'unknown')}"
+                    f"{execution_summary.get('error', exec_status or 'no execution summary')}"
                 ),
             )
 

@@ -6,11 +6,13 @@ Thin CLI entrypoint.  All orchestration logic lives under dispatcher/commands/.
 This module is responsible only for:
 
   - Parsing CLI arguments
+  - Constructing (or accepting via ``ctx.obj``) a ``WorkflowService``
   - Dispatching to the appropriate command handler (lazily loaded)
 
-Each handler submodule and its heavy dependencies (langgraph, graph, state,
-jira) are imported only when the relevant command is actually invoked, which
-keeps ``dispatcher --list`` / ``dispatcher --help`` near-instant.
+Each handler submodule is imported only when the relevant command is actually
+invoked, which keeps ``dispatcher --list`` / ``dispatcher --help`` near-instant.
+The WorkflowService is also constructed lazily so light-weight invocations
+(``--help``, ``--tui``) do not pay for repository / graph setup.
 
 Usage:
     python -m dispatcher.run --ticket AOS-36
@@ -20,12 +22,16 @@ Usage:
 """
 
 import sys
+from typing import TYPE_CHECKING, Optional
 
 import click
 from dotenv import load_dotenv
 
 from orchestrator.logging_setup import setup_logging
 from orchestrator.runtime_secrets import load_runtime_secrets_from_keyvault
+
+if TYPE_CHECKING:
+    from orchestrator.workflow_service import WorkflowService
 
 load_dotenv()
 load_runtime_secrets_from_keyvault()
@@ -34,7 +40,24 @@ load_runtime_secrets_from_keyvault()
 setup_logging()
 
 
+def _resolve_service(ctx: click.Context) -> "WorkflowService":
+    """Return the WorkflowService for this invocation.
+
+    Tests inject a fake via ``runner.invoke(run, args, obj=fake_service)``;
+    production builds the default ``LocalWorkflowService`` lazily so commands
+    that do not need it (``--help``, ``--tui``) avoid the import cost.
+    """
+    if ctx.obj is not None:
+        return ctx.obj
+    from orchestrator.workflow_service import build_local_workflow_service
+
+    service = build_local_workflow_service()
+    ctx.obj = service
+    return service
+
+
 @click.command()
+@click.pass_context
 @click.option(
     "--ticket",
     default=None,
@@ -148,7 +171,8 @@ setup_logging()
     help="Launch the interactive Textual TUI for workflow management",
 )
 def run(
-    ticket: str,
+    ctx: click.Context,
+    ticket: Optional[str],
     dry_run: bool,
     do_approve_plan: bool,
     do_reject: bool,
@@ -163,8 +187,8 @@ def run(
     do_comment_pr: bool,
     do_approve_pr: bool,
     do_reject_pr: bool,
-    reason: str,
-    workflow_id: str,
+    reason: Optional[str],
+    workflow_id: Optional[str],
     do_tui: bool,
 ) -> None:
     """
@@ -230,19 +254,21 @@ def run(
         run_tui()
         return
 
+    service = _resolve_service(ctx)
+
     if do_logs:
         if not ticket and not workflow_id:
             click.echo("\u274c --logs requires --ticket or --workflow-id", err=True)
             sys.exit(1)
         from dispatcher.commands.admin import _handle_logs
 
-        _handle_logs(ticket, workflow_id)
+        _handle_logs(service, ticket, workflow_id)
         return
 
     if do_clear_db:
         from dispatcher.commands.admin import _handle_clear_db
 
-        _handle_clear_db()
+        _handle_clear_db(service)
         return
 
     if do_history:
@@ -251,13 +277,13 @@ def run(
             sys.exit(1)
         from dispatcher.commands.admin import _handle_history
 
-        _handle_history(ticket, workflow_id, do_show_clarifications)
+        _handle_history(service, ticket, workflow_id, do_show_clarifications)
         return
 
     if do_list:
         from dispatcher.commands.admin import _handle_list
 
-        _handle_list(ticket)
+        _handle_list(service, ticket)
         return
 
     if do_cancel:
@@ -266,7 +292,7 @@ def run(
             sys.exit(1)
         from dispatcher.commands.admin import _handle_cancel
 
-        _handle_cancel(ticket, reason, workflow_id)
+        _handle_cancel(service, ticket, reason, workflow_id)
         return
 
     if do_clarify:
@@ -275,7 +301,7 @@ def run(
             sys.exit(1)
         from dispatcher.commands.clarify import _handle_clarify
 
-        _handle_clarify(ticket, workflow_id)
+        _handle_clarify(service, ticket, workflow_id)
         return
 
     if do_retry:
@@ -284,7 +310,7 @@ def run(
             sys.exit(1)
         from dispatcher.commands.retry import _handle_retry
 
-        _handle_retry(ticket, workflow_id)
+        _handle_retry(service, ticket, workflow_id)
         return
 
     if do_approve_plan:
@@ -293,7 +319,7 @@ def run(
             sys.exit(1)
         from dispatcher.commands.approve import _handle_approve
 
-        _handle_approve(ticket, workflow_id)
+        _handle_approve(service, ticket, workflow_id)
         return
 
     if do_reject:
@@ -302,7 +328,7 @@ def run(
             sys.exit(1)
         from dispatcher.commands.approve import _handle_reject
 
-        _handle_reject(ticket, reason, workflow_id)
+        _handle_reject(service, ticket, reason, workflow_id)
         return
 
     if do_approve_pr:
@@ -311,7 +337,7 @@ def run(
             sys.exit(1)
         from dispatcher.commands.pr import _handle_approve_pr
 
-        _handle_approve_pr(ticket, workflow_id)
+        _handle_approve_pr(service, ticket, workflow_id)
         return
 
     if do_comment_pr:
@@ -320,7 +346,7 @@ def run(
             sys.exit(1)
         from dispatcher.commands.pr import _handle_comment_pr
 
-        _handle_comment_pr(ticket, workflow_id)
+        _handle_comment_pr(service, ticket, workflow_id)
         return
 
     if do_reject_pr:
@@ -329,7 +355,7 @@ def run(
             sys.exit(1)
         from dispatcher.commands.pr import _handle_reject_pr
 
-        _handle_reject_pr(ticket, reason, workflow_id)
+        _handle_reject_pr(service, ticket, reason, workflow_id)
         return
 
     if not ticket:
@@ -344,7 +370,7 @@ def run(
 
     from dispatcher.commands.run_workflow import _handle_run
 
-    _handle_run(ticket, dry_run)
+    _handle_run(service, ticket, dry_run)
 
 
 if __name__ == "__main__":

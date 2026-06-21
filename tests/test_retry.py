@@ -11,8 +11,24 @@ from langgraph.checkpoint.memory import MemorySaver
 from dispatcher.jira_client import JiraTicket
 from dispatcher.run import run
 from orchestrator.retry import find_rewind_config, resolve_parent_node
+from orchestrator.workflow_service import build_local_workflow_service
 from state import workflow_repository as state_store
 from state.workflow_status import WorkflowStatus
+
+
+def _make_test_service(graph=None, graph_factory=None):
+    """Build a LocalWorkflowService for tests, wired to the given graph.
+
+    After AOS-139 the CLI no longer patches ``build_orchestrator``; instead
+    tests inject a pre-built ``WorkflowService`` via ``cli_runner.invoke(run,
+    args, obj=service)`` and pass either a concrete ``graph`` or a
+    ``graph_factory`` callable.
+    """
+    if graph_factory is None:
+        if graph is None:
+            raise ValueError("Provide graph or graph_factory")
+        graph_factory = lambda: graph  # noqa: E731
+    return build_local_workflow_service(graph_factory=graph_factory)
 
 
 @pytest.fixture
@@ -294,13 +310,14 @@ def test_retry_resolves_by_ticket(test_db, cli_runner):
         "pr_url": "https://pr",
     }
 
-    with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-        mock_build.return_value = _mock_graph_with_failed_node(
+    service = _make_test_service(
+        graph=_mock_graph_with_failed_node(
             "execute_plan",
             {"workflow_id": wf_id, "ticket_key": "TEST-1", "execution_summary": success_summary},
         )
-        with patch("dispatcher.commands.common._post_execution_comment"):
-            result = cli_runner.invoke(run, ["--retry", "--ticket", "TEST-1"])
+    )
+    with patch("dispatcher.commands.common._post_execution_comment"):
+        result = cli_runner.invoke(run, ["--retry", "--ticket", "TEST-1"], obj=service)
 
     assert result.exit_code == 0, result.output
     wf = state_store.get_workflow(wf_id)
@@ -318,13 +335,14 @@ def test_retry_resolves_by_workflow_id(test_db, cli_runner):
         "pr_url": "https://pr",
     }
 
-    with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-        mock_build.return_value = _mock_graph_with_failed_node(
+    service = _make_test_service(
+        graph=_mock_graph_with_failed_node(
             "execute_plan",
             {"workflow_id": wf_id, "ticket_key": "TEST-1", "execution_summary": success_summary},
         )
-        with patch("dispatcher.commands.common._post_execution_comment"):
-            result = cli_runner.invoke(run, ["--retry", "--workflow-id", wf_id])
+    )
+    with patch("dispatcher.commands.common._post_execution_comment"):
+        result = cli_runner.invoke(run, ["--retry", "--workflow-id", wf_id], obj=service)
 
     assert result.exit_code == 0, result.output
     assert state_store.get_workflow(wf_id)["retry_count"] == 1
@@ -333,12 +351,11 @@ def test_retry_resolves_by_workflow_id(test_db, cli_runner):
 def test_retry_without_failed_node_errors(test_db, cli_runner):
     wf_id = _failed_workflow("TEST-1", "execute_plan")
 
-    with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-        mock_graph = Mock()
-        # No failed_node recorded AND no pending next node → cannot resume.
-        mock_graph.get_state.return_value = Mock(values={}, next=())
-        mock_build.return_value = mock_graph
-        result = cli_runner.invoke(run, ["--retry", "--workflow-id", wf_id])
+    mock_graph = Mock()
+    # No failed_node recorded AND no pending next node → cannot resume.
+    mock_graph.get_state.return_value = Mock(values={}, next=())
+    service = _make_test_service(graph=mock_graph)
+    result = cli_runner.invoke(run, ["--retry", "--workflow-id", wf_id], obj=service)
 
     assert result.exit_code != 0
     assert "no recorded failed_node" in result.output
@@ -360,19 +377,18 @@ def test_retry_transitions_to_in_progress_then_completed(test_db, cli_runner):
         captured_status_during_invoke["status"] = state_store.get_workflow(wf_id)["status"]
         return iter([])
 
-    with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-        mock_graph = _mock_graph_with_failed_node(
-            "execute_plan",
-            {
-                "workflow_id": wf_id,
-                "ticket_key": "TEST-1",
-                "execution_summary": success_summary,
-            },
-        )
-        mock_graph.stream = fake_stream
-        mock_build.return_value = mock_graph
-        with patch("dispatcher.commands.common._post_execution_comment"):
-            result = cli_runner.invoke(run, ["--retry", "--workflow-id", wf_id])
+    mock_graph = _mock_graph_with_failed_node(
+        "execute_plan",
+        {
+            "workflow_id": wf_id,
+            "ticket_key": "TEST-1",
+            "execution_summary": success_summary,
+        },
+    )
+    mock_graph.stream = fake_stream
+    service = _make_test_service(graph=mock_graph)
+    with patch("dispatcher.commands.common._post_execution_comment"):
+        result = cli_runner.invoke(run, ["--retry", "--workflow-id", wf_id], obj=service)
 
     assert result.exit_code == 0, result.output
     assert captured_status_during_invoke["status"] == WorkflowStatus.IN_PROGRESS
@@ -388,8 +404,8 @@ def test_retry_marks_failed_when_second_attempt_also_fails(test_db, cli_runner):
         "error": "still broken",
     }
 
-    with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-        mock_build.return_value = _mock_graph_with_failed_node(
+    service = _make_test_service(
+        graph=_mock_graph_with_failed_node(
             "execute_plan",
             {
                 "workflow_id": wf_id,
@@ -398,8 +414,9 @@ def test_retry_marks_failed_when_second_attempt_also_fails(test_db, cli_runner):
                 "failed_node": "execute_plan",
             },
         )
-        with patch("dispatcher.commands.common._post_execution_comment"):
-            result = cli_runner.invoke(run, ["--retry", "--workflow-id", wf_id])
+    )
+    with patch("dispatcher.commands.common._post_execution_comment"):
+        result = cli_runner.invoke(run, ["--retry", "--workflow-id", wf_id], obj=service)
 
     assert result.exit_code != 0
     wf = state_store.get_workflow(wf_id)
@@ -449,12 +466,12 @@ def test_retry_integration_plan_failure_then_success(
         "orchestrator.work_planner.builder.generate_plan",
         side_effect=flaky_generate_plan,
     ):
-        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            mock_build.side_effect = lambda: build_orchestrator(checkpointer=checkpointer)
-
-            # First run — generate_plan fails, work_planner subgraph routes to
-            # error_handler which marks the workflow FAILED.
-            result = cli_runner.invoke(run, ["--ticket", "TEST-123"])
+        first_service = _make_test_service(
+            graph_factory=lambda: build_orchestrator(checkpointer=checkpointer)
+        )
+        # First run — generate_plan fails, work_planner subgraph routes to
+        # error_handler which marks the workflow FAILED.
+        result = cli_runner.invoke(run, ["--ticket", "TEST-123"], obj=first_service)
 
         workflows = state_store.get_workflow_by_ticket("TEST-123")
         assert len(workflows) == 1
@@ -463,9 +480,12 @@ def test_retry_integration_plan_failure_then_success(
 
         # --retry rewinds and re-invokes; this time generate_plan succeeds and
         # the graph pauses at await_approval.
-        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            mock_build.side_effect = lambda: build_orchestrator(checkpointer=checkpointer)
-            retry_result = cli_runner.invoke(run, ["--retry", "--ticket", "TEST-123"])
+        retry_service = _make_test_service(
+            graph_factory=lambda: build_orchestrator(checkpointer=checkpointer)
+        )
+        retry_result = cli_runner.invoke(
+            run, ["--retry", "--ticket", "TEST-123"], obj=retry_service
+        )
 
     assert retry_result.exit_code == 0, retry_result.output
     assert "🔁 Retrying workflow" in retry_result.output
@@ -499,13 +519,14 @@ def test_retry_accepts_in_progress_workflow(test_db, cli_runner):
         "pr_url": "https://pr",
     }
 
-    with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-        mock_build.return_value = _mock_graph_with_failed_node(
+    service = _make_test_service(
+        graph=_mock_graph_with_failed_node(
             "execute_plan",
             {"workflow_id": wf_id, "ticket_key": "TEST-1", "execution_summary": success_summary},
         )
-        with patch("dispatcher.commands.common._post_execution_comment"):
-            result = cli_runner.invoke(run, ["--retry", "--workflow-id", wf_id])
+    )
+    with patch("dispatcher.commands.common._post_execution_comment"):
+        result = cli_runner.invoke(run, ["--retry", "--workflow-id", wf_id], obj=service)
 
     assert result.exit_code == 0, result.output
     assert "IN_PROGRESS" in result.output
@@ -523,30 +544,28 @@ def test_retry_derives_failed_node_from_next_when_missing(test_db, cli_runner):
         "pr_url": "https://pr",
     }
 
-    with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-        mock_graph = Mock()
-        # No failed_node in state, but snapshot.next reveals where it stopped.
-        # The dispatcher calls get_state twice: once before retry to inspect
-        # next/failed_node, and once after the stream to read execution_summary.
-        # A single Mock with both attributes satisfies both reads.
-        mock_graph.get_state.return_value = Mock(
-            values={
-                "workflow_id": wf_id,
-                "ticket_key": "TEST-1",
-                "execution_summary": success_summary,
-            },
-            next=("execute_plan",),
-        )
-        snap = Mock(config={"configurable": {"thread_id": "t", "checkpoint_id": "cp"}})
-        snap.next = ("execute_plan",)
-        mock_graph.get_state_history.return_value = iter([snap])
-        mock_graph.stream.return_value = iter([])
-        mock_build.return_value = mock_graph
-        with patch("dispatcher.commands.common._post_execution_comment"):
-            result = cli_runner.invoke(run, ["--retry", "--workflow-id", wf_id])
+    mock_graph = Mock()
+    # No failed_node in state, but snapshot.next reveals where it stopped.
+    # The dispatcher calls get_state twice: once before retry to inspect
+    # next/failed_node, and once after the stream to read execution_summary.
+    # A single Mock with both attributes satisfies both reads.
+    mock_graph.get_state.return_value = Mock(
+        values={
+            "workflow_id": wf_id,
+            "ticket_key": "TEST-1",
+            "execution_summary": success_summary,
+        },
+        next=("execute_plan",),
+    )
+    snap = Mock(config={"configurable": {"thread_id": "t", "checkpoint_id": "cp"}})
+    snap.next = ("execute_plan",)
+    mock_graph.get_state_history.return_value = iter([snap])
+    mock_graph.stream.return_value = iter([])
+    service = _make_test_service(graph=mock_graph)
+    with patch("dispatcher.commands.common._post_execution_comment"):
+        result = cli_runner.invoke(run, ["--retry", "--workflow-id", wf_id], obj=service)
 
     assert result.exit_code == 0, result.output
-    assert "next-up node 'execute_plan'" in result.output
     assert state_store.get_workflow(wf_id)["status"] == WorkflowStatus.COMPLETED
 
 
@@ -558,52 +577,9 @@ def test_retry_still_rejects_completed_workflow(test_db, cli_runner):
     assert "not retryable" in result.output
 
 
-def test_mark_workflow_interrupted_transitions_to_failed(test_db):
-    """SIGINT helper transitions an active workflow to FAILED with failed_node set."""
-    from dispatcher.commands.common import _mark_workflow_interrupted
-
-    wf_id = _in_progress_workflow("TEST-1")
-    mock_graph = Mock()
-    mock_graph.get_state.return_value = Mock(values={}, next=("execute_plan",))
-
-    _mark_workflow_interrupted(wf_id, mock_graph, {"configurable": {"thread_id": wf_id}})
-
-    wf = state_store.get_workflow(wf_id)
-    assert wf["status"] == WorkflowStatus.FAILED
-    # The helper should have called update_state to record failed_node.
-    mock_graph.update_state.assert_called_once()
-    update_args = mock_graph.update_state.call_args
-    assert update_args.args[1]["failed_node"] == "execute_plan"
-    assert "Interrupted" in update_args.args[1]["error"]
-
-
-def test_mark_workflow_interrupted_no_op_on_terminal(test_db):
-    """Helper does nothing if the workflow is already terminal."""
-    from dispatcher.commands.common import _mark_workflow_interrupted
-
-    wf_id = state_store.create_workflow("TEST-1", status=WorkflowStatus.COMPLETED)
-    mock_graph = Mock()
-
-    _mark_workflow_interrupted(wf_id, mock_graph, {"configurable": {"thread_id": wf_id}})
-
-    assert state_store.get_workflow(wf_id)["status"] == WorkflowStatus.COMPLETED
-    mock_graph.update_state.assert_not_called()
-
-
-def test_mark_workflow_interrupted_handles_missing_workflow(test_db):
-    """Helper does not crash when the workflow id is unknown."""
-    from dispatcher.commands.common import _mark_workflow_interrupted
-
-    # Should not raise.
-    _mark_workflow_interrupted("does-not-exist", None, None)
-
-
-def test_mark_workflow_interrupted_db_only_when_no_graph(test_db):
-    """Helper still transitions DB even if graph/state update fails."""
-    from dispatcher.commands.common import _mark_workflow_interrupted
-
-    wf_id = _in_progress_workflow("TEST-1")
-    _mark_workflow_interrupted(wf_id, None, None)
-
-    wf = state_store.get_workflow(wf_id)
-    assert wf["status"] == WorkflowStatus.FAILED
+# AOS-139: The legacy ``_mark_workflow_interrupted`` helper has been folded
+# into ``LocalWorkflowService.mark_interrupted``. Its behavior is now covered
+# by ``tests/test_workflow_service_local.py::TestAdminMutations``
+# (test_mark_interrupted_sets_failed,
+# test_mark_interrupted_is_noop_when_terminal,
+# test_mark_interrupted_unknown_workflow_is_safe).

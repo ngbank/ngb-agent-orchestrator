@@ -10,8 +10,24 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from dispatcher.jira_client import JiraConfigurationError, JiraTicket, JiraTicketNotFoundError
 from dispatcher.run import run
+from orchestrator.workflow_service import build_local_workflow_service
 from state import workflow_repository as state_store
 from state.workflow_status import WorkflowStatus
+
+
+def _make_test_service(graph=None, graph_factory=None):
+    """Build a LocalWorkflowService for tests, wired to the given graph.
+
+    After AOS-139 the CLI no longer patches ``build_orchestrator``; instead
+    tests inject a pre-built ``WorkflowService`` via ``cli_runner.invoke(run,
+    args, obj=service)`` and pass either a concrete ``graph`` or a
+    ``graph_factory`` callable.
+    """
+    if graph_factory is None:
+        if graph is None:
+            raise ValueError("Provide graph or graph_factory")
+        graph_factory = lambda: graph  # noqa: E731
+    return build_local_workflow_service(graph_factory=graph_factory)
 
 
 @pytest.fixture
@@ -133,12 +149,12 @@ def test_run_creates_workflow(
     test_db, mock_jira_client, mock_generate_plan, mock_repo_setup, cli_runner, memory_checkpointer
 ):
     """Test that running the dispatcher creates a workflow record and pauses for approval."""
-    with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-        from orchestrator.builder import build_orchestrator
+    from orchestrator.builder import build_orchestrator
 
-        mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
-
-        result = cli_runner.invoke(run, ["--ticket", "TEST-123"])
+    service = _make_test_service(
+        graph_factory=lambda: build_orchestrator(checkpointer=memory_checkpointer)
+    )
+    result = cli_runner.invoke(run, ["--ticket", "TEST-123"], obj=service)
 
     assert result.exit_code == 0
     assert "🚀 Starting workflow for ticket: TEST-123" in result.output
@@ -159,12 +175,12 @@ def test_run_rejects_duplicate(test_db, mock_jira_client, cli_runner, memory_che
     # Create an in-progress workflow
     workflow_id = state_store.create_workflow("TEST-123", status=WorkflowStatus.IN_PROGRESS)
 
-    with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-        from orchestrator.builder import build_orchestrator
+    from orchestrator.builder import build_orchestrator
 
-        mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
-
-        result = cli_runner.invoke(run, ["--ticket", "TEST-123"])
+    service = _make_test_service(
+        graph_factory=lambda: build_orchestrator(checkpointer=memory_checkpointer)
+    )
+    result = cli_runner.invoke(run, ["--ticket", "TEST-123"], obj=service)
 
     assert result.exit_code == 1
     assert "❌ Workflow already in progress" in result.output
@@ -179,12 +195,12 @@ def test_run_allows_rerun_after_completion(
     # Create a completed workflow
     state_store.create_workflow("TEST-123", status=WorkflowStatus.COMPLETED)
 
-    with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-        from orchestrator.builder import build_orchestrator
+    from orchestrator.builder import build_orchestrator
 
-        mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
-
-        result = cli_runner.invoke(run, ["--ticket", "TEST-123"])
+    service = _make_test_service(
+        graph_factory=lambda: build_orchestrator(checkpointer=memory_checkpointer)
+    )
+    result = cli_runner.invoke(run, ["--ticket", "TEST-123"], obj=service)
 
     assert result.exit_code == 0
     assert "⚠️  Warning: 1 completed workflow(s) exist for TEST-123" in result.output
@@ -203,12 +219,12 @@ def test_run_handles_ticket_not_found(test_db, cli_runner, memory_checkpointer):
         mock_instance.get_ticket.side_effect = JiraTicketNotFoundError("Ticket not found")
         mock.return_value = mock_instance
 
-        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            from orchestrator.builder import build_orchestrator
+        from orchestrator.builder import build_orchestrator
 
-            mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
-
-            result = cli_runner.invoke(run, ["--ticket", "NOTFOUND-999"])
+        service = _make_test_service(
+            graph_factory=lambda: build_orchestrator(checkpointer=memory_checkpointer)
+        )
+        result = cli_runner.invoke(run, ["--ticket", "NOTFOUND-999"], obj=service)
 
     assert result.exit_code == 1
     assert "❌ Ticket not found" in result.output
@@ -238,12 +254,12 @@ def test_run_logs_transitions(
     test_db, mock_jira_client, mock_generate_plan, mock_repo_setup, cli_runner, memory_checkpointer
 ):
     """Test that all stage transitions are logged to audit log."""
-    with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-        from orchestrator.builder import build_orchestrator
+    from orchestrator.builder import build_orchestrator
 
-        mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
-
-        result = cli_runner.invoke(run, ["--ticket", "TEST-123"])
+    service = _make_test_service(
+        graph_factory=lambda: build_orchestrator(checkpointer=memory_checkpointer)
+    )
+    result = cli_runner.invoke(run, ["--ticket", "TEST-123"], obj=service)
 
     assert result.exit_code == 0
 
@@ -296,12 +312,12 @@ def test_run_handles_jira_config_error(test_db, cli_runner, memory_checkpointer)
     with patch("orchestrator.work_planner.nodes.fetch_ticket.JiraClient") as mock:
         mock.side_effect = JiraConfigurationError("Missing JIRA_URL")
 
-        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            from orchestrator.builder import build_orchestrator
+        from orchestrator.builder import build_orchestrator
 
-            mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
-
-            result = cli_runner.invoke(run, ["--ticket", "TEST-123"])
+        service = _make_test_service(
+            graph_factory=lambda: build_orchestrator(checkpointer=memory_checkpointer)
+        )
+        result = cli_runner.invoke(run, ["--ticket", "TEST-123"], obj=service)
 
     assert result.exit_code == 1
     assert "❌ JIRA configuration error" in result.output
@@ -358,12 +374,12 @@ def test_run_keyboard_interrupt(test_db, cli_runner, memory_checkpointer):
         mock_instance.get_ticket.side_effect = KeyboardInterrupt()
         mock.return_value = mock_instance
 
-        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            from orchestrator.builder import build_orchestrator
+        from orchestrator.builder import build_orchestrator
 
-            mock_build.side_effect = lambda: build_orchestrator(checkpointer=memory_checkpointer)
-
-            result = cli_runner.invoke(run, ["--ticket", "TEST-123"])
+        service = _make_test_service(
+            graph_factory=lambda: build_orchestrator(checkpointer=memory_checkpointer)
+        )
+        result = cli_runner.invoke(run, ["--ticket", "TEST-123"], obj=service)
 
     assert result.exit_code == 130  # Standard SIGINT exit code
     assert "⚠️  Workflow interrupted by user" in result.output
@@ -497,13 +513,12 @@ class TestPostExecutionComment:
             mock_instance.get_ticket.side_effect = TicketNotFoundError("abstract not found")
             mock.return_value = mock_instance
 
-            with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-                from orchestrator.builder import build_orchestrator
+            from orchestrator.builder import build_orchestrator
 
-                mock_build.side_effect = lambda: build_orchestrator(
-                    checkpointer=memory_checkpointer
-                )
-                result = cli_runner.invoke(run, ["--ticket", "ABSTRACT-1"])
+            service = _make_test_service(
+                graph_factory=lambda: build_orchestrator(checkpointer=memory_checkpointer)
+            )
+            result = cli_runner.invoke(run, ["--ticket", "ABSTRACT-1"], obj=service)
 
         assert result.exit_code == 1
         assert "❌ Ticket not found" in result.output
@@ -590,19 +605,21 @@ class TestHandleHistory:
         from orchestrator.builder import build_orchestrator
 
         checkpointer = memory_checkpointer
-        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            mock_build.side_effect = lambda: build_orchestrator(checkpointer=checkpointer)
+        service = _make_test_service(
+            graph_factory=lambda: build_orchestrator(checkpointer=checkpointer)
+        )
 
-            # Start workflow — pauses at await_approval
-            cli_runner.invoke(run, ["--ticket", "TEST-123"])
+        # Start workflow — pauses at await_approval
+        cli_runner.invoke(run, ["--ticket", "TEST-123"], obj=service)
 
         workflows = state_store.get_workflow_by_ticket("TEST-123")
         assert workflows, "expected at least one workflow"
         resolved_id = workflows[0]["id"]
 
-        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            mock_build.side_effect = lambda: build_orchestrator(checkpointer=checkpointer)
-            result = cli_runner.invoke(run, ["--history", "--ticket", "TEST-123"])
+        history_service = _make_test_service(
+            graph_factory=lambda: build_orchestrator(checkpointer=checkpointer)
+        )
+        result = cli_runner.invoke(run, ["--history", "--ticket", "TEST-123"], obj=history_service)
 
         assert result.exit_code == 0
         assert "Workflow history for TEST-123" in result.output
@@ -623,16 +640,20 @@ class TestHandleHistory:
         from orchestrator.builder import build_orchestrator
 
         checkpointer = memory_checkpointer
-        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            mock_build.side_effect = lambda: build_orchestrator(checkpointer=checkpointer)
-            cli_runner.invoke(run, ["--ticket", "TEST-123"])
+        service = _make_test_service(
+            graph_factory=lambda: build_orchestrator(checkpointer=checkpointer)
+        )
+        cli_runner.invoke(run, ["--ticket", "TEST-123"], obj=service)
 
         workflows = state_store.get_workflow_by_ticket("TEST-123")
         resolved_id = workflows[0]["id"]
 
-        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            mock_build.side_effect = lambda: build_orchestrator(checkpointer=checkpointer)
-            result = cli_runner.invoke(run, ["--history", "--workflow-id", resolved_id])
+        history_service = _make_test_service(
+            graph_factory=lambda: build_orchestrator(checkpointer=checkpointer)
+        )
+        result = cli_runner.invoke(
+            run, ["--history", "--workflow-id", resolved_id], obj=history_service
+        )
 
         assert result.exit_code == 0
         assert "Workflow history for TEST-123" in result.output
@@ -651,13 +672,14 @@ class TestHandleHistory:
             actor="developer",
         )
 
-        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            mock_graph = Mock()
-            mock_graph.get_state_history.return_value = []
-            mock_build.return_value = mock_graph
-            result = cli_runner.invoke(
-                run, ["--history", "--workflow-id", workflow_id, "--show-clarifications"]
-            )
+        mock_graph = Mock()
+        mock_graph.get_state_history.return_value = []
+        service = _make_test_service(graph=mock_graph)
+        result = cli_runner.invoke(
+            run,
+            ["--history", "--workflow-id", workflow_id, "--show-clarifications"],
+            obj=service,
+        )
 
         assert result.exit_code == 0
         assert "Clarification Q&A History" in result.output
@@ -670,13 +692,14 @@ class TestHandleHistory:
         """--history --show-clarifications on a workflow with no history should say so."""
         workflow_id = state_store.create_workflow("TEST-123", status=WorkflowStatus.COMPLETED)
 
-        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            mock_graph = Mock()
-            mock_graph.get_state_history.return_value = []
-            mock_build.return_value = mock_graph
-            result = cli_runner.invoke(
-                run, ["--history", "--workflow-id", workflow_id, "--show-clarifications"]
-            )
+        mock_graph = Mock()
+        mock_graph.get_state_history.return_value = []
+        service = _make_test_service(graph=mock_graph)
+        result = cli_runner.invoke(
+            run,
+            ["--history", "--workflow-id", workflow_id, "--show-clarifications"],
+            obj=service,
+        )
 
         assert result.exit_code == 0
         assert "No clarification history found." in result.output
@@ -686,12 +709,11 @@ def test_reject_handles_resume_error(test_db, cli_runner):
     """Test that reject path reports resume errors with existing message."""
     workflow_id = state_store.create_workflow("TEST-123", status=WorkflowStatus.PENDING_APPROVAL)
 
-    with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-        mock_graph = Mock()
-        mock_graph.stream.side_effect = Exception("boom")
-        mock_build.return_value = mock_graph
+    mock_graph = Mock()
+    mock_graph.stream.side_effect = Exception("boom")
+    service = _make_test_service(graph=mock_graph)
 
-        result = cli_runner.invoke(run, ["--reject", "--workflow-id", workflow_id])
+    result = cli_runner.invoke(run, ["--reject", "--workflow-id", workflow_id], obj=service)
 
     assert result.exit_code == 1
     assert "❌ Error resuming workflow: boom" in result.output
@@ -703,6 +725,41 @@ def test_get_actor_imported_from_graph_utils():
     from orchestrator.utils import _get_actor as shared_get_actor
 
     assert run_module._get_actor is shared_get_actor
+
+
+def test_dispatcher_commands_have_no_direct_repo_or_builder_imports():
+    """AOS-139: dispatcher/commands/ must route everything through WorkflowService.
+
+    The handlers must not directly import the SQLite repository, the LangGraph
+    builder, the retry helpers, or LangGraph itself; doing so would bypass the
+    service boundary that lets us swap the backend (e.g. for the MCP server).
+    """
+    import pathlib
+
+    forbidden = [
+        "state.sqlite_workflow_repository",
+        "state.workflow_repository",
+        "state.observable_sqlite_saver",
+        "orchestrator.builder",
+        "orchestrator.retry",
+        "langgraph",
+    ]
+    cmds = pathlib.Path(__file__).parent.parent / "dispatcher" / "commands"
+    assert cmds.is_dir(), f"expected dispatcher/commands/ at {cmds}"
+
+    offenders: list[str] = []
+    for py_file in sorted(cmds.glob("*.py")):
+        if py_file.name == "__init__.py":
+            continue
+        src = py_file.read_text(encoding="utf-8")
+        for token in forbidden:
+            if token in src:
+                offenders.append(f"{py_file.name}: {token}")
+
+    assert not offenders, (
+        "dispatcher/commands/ must go through WorkflowService — direct imports found:\n  - "
+        + "\n  - ".join(offenders)
+    )
 
 
 class TestHandleApproveFailedExecution:
@@ -733,20 +790,21 @@ class TestHandleApproveFailedExecution:
             "error": "Execution summary not written by recipe",
         }
 
-        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            mock_graph = Mock()
-            mock_graph.stream.return_value = iter([])
-            mock_graph.get_state.return_value = Mock(
-                values={
-                    "workflow_id": workflow_id,
-                    "ticket_key": "TEST-123",
-                    "execution_summary": failed_summary,
-                }
-            )
-            mock_build.return_value = mock_graph
+        mock_graph = Mock()
+        mock_graph.stream.return_value = iter([])
+        mock_graph.get_state.return_value = Mock(
+            values={
+                "workflow_id": workflow_id,
+                "ticket_key": "TEST-123",
+                "execution_summary": failed_summary,
+            }
+        )
+        service = _make_test_service(graph=mock_graph)
 
-            with patch("dispatcher.commands.common._post_execution_comment"):
-                result = cli_runner.invoke(run, ["--approve-plan", "--workflow-id", workflow_id])
+        with patch("dispatcher.commands.common._post_execution_comment"):
+            result = cli_runner.invoke(
+                run, ["--approve-plan", "--workflow-id", workflow_id], obj=service
+            )
 
         assert result.exit_code == 0
         workflow = state_store.get_workflow(workflow_id)
@@ -771,20 +829,21 @@ class TestHandleApproveFailedExecution:
             "status": "success",
         }
 
-        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            mock_graph = Mock()
-            mock_graph.stream.return_value = iter([])
-            mock_graph.get_state.return_value = Mock(
-                values={
-                    "workflow_id": workflow_id,
-                    "ticket_key": "TEST-123",
-                    "execution_summary": success_summary,
-                }
-            )
-            mock_build.return_value = mock_graph
+        mock_graph = Mock()
+        mock_graph.stream.return_value = iter([])
+        mock_graph.get_state.return_value = Mock(
+            values={
+                "workflow_id": workflow_id,
+                "ticket_key": "TEST-123",
+                "execution_summary": success_summary,
+            }
+        )
+        service = _make_test_service(graph=mock_graph)
 
-            with patch("dispatcher.commands.common._post_execution_comment"):
-                result = cli_runner.invoke(run, ["--approve-plan", "--workflow-id", workflow_id])
+        with patch("dispatcher.commands.common._post_execution_comment"):
+            result = cli_runner.invoke(
+                run, ["--approve-plan", "--workflow-id", workflow_id], obj=service
+            )
 
         assert result.exit_code == 0
         workflow = state_store.get_workflow(workflow_id)
@@ -795,20 +854,21 @@ class TestHandleApproveFailedExecution:
         """When execution_summary is missing entirely, status must be FAILED."""
         workflow_id = self._make_pending_workflow("TEST-123")
 
-        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            mock_graph = Mock()
-            mock_graph.stream.return_value = iter([])
-            mock_graph.get_state.return_value = Mock(
-                values={
-                    "workflow_id": workflow_id,
-                    "ticket_key": "TEST-123",
-                    # no execution_summary key
-                }
-            )
-            mock_build.return_value = mock_graph
+        mock_graph = Mock()
+        mock_graph.stream.return_value = iter([])
+        mock_graph.get_state.return_value = Mock(
+            values={
+                "workflow_id": workflow_id,
+                "ticket_key": "TEST-123",
+                # no execution_summary key
+            }
+        )
+        service = _make_test_service(graph=mock_graph)
 
-            with patch("dispatcher.commands.common._post_execution_comment"):
-                result = cli_runner.invoke(run, ["--approve-plan", "--workflow-id", workflow_id])
+        with patch("dispatcher.commands.common._post_execution_comment"):
+            result = cli_runner.invoke(
+                run, ["--approve-plan", "--workflow-id", workflow_id], obj=service
+            )
 
         assert result.exit_code == 0
         workflow = state_store.get_workflow(workflow_id)
@@ -829,20 +889,21 @@ class TestHandleApproveFailedExecution:
             "status": "partial",
         }
 
-        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            mock_graph = Mock()
-            mock_graph.stream.return_value = iter([])
-            mock_graph.get_state.return_value = Mock(
-                values={
-                    "workflow_id": workflow_id,
-                    "ticket_key": "TEST-123",
-                    "execution_summary": partial_summary,
-                }
-            )
-            mock_build.return_value = mock_graph
+        mock_graph = Mock()
+        mock_graph.stream.return_value = iter([])
+        mock_graph.get_state.return_value = Mock(
+            values={
+                "workflow_id": workflow_id,
+                "ticket_key": "TEST-123",
+                "execution_summary": partial_summary,
+            }
+        )
+        service = _make_test_service(graph=mock_graph)
 
-            with patch("dispatcher.commands.common._post_execution_comment"):
-                result = cli_runner.invoke(run, ["--approve-plan", "--workflow-id", workflow_id])
+        with patch("dispatcher.commands.common._post_execution_comment"):
+            result = cli_runner.invoke(
+                run, ["--approve-plan", "--workflow-id", workflow_id], obj=service
+            )
 
         assert result.exit_code == 0
         workflow = state_store.get_workflow(workflow_id)
@@ -916,22 +977,22 @@ class TestHandleClarify:
                     "- Which API?\nA: REST\n"
                 )
 
-        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            mock_graph = Mock()
-            mock_graph.stream.return_value = iter([])
-            mock_graph.get_state.return_value = Mock(
-                values={
-                    "workflow_id": workflow_id,
-                    "ticket_key": "TEST-123",
-                }
-            )
-            mock_build.return_value = mock_graph
+        mock_graph = Mock()
+        mock_graph.stream.return_value = iter([])
+        mock_graph.get_state.return_value = Mock(
+            values={
+                "workflow_id": workflow_id,
+                "ticket_key": "TEST-123",
+            }
+        )
+        service = _make_test_service(graph=mock_graph)
 
-            with patch("subprocess.run", side_effect=lambda cmd, **kwargs: fake_editor(cmd[1])):
-                result = cli_runner.invoke(
-                    run,
-                    ["--clarify", "--workflow-id", workflow_id],
-                )
+        with patch("subprocess.run", side_effect=lambda cmd, **kwargs: fake_editor(cmd[1])):
+            result = cli_runner.invoke(
+                run,
+                ["--clarify", "--workflow-id", workflow_id],
+                obj=service,
+            )
 
         assert result.exit_code == 0
         # Verify graph was resumed with a Command containing answers
@@ -957,19 +1018,19 @@ class TestHandleClarify:
             with open(tmp_path, "w", encoding="utf-8") as f:
                 f.write("- Risk A\nA: ok\n")
 
-        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            mock_graph = Mock()
-            mock_graph.stream.return_value = iter([])
-            mock_graph.get_state.return_value = Mock(
-                values={"workflow_id": "any", "ticket_key": "TEST-123"}
-            )
-            mock_build.return_value = mock_graph
+        mock_graph = Mock()
+        mock_graph.stream.return_value = iter([])
+        mock_graph.get_state.return_value = Mock(
+            values={"workflow_id": "any", "ticket_key": "TEST-123"}
+        )
+        service = _make_test_service(graph=mock_graph)
 
-            with patch("subprocess.run", side_effect=lambda cmd, **kwargs: fake_editor(cmd[1])):
-                result = cli_runner.invoke(
-                    run,
-                    ["--clarify", "--ticket", "TEST-123"],
-                )
+        with patch("subprocess.run", side_effect=lambda cmd, **kwargs: fake_editor(cmd[1])):
+            result = cli_runner.invoke(
+                run,
+                ["--clarify", "--ticket", "TEST-123"],
+                obj=service,
+            )
 
         assert result.exit_code == 0
         mock_graph.stream.assert_called_once()
@@ -989,19 +1050,19 @@ class TestHandleClarify:
             with open(tmp_path, "w", encoding="utf-8") as f:
                 f.write("- Risk A\nA: ok\n")
 
-        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            mock_graph = Mock()
-            mock_graph.stream.side_effect = _stream_and_transition
-            mock_graph.get_state.return_value = Mock(
-                values={"workflow_id": workflow_id, "ticket_key": "TEST-123"}
-            )
-            mock_build.return_value = mock_graph
+        mock_graph = Mock()
+        mock_graph.stream.side_effect = _stream_and_transition
+        mock_graph.get_state.return_value = Mock(
+            values={"workflow_id": workflow_id, "ticket_key": "TEST-123"}
+        )
+        service = _make_test_service(graph=mock_graph)
 
-            with patch("subprocess.run", side_effect=lambda cmd, **kwargs: fake_editor(cmd[1])):
-                result = cli_runner.invoke(
-                    run,
-                    ["--clarify", "--workflow-id", workflow_id],
-                )
+        with patch("subprocess.run", side_effect=lambda cmd, **kwargs: fake_editor(cmd[1])):
+            result = cli_runner.invoke(
+                run,
+                ["--clarify", "--workflow-id", workflow_id],
+                obj=service,
+            )
 
         assert result.exit_code == 0
         assert "--approve-plan" in result.output
@@ -1039,18 +1100,17 @@ class TestHandleApprovePr:
     def test_approve_pr_completes_workflow(self, test_db, cli_runner):
         workflow_id = self._make_pending_pr_approval_workflow("TEST-123")
 
-        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            mock_graph = Mock()
-            mock_graph.stream.return_value = iter([])
-            mock_graph.get_state.return_value = Mock(
-                values={
-                    "workflow_id": workflow_id,
-                    "ticket_key": "TEST-123",
-                }
-            )
-            mock_build.return_value = mock_graph
+        mock_graph = Mock()
+        mock_graph.stream.return_value = iter([])
+        mock_graph.get_state.return_value = Mock(
+            values={
+                "workflow_id": workflow_id,
+                "ticket_key": "TEST-123",
+            }
+        )
+        service = _make_test_service(graph=mock_graph)
 
-            result = cli_runner.invoke(run, ["--approve-pr", "--workflow-id", workflow_id])
+        result = cli_runner.invoke(run, ["--approve-pr", "--workflow-id", workflow_id], obj=service)
 
         assert result.exit_code == 0
         workflow = state_store.get_workflow(workflow_id)
@@ -1089,22 +1149,22 @@ class TestHandleCommentPr:
             with open(tmp_path, "w", encoding="utf-8") as f:
                 f.write("Fix the typo in line 42\nAdd more tests\n")
 
-        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            mock_graph = Mock()
-            mock_graph.stream.return_value = iter([])
-            mock_graph.get_state.return_value = Mock(
-                values={
-                    "workflow_id": workflow_id,
-                    "ticket_key": "TEST-123",
-                }
-            )
-            mock_build.return_value = mock_graph
+        mock_graph = Mock()
+        mock_graph.stream.return_value = iter([])
+        mock_graph.get_state.return_value = Mock(
+            values={
+                "workflow_id": workflow_id,
+                "ticket_key": "TEST-123",
+            }
+        )
+        service = _make_test_service(graph=mock_graph)
 
-            with patch("subprocess.run", side_effect=lambda cmd, **kwargs: fake_editor(cmd[1])):
-                result = cli_runner.invoke(
-                    run,
-                    ["--comment-pr", "--workflow-id", workflow_id],
-                )
+        with patch("subprocess.run", side_effect=lambda cmd, **kwargs: fake_editor(cmd[1])):
+            result = cli_runner.invoke(
+                run,
+                ["--comment-pr", "--workflow-id", workflow_id],
+                obj=service,
+            )
 
         assert result.exit_code == 0
         from langgraph.types import Command
@@ -1135,20 +1195,21 @@ class TestHandleRejectPr:
     def test_reject_pr_rejects_workflow(self, test_db, cli_runner):
         workflow_id = self._make_pending_pr_approval_workflow("TEST-123")
 
-        with patch("dispatcher.commands.common.build_orchestrator") as mock_build:
-            mock_graph = Mock()
-            mock_graph.stream.return_value = iter([])
-            mock_graph.get_state.return_value = Mock(
-                values={
-                    "workflow_id": workflow_id,
-                    "ticket_key": "TEST-123",
-                }
-            )
-            mock_build.return_value = mock_graph
+        mock_graph = Mock()
+        mock_graph.stream.return_value = iter([])
+        mock_graph.get_state.return_value = Mock(
+            values={
+                "workflow_id": workflow_id,
+                "ticket_key": "TEST-123",
+            }
+        )
+        service = _make_test_service(graph=mock_graph)
 
-            result = cli_runner.invoke(
-                run, ["--reject-pr", "--workflow-id", workflow_id, "--reason", "scope too broad"]
-            )
+        result = cli_runner.invoke(
+            run,
+            ["--reject-pr", "--workflow-id", workflow_id, "--reason", "scope too broad"],
+            obj=service,
+        )
 
         assert result.exit_code == 0
         workflow = state_store.get_workflow(workflow_id)

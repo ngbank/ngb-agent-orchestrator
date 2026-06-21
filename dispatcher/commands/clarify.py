@@ -4,23 +4,27 @@ import os
 import subprocess
 import sys
 import tempfile
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import click
-from langgraph.errors import GraphInterrupt
-from langgraph.types import Command
 
-import dispatcher.commands.common as common
-from state.workflow_repository import get_workflow, get_workflow_by_ticket
+import dispatcher.commands.common as common  # noqa: F401  (kept for symmetry)
 from state.workflow_status import WorkflowStatus
 
+if TYPE_CHECKING:
+    from orchestrator.workflow_service import WorkflowService
 
-def _handle_clarify(ticket_key: Optional[str], workflow_id: Optional[str] = None) -> None:
+
+def _handle_clarify(
+    service: "WorkflowService",
+    ticket_key: Optional[str],
+    workflow_id: Optional[str] = None,
+) -> None:
     """Collect clarification answers via file-based editing and resume a suspended WorkPlan."""
     if workflow_id:
         resolved_id = workflow_id
-        workflow = get_workflow(resolved_id)
-        if workflow is None:
+        detail = service.get(resolved_id)
+        if detail is None:
             click.echo(f"❌ Workflow not found: {resolved_id}", err=True)
             sys.exit(1)
     else:
@@ -30,26 +34,29 @@ def _handle_clarify(ticket_key: Optional[str], workflow_id: Optional[str] = None
 
         pending = [
             w
-            for w in get_workflow_by_ticket(ticket_key)
-            if w["status"] == WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION
+            for w in service.get_by_ticket(ticket_key)
+            if w.status == WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION
         ]
         if not pending:
             click.echo(
                 f"❌ No workflow pending clarification found for ticket: {ticket_key}", err=True
             )
             sys.exit(1)
-        workflow = pending[0]
-        resolved_id = workflow["id"]
+        resolved_id = pending[0].id
+        detail = service.get(resolved_id)
+        if detail is None:
+            click.echo(f"❌ Workflow not found: {resolved_id}", err=True)
+            sys.exit(1)
 
-    if workflow["status"] != WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION:
-        status_val = workflow["status"].value
+    if detail.status != WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION:
+        status_val = detail.status.value
         click.echo(
             f"❌ Workflow {resolved_id} is not pending clarification (status: {status_val})",
             err=True,
         )
         sys.exit(1)
 
-    work_plan = workflow.get("work_plan") or {}
+    work_plan = detail.work_plan or {}
     concerns = work_plan.get("concerns", [])
 
     if not concerns:
@@ -59,9 +66,11 @@ def _handle_clarify(ticket_key: Optional[str], workflow_id: Optional[str] = None
         )
         sys.exit(1)
 
+    workflow_ticket = detail.ticket_key or ticket_key
+
     click.echo("")
     click.echo(f"📋 WorkPlan clarification for workflow: {resolved_id}")
-    click.echo(f"   Ticket: {workflow.get('ticket_key', ticket_key)}")
+    click.echo(f"   Ticket: {workflow_ticket}")
     click.echo("")
 
     # Build the concerns file content
@@ -93,9 +102,6 @@ def _handle_clarify(ticket_key: Optional[str], workflow_id: Optional[str] = None
     except subprocess.CalledProcessError as e:
         click.echo(f"❌ Editor exited with error code {e.returncode}", err=True)
         sys.exit(1)
-    finally:
-        # Read the file contents regardless of how editor exited
-        pass
 
     with open(tmp_path, "r", encoding="utf-8") as f:
         edited_lines = f.read().splitlines()
@@ -104,7 +110,7 @@ def _handle_clarify(ticket_key: Optional[str], workflow_id: Optional[str] = None
 
     # Parse answers from the edited file
     answers = []
-    current_concern = None
+    current_concern: Optional[str] = None
     for line in edited_lines:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
@@ -116,55 +122,35 @@ def _handle_clarify(ticket_key: Optional[str], workflow_id: Optional[str] = None
             answers.append({"concern": current_concern, "answer": answer})
             current_concern = None
 
-    thread_config = common.make_thread_config(resolved_id)
-
     try:
-        graph = common.build_orchestrator()
-        common.run_graph_stream(
-            graph,
-            Command(resume={"answers": answers}),
-            workflow_id=resolved_id,
-            ticket_key=workflow.get("ticket_key") or ticket_key or "",
-            thread_config=thread_config,
-        )
+        result = service.submit_clarification(resolved_id, answers)
 
-        final_state = graph.get_state(thread_config).values or {}
-
-        if final_state.get("error"):
-            click.echo(f"❌ Workflow error: {final_state['error']}", err=True)
+        if result.error:
+            click.echo(f"❌ Workflow error: {result.error}", err=True)
             sys.exit(1)
 
-        # Check if the graph has suspended again for another clarification round
-        wf_id = final_state.get("workflow_id", resolved_id)
-        refreshed = get_workflow(wf_id)
-        if refreshed and refreshed["status"] == WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION:
+        # The graph may have suspended again (interrupted=True) or completed a
+        # round trip and stored a new plan; either way, read the refreshed
+        # status to decide the user-facing message.
+        refreshed = service.get(resolved_id)
+        refreshed_status = refreshed.status if refreshed else None
+
+        if refreshed_status == WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION:
             click.echo("")
             click.echo("⏸️  The plan still needs clarification.")
+            click.echo(f"   Run:  dispatcher --clarify --ticket {workflow_ticket}")
+            return
+
+        if refreshed_status == WorkflowStatus.PENDING_APPROVAL:
+            click.echo("")
+            click.echo("✅ Plan regenerated and posted to JIRA.")
+            click.echo(f"   To approve:  dispatcher --approve-plan --ticket {workflow_ticket}")
             click.echo(
-                f"   Run:  dispatcher --clarify --ticket {workflow.get('ticket_key', ticket_key)}"
+                f"   To reject:   dispatcher --reject  --ticket {workflow_ticket} " '--reason "..."'
             )
             return
 
-        if refreshed and refreshed["status"] == WorkflowStatus.PENDING_APPROVAL:
-            click.echo("")
-            click.echo("✅ Plan regenerated and posted to JIRA.")
-            approve_ticket = workflow.get("ticket_key", ticket_key)
-            click.echo(f"   To approve:  dispatcher --approve-plan --ticket {approve_ticket}")
-            reject_ticket = workflow.get("ticket_key", ticket_key)
-            click.echo(
-                f"   To reject:   dispatcher --reject  --ticket {reject_ticket} " '--reason "..."'
-            )
-
-    except GraphInterrupt:
-        # Another clarification round is needed — await_workplan_clarification suspended again.
-        refreshed = get_workflow(resolved_id)
-        if refreshed and refreshed["status"] == WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION:
-            click.echo("")
-            click.echo("⏸️  The plan still needs clarification.")
-            click.echo(
-                f"   Run:  dispatcher --clarify --ticket {workflow.get('ticket_key', ticket_key)}"
-            )
-        else:
+        if result.interrupted:
             click.echo("⏸️  Workflow suspended — check status with:  dispatcher --list")
 
     except Exception as e:
