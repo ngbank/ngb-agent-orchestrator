@@ -46,6 +46,11 @@ parameters:
     description: "Review comments from the PR to address in this re-execution"
     default: ""
 
+  - key: branch_name
+    input_type: string
+    requirement: required
+    description: "Deterministic branch name pre-computed by the orchestrator (feature/{ticket_key}+{slug}-{workflow_id[:8]})"
+
 extensions:
   - type: builtin
     name: developer
@@ -168,17 +173,12 @@ prompt: |
 
   ## Step 3: Create or Checkout Feature Branch
 
-  Construct the branch name using `vcs.branch_pattern` from Step 2:
-  - Replace `{ticket_key}` with `{{ ticket_key }}`
-  - Replace `{slug}` with the WorkPlan `summary`: lowercase, hyphens only, max 40 chars, no trailing hyphens
-
   If `{{ existing_branch }}` is provided:
   - Checkout the existing branch: `git checkout {{ existing_branch }}`
   - This is a re-execution after PR comments; apply incremental changes to address the comments
 
   Otherwise:
-  - Create a new branch: `git checkout -b {branch}`
-  - If the branch already exists, append `-2` (and increment until unique)
+  - Create a new branch using the pre-computed name: `git checkout -b {{ branch_name }}`
 
   If `{{ pr_comments }}` is provided, those are mandatory review comments from the existing
   PR that must be fully addressed — they are listed prominently at the top of these instructions.
@@ -306,7 +306,7 @@ prompt: |
   ```json
   {
     "ticket_key": "{{ ticket_key }}",
-    "branch": "feature/{{ ticket_key }}+{slug}",
+    "branch": "{{ branch_name }}",
     "build": "pass",
     "tests": "pass",
     "files_changed": ["list of changed files"],
