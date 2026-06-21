@@ -67,7 +67,6 @@ def infer_branch_prefix(state: CodeGeneratorState) -> dict:
                     ),
                 },
             ],
-            max_tokens=2048,
             temperature=0,
         )
         if not hasattr(raw_response, "choices"):
