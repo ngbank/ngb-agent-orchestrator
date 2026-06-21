@@ -5,7 +5,6 @@ This module handles GitHub App token generation and provides methods for
 common GitHub API operations (clone, push, PR creation).
 """
 
-import logging
 import os
 import re
 import subprocess
@@ -31,74 +30,50 @@ def push_branch_with_token(
 ) -> None:
     """Push a branch using a short-lived GitHub App token.
 
-    This temporarily rewrites origin to a tokenized HTTPS URL, pushes the branch,
-    and always resets origin back to the public HTTPS URL.
+    Temporarily rewrites origin to a tokenized HTTPS URL for the push. No
+    reset is needed because the working directory is an ephemeral clone that
+    is deleted after each run.
 
     Raises:
-        GitHubAuthError: if set-url or push fails. A reset-url failure after a
-            successful push is logged as a warning but does not raise.
+        GitHubAuthError: if set-url or push fails.
     """
     remote_url_with_token = f"https://x-access-token:{token}@github.com/{owner}/{repo}.git"
-    public_remote_url = f"https://github.com/{owner}/{repo}.git"
 
-    try:
-        set_url_result = subprocess.run(
-            [
-                "git",
-                "-C",
-                working_dir,
-                "remote",
-                "set-url",
-                "origin",
-                remote_url_with_token,
-            ],
-            capture_output=True,
-            text=True,
+    set_url_result = subprocess.run(
+        [
+            "git",
+            "-C",
+            working_dir,
+            "remote",
+            "set-url",
+            "origin",
+            remote_url_with_token,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if set_url_result.returncode != 0:
+        raise GitHubAuthError(
+            "git remote set-url failed: "
+            f"{set_url_result.stderr.strip() or set_url_result.returncode}"
         )
-        if set_url_result.returncode != 0:
-            raise GitHubAuthError(
-                "git remote set-url failed: "
-                f"{set_url_result.stderr.strip() or set_url_result.returncode}"
-            )
 
-        push_result = subprocess.run(
-            [
-                "git",
-                "-C",
-                working_dir,
-                "push",
-                "origin",
-                branch,
-            ],
-            capture_output=True,
-            text=True,
+    push_result = subprocess.run(
+        [
+            "git",
+            "-C",
+            working_dir,
+            "push",
+            "origin",
+            branch,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if push_result.returncode != 0:
+        raise GitHubAuthError(
+            f"git push failed: {push_result.stderr.strip() or push_result.returncode}"
         )
-        if push_result.returncode != 0:
-            raise GitHubAuthError(
-                f"git push failed: {push_result.stderr.strip() or push_result.returncode}"
-            )
-    finally:
-        reset_url_result = subprocess.run(
-            [
-                "git",
-                "-C",
-                working_dir,
-                "remote",
-                "set-url",
-                "origin",
-                public_remote_url,
-            ],
-            capture_output=True,
-            text=True,
-        )
-        if reset_url_result.returncode != 0:
-            # URL reset is local housekeeping — log but never raise so that a
-            # successful push is not misreported as a failure, and a real push
-            # error is not replaced by this secondary failure.
-            logging.warning(
-                "git remote reset-url failed (non-fatal): %s",
-                reset_url_result.stderr.strip() or reset_url_result.returncode,
-            )
 
 
 def _load_private_key() -> str:

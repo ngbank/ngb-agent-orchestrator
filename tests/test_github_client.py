@@ -107,10 +107,9 @@ def test_parse_repo_url_https_and_ssh():
     assert _parse_repo_url("git@github.com:org/repo.git") == ("org", "repo")
 
 
-def test_push_branch_with_token_success_sets_pushes_and_resets():
+def test_push_branch_with_token_success_sets_and_pushes():
     with patch("dispatcher.github_client.subprocess.run") as mock_run:
         mock_run.side_effect = [
-            MagicMock(returncode=0, stderr=""),
             MagicMock(returncode=0, stderr=""),
             MagicMock(returncode=0, stderr=""),
         ]
@@ -123,15 +122,14 @@ def test_push_branch_with_token_success_sets_pushes_and_resets():
             token="tok",
         )
 
-    assert mock_run.call_count == 3
+    assert mock_run.call_count == 2
 
 
-def test_push_branch_with_token_raises_on_push_failure_and_still_resets():
+def test_push_branch_with_token_raises_on_push_failure():
     with patch("dispatcher.github_client.subprocess.run") as mock_run:
         mock_run.side_effect = [
             MagicMock(returncode=0, stderr=""),
             MagicMock(returncode=1, stderr="denied"),
-            MagicMock(returncode=0, stderr=""),
         ]
 
         with pytest.raises(GitHubAuthError, match="git push failed"):
@@ -143,46 +141,4 @@ def test_push_branch_with_token_raises_on_push_failure_and_still_resets():
                 token="tok",
             )
 
-    assert mock_run.call_count == 3
-
-
-def test_push_branch_with_token_reset_url_failure_after_success_does_not_raise():
-    """A failed URL reset after a successful push must not mask the success."""
-    with patch("dispatcher.github_client.subprocess.run") as mock_run:
-        mock_run.side_effect = [
-            MagicMock(returncode=0, stderr=""),  # set-url
-            MagicMock(returncode=0, stderr=""),  # push
-            MagicMock(returncode=1, stderr="reset failed"),  # reset-url (non-fatal)
-        ]
-
-        # Must not raise even though reset-url failed
-        push_branch_with_token(
-            working_dir="/tmp/repo",
-            owner="org",
-            repo="repo",
-            branch="feature/test",
-            token="tok",
-        )
-
-    assert mock_run.call_count == 3
-
-
-def test_push_branch_with_token_push_and_reset_both_fail_raises_push_error():
-    """When push fails and reset also fails, the original push error must propagate."""
-    with patch("dispatcher.github_client.subprocess.run") as mock_run:
-        mock_run.side_effect = [
-            MagicMock(returncode=0, stderr=""),  # set-url
-            MagicMock(returncode=1, stderr="denied"),  # push
-            MagicMock(returncode=1, stderr="reset failed"),  # reset-url (non-fatal)
-        ]
-
-        with pytest.raises(GitHubAuthError, match="git push failed"):
-            push_branch_with_token(
-                working_dir="/tmp/repo",
-                owner="org",
-                repo="repo",
-                branch="feature/test",
-                token="tok",
-            )
-
-    assert mock_run.call_count == 3
+    assert mock_run.call_count == 2
