@@ -32,6 +32,15 @@ def route_after_clone(
     return "run_goose"
 
 
+def route_after_infer_branch_prefix(
+    state: CodeGeneratorState,
+) -> Literal["run_goose", "persist_results"]:
+    """Skip to persist_results if infer_branch_prefix failed."""
+    if state.get("exec_error"):
+        return "persist_results"
+    return "run_goose"
+
+
 def route_after_repo_setup(
     state: CodeGeneratorState,
 ) -> Literal["run_goose", "persist_results"]:

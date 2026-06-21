@@ -170,6 +170,17 @@ def test_run_goose_passes_existing_branch_and_comments():
 # ---------------------------------------------------------------------------
 
 
+def _mock_litellm_response(content: str) -> MagicMock:
+    """Build a minimal litellm response mock with the given message content."""
+    msg = MagicMock()
+    msg.content = content
+    choice = MagicMock()
+    choice.message = msg
+    response = MagicMock()
+    response.choices = [choice]
+    return response
+
+
 def test_infer_branch_prefix_returns_correct_prefix(monkeypatch):
     """infer_branch_prefix returns the prefix the LLM classifies."""
     from orchestrator.code_generator.nodes.infer_branch_prefix import infer_branch_prefix
@@ -183,49 +194,52 @@ def test_infer_branch_prefix_returns_correct_prefix(monkeypatch):
         }
     }
 
-    mock_response = MagicMock()
-    mock_response.content = '{"prefix": "bugfix"}'
-
-    with patch("orchestrator.code_generator.nodes.infer_branch_prefix.ChatLiteLLM") as MockLLM:
-        MockLLM.return_value.invoke.return_value = mock_response
+    with patch(
+        "orchestrator.code_generator.nodes.infer_branch_prefix.litellm.completion",
+        return_value=_mock_litellm_response('{"prefix": "bugfix"}'),
+    ):
         result = infer_branch_prefix(state)
 
     assert result == {"branch_prefix": "bugfix"}
 
 
-def test_infer_branch_prefix_fallback_on_invalid_response(monkeypatch):
-    """infer_branch_prefix defaults to 'feature' when LLM returns an unrecognised prefix."""
+def test_infer_branch_prefix_fails_on_invalid_response(monkeypatch):
+    """infer_branch_prefix sets exec_error when LLM returns an unrecognised prefix."""
     from orchestrator.code_generator.nodes.infer_branch_prefix import infer_branch_prefix
 
     monkeypatch.setenv("GOOSE_MODEL", "openai/gpt-4o")
     state = {"work_plan_data": {"summary": "Do something", "approach": "", "tasks": []}}
 
-    mock_response = MagicMock()
-    mock_response.content = '{"prefix": "hotfix"}'
-
-    with patch("orchestrator.code_generator.nodes.infer_branch_prefix.ChatLiteLLM") as MockLLM:
-        MockLLM.return_value.invoke.return_value = mock_response
+    with patch(
+        "orchestrator.code_generator.nodes.infer_branch_prefix.litellm.completion",
+        return_value=_mock_litellm_response('{"prefix": "hotfix"}'),
+    ):
         result = infer_branch_prefix(state)
 
-    assert result == {"branch_prefix": "feature"}
+    assert "exec_error" in result
+    assert result["failed_node"] == "infer_branch_prefix"
 
 
-def test_infer_branch_prefix_fallback_on_exception(monkeypatch):
-    """infer_branch_prefix defaults to 'feature' when the LLM call raises."""
+def test_infer_branch_prefix_fails_on_exception(monkeypatch):
+    """infer_branch_prefix sets exec_error when the LLM call raises."""
     from orchestrator.code_generator.nodes.infer_branch_prefix import infer_branch_prefix
 
     monkeypatch.setenv("GOOSE_MODEL", "openai/gpt-4o")
     state = {"work_plan_data": {"summary": "Do something", "approach": "", "tasks": []}}
 
-    with patch("orchestrator.code_generator.nodes.infer_branch_prefix.ChatLiteLLM") as MockLLM:
-        MockLLM.return_value.invoke.side_effect = RuntimeError("connection timeout")
+    with patch(
+        "orchestrator.code_generator.nodes.infer_branch_prefix.litellm.completion",
+        side_effect=RuntimeError("connection timeout"),
+    ):
         result = infer_branch_prefix(state)
 
-    assert result == {"branch_prefix": "feature"}
+    assert "exec_error" in result
+    assert "connection timeout" in result["exec_error"]
+    assert result["failed_node"] == "infer_branch_prefix"
 
 
-def test_infer_branch_prefix_fallback_when_no_model(monkeypatch):
-    """infer_branch_prefix defaults to 'feature' when GOOSE_MODEL is not set."""
+def test_infer_branch_prefix_fails_when_no_model(monkeypatch):
+    """infer_branch_prefix sets exec_error when GOOSE_MODEL is not set."""
     from orchestrator.code_generator.nodes.infer_branch_prefix import infer_branch_prefix
 
     monkeypatch.delenv("GOOSE_MODEL", raising=False)
@@ -233,7 +247,8 @@ def test_infer_branch_prefix_fallback_when_no_model(monkeypatch):
 
     result = infer_branch_prefix(state)
 
-    assert result == {"branch_prefix": "feature"}
+    assert "exec_error" in result
+    assert result["failed_node"] == "infer_branch_prefix"
 
 
 def test_run_goose_uses_inferred_branch_prefix():
