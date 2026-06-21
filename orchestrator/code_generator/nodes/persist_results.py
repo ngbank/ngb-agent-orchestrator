@@ -35,9 +35,10 @@ def persist_results(state: PersistResultsInputState) -> PersistResultsOutputStat
         update_execution_summary(workflow_id, execution_summary)
 
         exec_status = execution_summary.get("status")
+        pr_url_for_status = execution_summary.get("pr_url", "")
         new_status = (
             WorkflowStatus.PENDING_PR_APPROVAL
-            if not exec_error and exec_status in ("success", "partial")
+            if not exec_error and exec_status in ("success", "partial") and pr_url_for_status
             else WorkflowStatus.FAILED
         )
         update_status(workflow_id, new_status, actor="execute_plan")
@@ -49,8 +50,13 @@ def persist_results(state: PersistResultsInputState) -> PersistResultsOutputStat
             f"tests: {execution_summary.get('tests')}"
         )
 
-    is_failure = bool(exec_error) or execution_summary.get("status") not in ("success", "partial")
+    pr_url = execution_summary.get("pr_url", "")
+    is_failure = (
+        bool(exec_error)
+        or execution_summary.get("status") not in ("success", "partial")
+        or not pr_url
+    )
     return {
-        "pr_url": execution_summary.get("pr_url", ""),
+        "pr_url": pr_url,
         "failed_node": "execute_plan" if is_failure else None,
     }
