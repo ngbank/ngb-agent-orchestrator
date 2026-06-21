@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 def _base_state():
@@ -83,6 +83,66 @@ def test_push_and_create_pr_skips_when_exec_error_set():
 
     assert result["execution_summary"]["status"] == "success"
     mock_push.assert_not_called()
+
+
+def test_push_and_create_pr_fails_when_reexecution_produces_no_new_commits():
+    from orchestrator.code_generator.nodes.push_and_create_pr import push_and_create_pr
+
+    state = _base_state()
+    state["pr_comments"] = "Please fix the typos"
+
+    # origin/<branch> already at the same SHA — Goose made no new commits
+    mock_rev = MagicMock()
+    mock_rev.returncode = 0
+    mock_rev.stdout = "abc123\n"
+
+    with (
+        patch(
+            "orchestrator.code_generator.nodes.push_and_create_pr.subprocess.run",
+            return_value=mock_rev,
+        ) as mock_sub,
+        patch(
+            "orchestrator.code_generator.nodes.push_and_create_pr.push_branch_with_token"
+        ) as mock_push,
+    ):
+        result = push_and_create_pr(state)
+
+    assert result["execution_summary"]["status"] == "failed"
+    assert "no new commits" in result["execution_summary"]["error"]
+    assert result["failed_node"] == "execute_plan"
+    mock_push.assert_not_called()
+    mock_sub.assert_called_once()
+
+
+def test_push_and_create_pr_proceeds_when_reexecution_has_new_commits():
+    from orchestrator.code_generator.nodes.push_and_create_pr import push_and_create_pr
+
+    state = _base_state()
+    state["pr_comments"] = "Please fix the typos"
+
+    # origin/<branch> at a different SHA — Goose did make new commits
+    mock_rev = MagicMock()
+    mock_rev.returncode = 0
+    mock_rev.stdout = "old-sha-xyz\n"
+
+    with (
+        patch(
+            "orchestrator.code_generator.nodes.push_and_create_pr.subprocess.run",
+            return_value=mock_rev,
+        ),
+        patch(
+            "orchestrator.code_generator.nodes.push_and_create_pr.push_branch_with_token"
+        ) as mock_push,
+        patch(
+            "orchestrator.code_generator.nodes.push_and_create_pr.get_open_pr",
+            return_value="https://github.com/ngbank/ngb-agent-orchestrator/pull/7",
+        ),
+        patch("orchestrator.code_generator.nodes.push_and_create_pr.add_pr_comment"),
+    ):
+        result = push_and_create_pr(state)
+
+    mock_push.assert_called_once()
+    assert result["execution_summary"]["pr_url"].endswith("/pull/7")
 
 
 def test_push_and_create_pr_downgrades_to_partial_on_push_failure():
