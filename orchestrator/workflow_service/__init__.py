@@ -16,13 +16,13 @@ in-process orchestrator or a remote one without call-site changes.
 """
 
 from .dtos import (
-    AuditEntry,
-    HistoryEntry,
-    LogChunk,
-    StartRequest,
+    WorkflowAuditEntry,
     WorkflowDetail,
     WorkflowEvent,
+    WorkflowHistoryEntry,
+    WorkflowLogChunk,
     WorkflowRunResult,
+    WorkflowStartRequest,
     WorkflowSummary,
 )
 from .local import LocalWorkflowService, build_local_workflow_service
@@ -32,12 +32,12 @@ __all__ = [
     "WorkflowService",
     "LocalWorkflowService",
     "build_local_workflow_service",
-    "AuditEntry",
-    "HistoryEntry",
-    "LogChunk",
-    "StartRequest",
+    "WorkflowAuditEntry",
     "WorkflowDetail",
     "WorkflowEvent",
+    "WorkflowHistoryEntry",
+    "WorkflowLogChunk",
     "WorkflowRunResult",
+    "WorkflowStartRequest",
     "WorkflowSummary",
 ]

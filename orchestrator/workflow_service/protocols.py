@@ -22,13 +22,13 @@ from typing import Dict, Iterable, List, Optional, Protocol, runtime_checkable
 from state.workflow_status import WorkflowStatus
 
 from .dtos import (
-    AuditEntry,
-    HistoryEntry,
-    LogChunk,
-    StartRequest,
+    WorkflowAuditEntry,
     WorkflowDetail,
     WorkflowEvent,
+    WorkflowHistoryEntry,
+    WorkflowLogChunk,
     WorkflowRunResult,
+    WorkflowStartRequest,
     WorkflowSummary,
 )
 
@@ -62,11 +62,11 @@ class WorkflowService(Protocol):
         """List workflows, optionally filtered by ticket and/or status."""
         ...
 
-    def get_history(self, workflow_id: str) -> List[HistoryEntry]:
+    def get_history(self, workflow_id: str) -> List[WorkflowHistoryEntry]:
         """Return the node traversal history for a workflow, oldest first."""
         ...
 
-    def get_audit_log(self, workflow_id: str) -> List[AuditEntry]:
+    def get_audit_log(self, workflow_id: str) -> List[WorkflowAuditEntry]:
         """Return the audit log entries for a workflow, oldest first."""
         ...
 
@@ -74,7 +74,7 @@ class WorkflowService(Protocol):
         self,
         workflow_id: str,
         stage: Optional[str] = None,
-    ) -> List[LogChunk]:
+    ) -> List[WorkflowLogChunk]:
         """Read captured stage logs from disk.
 
         When ``stage`` is ``None`` returns every stage that has a log file
@@ -130,7 +130,7 @@ class WorkflowService(Protocol):
     # Graph-running operations
     # ------------------------------------------------------------------
 
-    def start(self, request: StartRequest) -> WorkflowRunResult:
+    def start(self, request: WorkflowStartRequest) -> WorkflowRunResult:
         """Start a new workflow from a ticket key and run the graph to completion or pause."""
         ...
 

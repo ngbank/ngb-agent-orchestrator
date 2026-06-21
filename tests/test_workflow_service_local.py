@@ -23,8 +23,8 @@ from langgraph.types import Command
 
 from orchestrator.workflow_service import (
     LocalWorkflowService,
-    StartRequest,
     WorkflowEvent,
+    WorkflowStartRequest,
     WorkflowSummary,
 )
 from state import workflow_repository as state_store
@@ -356,7 +356,7 @@ class TestAdminMutations:
 class TestStart:
     def test_start_dry_run_is_noop(self, temp_db, repo):
         svc = _make_service(repo, FakeGraph())
-        result = svc.start(StartRequest(ticket_key="AOS-20", dry_run=True))
+        result = svc.start(WorkflowStartRequest(ticket_key="AOS-20", dry_run=True))
         assert result.final_status == WorkflowStatus.PENDING
         assert repo.list_workflows() == []
 
@@ -368,7 +368,7 @@ class TestStart:
             )
         )
         svc = _make_service(repo, graph)
-        result = svc.start(StartRequest(ticket_key="AOS-21", workflow_id=wf_id))
+        result = svc.start(WorkflowStartRequest(ticket_key="AOS-21", workflow_id=wf_id))
         # graph.stream was driven once with the start input
         assert graph._stream_called
         # status pulled from repo
@@ -388,7 +388,7 @@ class TestStart:
             )
         )
         svc = _make_service(repo, graph)
-        result = svc.start(StartRequest(ticket_key="AOS-22", workflow_id=wf_id))
+        result = svc.start(WorkflowStartRequest(ticket_key="AOS-22", workflow_id=wf_id))
         assert result.final_status == WorkflowStatus.COMPLETED
         assert result.pr_url == "http://pr/1"
         assert repo.get_workflow(wf_id)["status"] == WorkflowStatus.COMPLETED
@@ -401,7 +401,7 @@ class TestStart:
             post_stream_state=_FakeStateSnapshot(values={"workflow_id": wf_id}),
         )
         svc = _make_service(repo, graph)
-        result = svc.start(StartRequest(ticket_key="AOS-23", workflow_id=wf_id))
+        result = svc.start(WorkflowStartRequest(ticket_key="AOS-23", workflow_id=wf_id))
         assert result.interrupted is True
         # Status comes from DB (PENDING_APPROVAL is what the await_approval
         # node would have set today).

@@ -38,13 +38,13 @@ from state.workflow_repository import WorkflowRepository
 from state.workflow_status import WorkflowStatus
 
 from .dtos import (
-    AuditEntry,
-    HistoryEntry,
-    LogChunk,
-    StartRequest,
+    WorkflowAuditEntry,
     WorkflowDetail,
     WorkflowEvent,
+    WorkflowHistoryEntry,
+    WorkflowLogChunk,
     WorkflowRunResult,
+    WorkflowStartRequest,
     WorkflowSummary,
 )
 
@@ -135,14 +135,14 @@ class LocalWorkflowService:
         rows = self._repo.list_workflows(ticket_key=ticket_key, status=status_str, limit=limit)
         return [_to_summary(r) for r in rows]
 
-    def get_history(self, workflow_id: str) -> List[HistoryEntry]:
+    def get_history(self, workflow_id: str) -> List[WorkflowHistoryEntry]:
         graph = self._graph_factory()
         thread_config = _make_thread_config(workflow_id)
         # get_state_history returns newest-first; the CLI today reverses for
         # chronological order, so we do the same here.
         history = list(graph.get_state_history(thread_config))
         history.reverse()
-        entries: List[HistoryEntry] = []
+        entries: List[WorkflowHistoryEntry] = []
         for state in history:
             step = (state.metadata or {}).get("step", -1)
             if step == -1:
@@ -162,7 +162,7 @@ class LocalWorkflowService:
                     error = None
                     result_keys = list((task.result or {}).keys())
                 entries.append(
-                    HistoryEntry(
+                    WorkflowHistoryEntry(
                         step=int(step),
                         node=task.name,
                         outcome=outcome,
@@ -172,25 +172,25 @@ class LocalWorkflowService:
                 )
         return entries
 
-    def get_audit_log(self, workflow_id: str) -> List[AuditEntry]:
+    def get_audit_log(self, workflow_id: str) -> List[WorkflowAuditEntry]:
         return [_to_audit(workflow_id, r) for r in self._repo.get_audit_log(workflow_id)]
 
     def read_logs(
         self,
         workflow_id: str,
         stage: Optional[str] = None,
-    ) -> List[LogChunk]:
+    ) -> List[WorkflowLogChunk]:
         ticket_key: Optional[str] = None
         row = self._repo.get_workflow(workflow_id)
         if row is not None:
             ticket_key = row.get("ticket_key")
         stages = [stage] if stage else ["plan", "execute"]
-        chunks: List[LogChunk] = []
+        chunks: List[WorkflowLogChunk] = []
         for st in stages:
             path = log_path(workflow_id, st, ticket_key=ticket_key)
             if path.exists():
                 chunks.append(
-                    LogChunk(
+                    WorkflowLogChunk(
                         workflow_id=workflow_id,
                         stage=st,
                         path=str(path),
@@ -287,7 +287,7 @@ class LocalWorkflowService:
     # Graph-running operations
     # ------------------------------------------------------------------
 
-    def start(self, request: StartRequest) -> WorkflowRunResult:
+    def start(self, request: WorkflowStartRequest) -> WorkflowRunResult:
         # Dry-run is a no-op at the service layer; the CLI handles the
         # informational echoes today.  Returning a placeholder keeps the
         # protocol uniform without writing anything to the DB.
@@ -700,8 +700,8 @@ def _to_detail(row: Dict[str, Any]) -> WorkflowDetail:
     )
 
 
-def _to_audit(workflow_id: str, row: Dict[str, Any]) -> AuditEntry:
-    return AuditEntry(
+def _to_audit(workflow_id: str, row: Dict[str, Any]) -> WorkflowAuditEntry:
+    return WorkflowAuditEntry(
         workflow_id=workflow_id,
         actor=row.get("actor", ""),
         action=row.get("action", ""),

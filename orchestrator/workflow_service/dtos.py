@@ -14,7 +14,7 @@ from state.workflow_status import WorkflowStatus
 
 
 @dataclass(frozen=True)
-class StartRequest:
+class WorkflowStartRequest:
     """Inputs for ``WorkflowService.start``."""
 
     ticket_key: str
@@ -53,7 +53,7 @@ class WorkflowDetail:
 
 
 @dataclass(frozen=True)
-class LogChunk:
+class WorkflowLogChunk:
     """One stage's captured log output."""
 
     workflow_id: str
@@ -63,7 +63,7 @@ class LogChunk:
 
 
 @dataclass(frozen=True)
-class HistoryEntry:
+class WorkflowHistoryEntry:
     """One step in a workflow's node traversal history."""
 
     step: int
@@ -74,7 +74,7 @@ class HistoryEntry:
 
 
 @dataclass(frozen=True)
-class AuditEntry:
+class WorkflowAuditEntry:
     """One row from the audit log for a workflow."""
 
     workflow_id: str
