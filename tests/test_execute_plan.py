@@ -1,7 +1,8 @@
 """Tests for code_generator subgraph nodes and shared execution helpers."""
 
+import json
 from contextlib import contextmanager
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
@@ -149,9 +150,10 @@ def test_run_goose_passes_existing_branch_and_comments():
         "pr_comments": "Fix typo in line 42",
     }
 
+    work_plan_json = json.dumps({"summary": "test work plan summary"})
     with (
         patch("orchestrator.code_generator.nodes.run_goose.run_and_tee") as mock_run,
-        patch("builtins.open", MagicMock()),
+        patch("builtins.open", mock_open(read_data=work_plan_json)),
         patch("os.path.exists", return_value=False),
     ):
         mock_run.return_value = MagicMock(returncode=0)
@@ -160,6 +162,7 @@ def test_run_goose_passes_existing_branch_and_comments():
         cmd = mock_run.call_args[0][0]
         assert "existing_branch=feature/AOS-92+test" in cmd
         assert "pr_comments=Fix typo in line 42" in cmd
+        assert any(arg.startswith("branch_name=feature/AOS-92+") for arg in cmd)
 
 
 # ---------------------------------------------------------------------------
