@@ -1,5 +1,6 @@
 """Node: push_and_create_pr — push branch and open/update PR."""
 
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -147,6 +148,33 @@ def push_and_create_pr(
             "execution_summary": execution_summary,
             "failed_node": None,
         }
+
+    # When re-executing after PR comments, verify Goose actually produced new commits.
+    # If origin/<branch> already points at the same SHA, the branch is unchanged and
+    # posting an "Addressed review comments" PR comment would be misleading.
+    if pr_comments:
+        try:
+            rev_result = subprocess.run(
+                ["git", "-C", working_dir, "rev-parse", f"origin/{branch}"],
+                capture_output=True,
+                text=True,
+            )
+            if rev_result.returncode == 0 and rev_result.stdout.strip() == commit_sha:
+                click.echo(
+                    "⊘ Re-execution produced no new commits — branch is unchanged",
+                    err=True,
+                )
+                execution_summary["status"] = "failed"
+                execution_summary["error"] = (
+                    "Re-execution produced no new commits. "
+                    "The branch is unchanged — review comments may not have been addressed."
+                )
+                return {
+                    "execution_summary": execution_summary,
+                    "failed_node": "execute_plan",
+                }
+        except Exception:
+            pass  # if git isn't callable, fall through and attempt the push normally
 
     # === PUSH ===
     click.echo(f"📤 Pushing {branch}...")
