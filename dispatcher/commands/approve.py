@@ -71,6 +71,9 @@ def _handle_approve(ticket_key: str, workflow_id: Optional[str] = None) -> None:
                 reason="Execution completed — awaiting PR approval",
             )
             click.echo("✅ Execution completed — awaiting PR approval")
+            pr_url = execution_summary.get("pr_url", "")
+            if pr_url:
+                click.echo(f"   PR URL: {pr_url}")
         else:
             update_status(
                 wf_id,
