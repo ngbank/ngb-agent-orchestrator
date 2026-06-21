@@ -73,7 +73,17 @@ def infer_branch_prefix(state: CodeGeneratorState) -> dict:
         if not hasattr(raw_response, "choices"):
             raise TypeError(f"Unexpected litellm response type: {type(raw_response)}")
         response = cast(ModelResponse, raw_response)
-        raw = (response.choices[0].message.content or "").strip()
+        choice = response.choices[0]
+        msg = choice.message
+        # Temporary diagnostic: surface the full response structure
+        click.echo(
+            f"[infer_branch_prefix] finish_reason={choice.finish_reason!r} "
+            f"content={msg.content!r} "
+            f"tool_calls={getattr(msg, 'tool_calls', None)!r} "
+            f"reasoning_content={getattr(msg, 'reasoning_content', None)!r}",
+            err=True,
+        )
+        raw = (msg.content or "").strip()
         if not raw:
             raise ValueError("LLM returned empty content")
         # Strip markdown fences if present
