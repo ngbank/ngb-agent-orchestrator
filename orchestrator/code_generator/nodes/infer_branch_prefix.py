@@ -50,10 +50,9 @@ def infer_branch_prefix(state: CodeGeneratorState) -> dict:
 
     model = os.environ.get("GOOSE_MODEL", "")
     if not model:
-        return {
-            "exec_error": "GOOSE_MODEL is not set — cannot infer branch prefix",
-            "failed_node": "infer_branch_prefix",
-        }
+        msg = "GOOSE_MODEL is not set — cannot infer branch prefix"
+        click.echo(f"❌ {msg}", err=True)
+        return {"exec_error": msg, "failed_node": "infer_branch_prefix"}
 
     try:
         kwargs = litellm_call_kwargs(model)
@@ -70,13 +69,13 @@ def infer_branch_prefix(state: CodeGeneratorState) -> dict:
             ],
             max_tokens=64,
             temperature=0,
-            response_format={"type": "json_object"},
-            drop_params=True,
         )
         if not hasattr(raw_response, "choices"):
             raise TypeError(f"Unexpected litellm response type: {type(raw_response)}")
         response = cast(ModelResponse, raw_response)
         raw = (response.choices[0].message.content or "").strip()
+        if not raw:
+            raise ValueError("LLM returned empty content")
         # Strip markdown fences if present
         if raw.startswith("```"):
             raw = raw.split("```")[1].lstrip("json").strip()
@@ -88,17 +87,15 @@ def infer_branch_prefix(state: CodeGeneratorState) -> dict:
         data = json.loads(raw)
         prefix = data.get("prefix", "").lower().strip()
         if prefix not in _VALID_PREFIXES:
-            return {
-                "exec_error": (
-                    f"LLM returned unrecognised branch prefix '{prefix}'"
-                    f" — expected one of {sorted(_VALID_PREFIXES)}"
-                ),
-                "failed_node": "infer_branch_prefix",
-            }
+            msg = (
+                f"LLM returned unrecognised branch prefix '{prefix}'"
+                f" — expected one of {sorted(_VALID_PREFIXES)}"
+            )
+            click.echo(f"❌ {msg}", err=True)
+            return {"exec_error": msg, "failed_node": "infer_branch_prefix"}
         click.echo(f"🌿 Branch prefix inferred: {prefix}")
         return {"branch_prefix": prefix}
     except Exception as exc:  # noqa: BLE001
-        return {
-            "exec_error": f"Branch prefix inference failed: {exc}",
-            "failed_node": "infer_branch_prefix",
-        }
+        msg = f"Branch prefix inference failed: {exc}"
+        click.echo(f"❌ {msg}", err=True)
+        return {"exec_error": msg, "failed_node": "infer_branch_prefix"}
