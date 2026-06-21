@@ -5,6 +5,7 @@ This module handles GitHub App token generation and provides methods for
 common GitHub API operations (clone, push, PR creation).
 """
 
+import logging
 import os
 import re
 import subprocess
@@ -34,7 +35,8 @@ def push_branch_with_token(
     and always resets origin back to the public HTTPS URL.
 
     Raises:
-        GitHubAuthError: if set-url, push, or reset-url fails.
+        GitHubAuthError: if set-url or push fails. A reset-url failure after a
+            successful push is logged as a warning but does not raise.
     """
     remote_url_with_token = f"https://x-access-token:{token}@github.com/{owner}/{repo}.git"
     public_remote_url = f"https://github.com/{owner}/{repo}.git"
@@ -90,9 +92,12 @@ def push_branch_with_token(
             text=True,
         )
         if reset_url_result.returncode != 0:
-            raise GitHubAuthError(
-                "git remote reset-url failed: "
-                f"{reset_url_result.stderr.strip() or reset_url_result.returncode}"
+            # URL reset is local housekeeping — log but never raise so that a
+            # successful push is not misreported as a failure, and a real push
+            # error is not replaced by this secondary failure.
+            logging.warning(
+                "git remote reset-url failed (non-fatal): %s",
+                reset_url_result.stderr.strip() or reset_url_result.returncode,
             )
 
 
