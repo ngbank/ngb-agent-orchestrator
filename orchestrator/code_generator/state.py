@@ -40,6 +40,7 @@ class RunGooseInputState(TypedDict, total=False):
     exec_log_path: str
     execution_summary: Optional[dict]
     pr_comments: Optional[str]
+    branch_prefix: str
 
 
 class ProcessResultsInputState(TypedDict, total=False):
@@ -136,3 +137,4 @@ class CodeGeneratorState(TypedDict, total=False):
     summary_path: str
     reasoning_path: str
     exec_log_path: str
+    branch_prefix: str

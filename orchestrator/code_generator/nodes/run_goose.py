@@ -35,6 +35,8 @@ def run_goose(state: RunGooseInputState) -> dict:
     existing_branch = existing_exec_summary.get("branch", "")
     pr_comments = state.get("pr_comments", "")
 
+    branch_prefix = state.get("branch_prefix") or "feature"
+
     # Compute a deterministic branch name from the work plan summary + workflow_id suffix.
     # This prevents remote collisions when the same ticket is run multiple times.
     with open(work_plan_path) as _f:
@@ -44,7 +46,7 @@ def run_goose(state: RunGooseInputState) -> dict:
         .strip("-")[:40]
         .rstrip("-")
     )
-    branch_name = f"feature/{ticket_key}+{_slug}-{str(workflow_id)[:8]}"
+    branch_name = f"{branch_prefix}/{ticket_key}+{_slug}-{str(workflow_id)[:8]}"
 
     mcp_python = os.environ.get("GOOSE_MCP_PYTHON", "python")
     max_turns = os.environ.get("GOOSE_MAX_TURNS", "200")
