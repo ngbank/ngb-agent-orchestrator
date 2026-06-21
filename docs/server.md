@@ -1,13 +1,14 @@
 # Orchestrator HTTP Server
 
 The orchestrator ships an optional FastAPI server that exposes the
-non-streaming subset of [`WorkflowService`](architecture.md#orchestratorworkflow_service)
-as REST endpoints. The CLI continues to work against the in-process
-`LocalWorkflowService` and is **not** affected by the server.
+[`WorkflowService`](architecture.md#orchestratorworkflow_service)
+as REST endpoints, plus two Server-Sent Events (SSE) streams for
+following workflow events and log output in real time. The CLI continues
+to work against the in-process `LocalWorkflowService` and is **not**
+affected by the server.
 
-Streaming events / logs (B2), the `HttpWorkflowService` client (B3), and
-packaging polish (B4) are tracked in separate tickets and are **not** part
-of this skeleton.
+The `HttpWorkflowService` client (B3) and packaging polish (B4) are
+tracked in separate tickets and are **not** part of this work.
 
 ---
 
@@ -45,6 +46,8 @@ All `/workflows*` routes require a bearer token when
 | `GET` | `/workflows` | List workflows (optionally filter by `ticket_key`, `status`, `limit`) |
 | `GET` | `/workflows/{id}` | Fetch a full workflow record |
 | `POST` | `/workflows/{id}/cancel` | Cancel an in-flight workflow |
+| `GET` | `/workflows/{id}/events` | **SSE** — stream workflow lifecycle events |
+| `GET` | `/workflows/{id}/logs` | **SSE** — stream captured stage log content |
 
 ### `POST /workflows`
 
@@ -90,6 +93,76 @@ Returns:
 - `204 No Content` on success
 - `404 Not Found` when the workflow id does not exist
 - `409 Conflict` when the workflow is already terminal
+
+### `GET /workflows/{id}/events` (SSE)
+
+Live stream of workflow lifecycle events derived from LangGraph state
+history. The response uses the standard SSE wire format
+(`text/event-stream`) and one event per JSON payload:
+
+```
+id: 4
+data: {"seq": 4, "kind": "node_end", "node": "plan", "data": {"result_keys": ["work_plan"]}}
+
+```
+
+`kind` is one of `node_start`, `node_end`, `interrupt`, `failed`. When
+the workflow reaches a terminal status the server emits a final
+`stream_end` event and closes the connection:
+
+```
+data: {"seq": 12, "kind": "stream_end", "node": null, "data": {"final_status": "completed"}}
+```
+
+**Replay / reconnect** — clients can resume after a disconnect by passing
+the last seen sequence number either:
+
+- as the `after_seq` query parameter, or
+- via the standard `Last-Event-ID` header (set automatically by browser
+    `EventSource`).
+
+The query parameter takes precedence when both are present.
+
+Heartbeats (`: ping\n\n` SSE comment frames) are sent every 15s of idle
+time so proxies do not close the connection.
+
+`404 Not Found` is returned synchronously when the workflow id is
+unknown — before the stream is opened.
+
+### `GET /workflows/{id}/logs` (SSE)
+
+Live stream of captured `plan` / `execute` stage logs. Each event
+carries a JSON payload with the stage, the byte offset of the chunk
+within the stage's full log file, and the chunk content:
+
+```
+id: 1024
+data: {"stage": "plan", "offset": 0, "end_offset": 1024, "content": "..."}
+```
+
+Query parameters:
+
+- `stage` — limit to one stage (`plan` or `execute`). When omitted, both
+    stages are followed with independent offsets.
+- `after_offset` — skip bytes already delivered. Applies to every
+    streamed stage uniformly; typically only useful with a single
+    `stage`. Can also be supplied via `Last-Event-ID`.
+
+Same heartbeat (15s) and terminal-`stream_end`/close semantics as
+`/events`. The trailing event has no `id:` and looks like:
+
+```
+data: {"stage": "plan", "kind": "stream_end", "final_status": "completed"}
+```
+
+#### Consuming with `curl`
+
+```bash
+curl -N "http://localhost:8080/workflows/$WF_ID/events"
+curl -N "http://localhost:8080/workflows/$WF_ID/logs?stage=execute&after_offset=4096"
+```
+
+`-N` disables curl's output buffering so frames render immediately.
 
 ---
 
