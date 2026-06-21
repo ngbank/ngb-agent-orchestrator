@@ -179,6 +179,7 @@ class LocalWorkflowService:
         self,
         workflow_id: str,
         stage: Optional[str] = None,
+        after_offset: int = 0,
     ) -> List[WorkflowLogChunk]:
         ticket_key: Optional[str] = None
         row = self._repo.get_workflow(workflow_id)
@@ -188,15 +189,30 @@ class LocalWorkflowService:
         chunks: List[WorkflowLogChunk] = []
         for st in stages:
             path = log_path(workflow_id, st, ticket_key=ticket_key)
-            if path.exists():
-                chunks.append(
-                    WorkflowLogChunk(
-                        workflow_id=workflow_id,
-                        stage=st,
-                        path=str(path),
-                        content=path.read_text(),
-                    )
+            if not path.exists():
+                continue
+            raw = path.read_bytes()
+            size = len(raw)
+            start = max(0, min(after_offset, size))
+            if start >= size and after_offset > 0:
+                # Caller is already caught up on this stage — skip emitting an
+                # empty chunk so they can distinguish "no new bytes" from "no
+                # log file yet" (the latter is also omitted above).
+                continue
+            content_bytes = raw[start:]
+            try:
+                content = content_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                content = content_bytes.decode("utf-8", errors="replace")
+            chunks.append(
+                WorkflowLogChunk(
+                    workflow_id=workflow_id,
+                    stage=st,
+                    path=str(path),
+                    content=content,
+                    offset=start,
                 )
+            )
         return chunks
 
     def stream_events(
