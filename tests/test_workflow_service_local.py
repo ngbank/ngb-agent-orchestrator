@@ -1,0 +1,553 @@
+"""Unit tests for :mod:`orchestrator.workflow_service.local`.
+
+These tests cover every public method of ``LocalWorkflowService`` using:
+  * The real SQLite ``WorkflowRepository`` against a per-test temp DB
+    (mirroring :mod:`tests.test_state_store`).
+  * A ``FakeGraph`` that records calls and serves canned state /
+    state_history without booting LangGraph.
+
+No dispatcher CLI or TUI code is exercised — those layers are wired in by
+AOS-139 (A2) and AOS-140 (A3).
+"""
+
+from __future__ import annotations
+
+import os
+import tempfile
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import pytest
+from langgraph.errors import GraphInterrupt
+from langgraph.types import Command
+
+from orchestrator.workflow_service import (
+    LocalWorkflowService,
+    WorkflowEvent,
+    WorkflowStartRequest,
+    WorkflowSummary,
+)
+from state import workflow_repository as state_store
+from state.sqlite_workflow_repository import SQLiteWorkflowRepository
+from state.workflow_status import WorkflowStatus
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def temp_db(monkeypatch):
+    """Create a fresh SQLite DB per test, plus a temp logs dir."""
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "test.db")
+        logs_dir = os.path.join(tmp, "logs")
+        os.makedirs(logs_dir, exist_ok=True)
+
+        monkeypatch.setenv("DB_PATH", db_path)
+        monkeypatch.setenv("ORCHESTRATOR_LOGS_DIR", logs_dir)
+
+        state_store.run_migrations()
+        yield db_path
+
+
+@pytest.fixture
+def repo():
+    return SQLiteWorkflowRepository()
+
+
+# ---------------------------------------------------------------------------
+# FakeGraph — minimal stand-in for the langgraph CompiledGraph
+# ---------------------------------------------------------------------------
+
+
+class _FakeTask:
+    def __init__(
+        self,
+        name: str,
+        *,
+        result: Optional[Dict[str, Any]] = None,
+        error: Optional[str] = None,
+        interrupts: tuple = (),
+    ) -> None:
+        self.name = name
+        self.result = result
+        self.error = error
+        self.interrupts = interrupts
+
+
+class _FakeStateSnapshot:
+    def __init__(
+        self,
+        *,
+        values: Optional[Dict[str, Any]] = None,
+        next_nodes: tuple = (),
+        tasks: Optional[List[_FakeTask]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        config: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        self.values = dict(values or {})
+        self.next = next_nodes
+        self.tasks = tasks or []
+        self.metadata = metadata or {}
+        self.config = config or {}
+
+
+class FakeGraph:
+    """Test double for the LangGraph CompiledGraph.
+
+    Records every call so tests can assert on the inputs the service passes,
+    and serves canned ``get_state`` / ``get_state_history`` responses.
+    Set ``stream_raises`` to simulate ``GraphInterrupt``.
+    """
+
+    def __init__(
+        self,
+        *,
+        stream_events: Optional[List[Any]] = None,
+        stream_raises: Optional[BaseException] = None,
+        history: Optional[List[_FakeStateSnapshot]] = None,
+        state: Optional[_FakeStateSnapshot] = None,
+        post_stream_state: Optional[_FakeStateSnapshot] = None,
+    ) -> None:
+        self._stream_events = stream_events or []
+        self._stream_raises = stream_raises
+        # ``history`` is newest-first to match langgraph's contract; the
+        # service reverses internally.
+        self._history = history or []
+        self._initial_state = state or _FakeStateSnapshot()
+        self._post_stream_state = post_stream_state or self._initial_state
+        self._stream_called = False
+        self.stream_calls: List[tuple] = []
+        self.update_state_calls: List[tuple] = []
+
+    def stream(self, *args, **kwargs):
+        self.stream_calls.append((args, kwargs))
+        self._stream_called = True
+        if self._stream_raises is not None:
+            raise self._stream_raises
+        return iter(self._stream_events)
+
+    def get_state(self, config):
+        # Once the stream has been consumed, return the post-stream state so
+        # tests can assert the service reads the *final* state.
+        return self._post_stream_state if self._stream_called else self._initial_state
+
+    def get_state_history(self, config):
+        return iter(self._history)
+
+    def update_state(self, config, values):
+        self.update_state_calls.append((config, values))
+        # Propagate the update into the post-stream state so subsequent
+        # get_state calls see the change.
+        self._post_stream_state.values.update(values)
+
+
+def _make_service(repo, graph: FakeGraph) -> LocalWorkflowService:
+    return LocalWorkflowService(repository=repo, graph_factory=lambda: graph)
+
+
+# ---------------------------------------------------------------------------
+# Read-side wrappers
+# ---------------------------------------------------------------------------
+
+
+class TestReads:
+    def test_get_returns_none_when_missing(self, temp_db, repo):
+        svc = _make_service(repo, FakeGraph())
+        assert svc.get("does-not-exist") is None
+
+    def test_get_returns_workflow_detail(self, temp_db, repo):
+        wf_id = repo.create_workflow(
+            ticket_key="AOS-1",
+            work_plan={"summary": "demo"},
+            status=WorkflowStatus.PENDING,
+        )
+        svc = _make_service(repo, FakeGraph())
+        detail = svc.get(wf_id)
+        assert detail is not None
+        assert detail.id == wf_id
+        assert detail.ticket_key == "AOS-1"
+        assert detail.status == WorkflowStatus.PENDING
+        assert detail.work_plan == {"summary": "demo"}
+
+    def test_get_by_ticket_returns_summaries_newest_first(self, temp_db, repo):
+        wf1 = repo.create_workflow(ticket_key="AOS-2")
+        wf2 = repo.create_workflow(ticket_key="AOS-2")
+        svc = _make_service(repo, FakeGraph())
+        results = svc.get_by_ticket("AOS-2")
+        assert [r.id for r in results] == [wf2, wf1]
+        for r in results:
+            assert isinstance(r, WorkflowSummary)
+
+    def test_get_latest_retryable_by_ticket(self, temp_db, repo):
+        wf_id = repo.create_workflow(ticket_key="AOS-3")
+        repo.update_status(wf_id, WorkflowStatus.FAILED)
+        svc = _make_service(repo, FakeGraph())
+        result = svc.get_latest_retryable_by_ticket("AOS-3")
+        assert result is not None
+        assert result.id == wf_id
+        assert svc.get_latest_retryable_by_ticket("AOS-nope") is None
+
+    def test_list_respects_status_filter(self, temp_db, repo):
+        wf_done = repo.create_workflow(ticket_key="AOS-4")
+        repo.update_status(wf_done, WorkflowStatus.COMPLETED)
+        repo.create_workflow(ticket_key="AOS-4", status=WorkflowStatus.PENDING)
+
+        svc = _make_service(repo, FakeGraph())
+        completed = svc.list(status=WorkflowStatus.COMPLETED)
+        assert {w.id for w in completed} == {wf_done}
+
+    def test_get_audit_log(self, temp_db, repo):
+        wf_id = repo.create_workflow(ticket_key="AOS-5")
+        repo.update_status(wf_id, WorkflowStatus.IN_PROGRESS, actor="alice")
+
+        svc = _make_service(repo, FakeGraph())
+        entries = svc.get_audit_log(wf_id)
+        assert any(e.action == "status_change" and e.actor == "alice" for e in entries)
+
+
+# ---------------------------------------------------------------------------
+# Log file reads
+# ---------------------------------------------------------------------------
+
+
+class TestReadLogs:
+    def test_returns_empty_when_no_files(self, temp_db, repo):
+        wf_id = repo.create_workflow(ticket_key="AOS-6")
+        svc = _make_service(repo, FakeGraph())
+        assert svc.read_logs(wf_id) == []
+
+    def test_returns_chunks_for_existing_stage_logs(self, temp_db, repo):
+        wf_id = repo.create_workflow(ticket_key="AOS-7")
+        # log_path() creates the workflow dir on demand; write a file there.
+        from orchestrator.utils import log_path
+
+        plan_log = log_path(wf_id, "plan", ticket_key="AOS-7")
+        plan_log.write_text("plan output here")
+
+        svc = _make_service(repo, FakeGraph())
+        chunks = svc.read_logs(wf_id)
+        stages = {c.stage for c in chunks}
+        assert "plan" in stages
+        assert "execute" not in stages  # not written
+        plan_chunk = next(c for c in chunks if c.stage == "plan")
+        assert plan_chunk.content == "plan output here"
+        assert Path(plan_chunk.path) == plan_log
+
+
+# ---------------------------------------------------------------------------
+# History & stream_events
+# ---------------------------------------------------------------------------
+
+
+class TestHistoryAndEvents:
+    def _build_history(self) -> List[_FakeStateSnapshot]:
+        # newest-first ordering (matches langgraph)
+        return [
+            _FakeStateSnapshot(
+                metadata={"step": 2},
+                tasks=[_FakeTask("execute_plan", result={"summary": "ok"})],
+            ),
+            _FakeStateSnapshot(
+                metadata={"step": 1},
+                tasks=[_FakeTask("work_planner", result={"work_plan": {}})],
+            ),
+            _FakeStateSnapshot(
+                metadata={"step": -1},  # synthetic input step — must be skipped
+                tasks=[_FakeTask("__start__")],
+            ),
+        ]
+
+    def test_get_history_skips_input_and_orders_chronologically(self, temp_db, repo):
+        graph = FakeGraph(history=self._build_history())
+        svc = _make_service(repo, graph)
+        history = svc.get_history("wf-x")
+        assert [(h.step, h.node) for h in history] == [
+            (1, "work_planner"),
+            (2, "execute_plan"),
+        ]
+        assert history[0].outcome == "ok"
+        assert history[0].result_keys == ["work_plan"]
+
+    def test_get_history_marks_error_and_interrupt(self, temp_db, repo):
+        history = [
+            _FakeStateSnapshot(
+                metadata={"step": 2},
+                tasks=[_FakeTask("await_approval", interrupts=("paused",))],
+            ),
+            _FakeStateSnapshot(
+                metadata={"step": 1},
+                tasks=[_FakeTask("work_planner", error="boom")],
+            ),
+        ]
+        graph = FakeGraph(history=history)
+        svc = _make_service(repo, graph)
+        result = svc.get_history("wf-x")
+        assert result[0].outcome == "error" and result[0].error == "boom"
+        assert result[1].outcome == "interrupted"
+
+    def test_stream_events_yields_sequential_events(self, temp_db, repo):
+        graph = FakeGraph(history=self._build_history())
+        svc = _make_service(repo, graph)
+        events = list(svc.stream_events("wf-x"))
+        # 3 historical states × 1 task each = 3 events, replayed in
+        # chronological order: the synthetic __start__ task first (no
+        # result → "node_start"), then the two real nodes that produced
+        # results.
+        assert [e.seq for e in events] == [1, 2, 3]
+        assert [e.kind for e in events] == ["node_start", "node_end", "node_end"]
+        assert [e.node for e in events] == ["__start__", "work_planner", "execute_plan"]
+        assert all(isinstance(e, WorkflowEvent) for e in events)
+
+    def test_stream_events_respects_after_seq(self, temp_db, repo):
+        graph = FakeGraph(history=self._build_history())
+        svc = _make_service(repo, graph)
+        events = list(svc.stream_events("wf-x", after_seq=2))
+        assert [e.seq for e in events] == [3]
+
+
+# ---------------------------------------------------------------------------
+# Admin / status mutations
+# ---------------------------------------------------------------------------
+
+
+class TestAdminMutations:
+    def test_cancel_marks_workflow_cancelled(self, temp_db, repo):
+        wf_id = repo.create_workflow(ticket_key="AOS-8")
+        svc = _make_service(repo, FakeGraph())
+        svc.cancel(wf_id, reason="testing", actor="tester")
+        assert repo.get_workflow(wf_id)["status"] == WorkflowStatus.CANCELLED
+
+    def test_mark_interrupted_is_noop_when_terminal(self, temp_db, repo):
+        wf_id = repo.create_workflow(ticket_key="AOS-9")
+        repo.update_status(wf_id, WorkflowStatus.COMPLETED)
+        svc = _make_service(repo, FakeGraph())
+        svc.mark_interrupted(wf_id, failed_node="execute_plan")
+        # Status stays COMPLETED (terminal); no-op.
+        assert repo.get_workflow(wf_id)["status"] == WorkflowStatus.COMPLETED
+
+    def test_mark_interrupted_sets_failed(self, temp_db, repo):
+        wf_id = repo.create_workflow(ticket_key="AOS-10")
+        repo.update_status(wf_id, WorkflowStatus.IN_PROGRESS)
+        svc = _make_service(repo, FakeGraph())
+        svc.mark_interrupted(wf_id, failed_node="execute_plan")
+        assert repo.get_workflow(wf_id)["status"] == WorkflowStatus.FAILED
+
+    def test_clear_db_returns_counts(self, temp_db, repo):
+        # The real clear_db requires the langgraph checkpoints table; use a
+        # fake repo to keep the test focused on the service's delegation.
+        class _StubRepo:
+            def clear_db(self):
+                return (7, 3)
+
+        svc = LocalWorkflowService(
+            repository=_StubRepo(),
+            graph_factory=lambda: FakeGraph(),
+        )
+        assert svc.clear_db() == (7, 3)
+
+
+# ---------------------------------------------------------------------------
+# Graph-running operations
+# ---------------------------------------------------------------------------
+
+
+class TestStart:
+    def test_start_dry_run_is_noop(self, temp_db, repo):
+        svc = _make_service(repo, FakeGraph())
+        result = svc.start(WorkflowStartRequest(ticket_key="AOS-20", dry_run=True))
+        assert result.final_status == WorkflowStatus.PENDING
+        assert repo.list_workflows() == []
+
+    def test_start_uses_provided_workflow_id(self, temp_db, repo):
+        wf_id = repo.create_workflow(ticket_key="AOS-21", status=WorkflowStatus.PENDING_APPROVAL)
+        graph = FakeGraph(
+            post_stream_state=_FakeStateSnapshot(
+                values={"workflow_id": wf_id, "ticket_key": "AOS-21"}
+            )
+        )
+        svc = _make_service(repo, graph)
+        result = svc.start(WorkflowStartRequest(ticket_key="AOS-21", workflow_id=wf_id))
+        # graph.stream was driven once with the start input
+        assert graph._stream_called
+        # status pulled from repo
+        assert result.final_status == WorkflowStatus.PENDING_APPROVAL
+        assert result.workflow_id == wf_id
+
+    def test_start_completes_when_approval_already_present(self, temp_db, repo):
+        wf_id = repo.create_workflow(ticket_key="AOS-22", status=WorkflowStatus.PENDING_APPROVAL)
+        graph = FakeGraph(
+            post_stream_state=_FakeStateSnapshot(
+                values={
+                    "workflow_id": wf_id,
+                    "ticket_key": "AOS-22",
+                    "approval_decision": "approved",
+                    "execution_summary": {"status": "success", "pr_url": "http://pr/1"},
+                }
+            )
+        )
+        svc = _make_service(repo, graph)
+        result = svc.start(WorkflowStartRequest(ticket_key="AOS-22", workflow_id=wf_id))
+        assert result.final_status == WorkflowStatus.COMPLETED
+        assert result.pr_url == "http://pr/1"
+        assert repo.get_workflow(wf_id)["status"] == WorkflowStatus.COMPLETED
+
+    def test_start_handles_graph_interrupt(self, temp_db, repo):
+        wf_id = repo.create_workflow(ticket_key="AOS-23", status=WorkflowStatus.PENDING_APPROVAL)
+        graph = FakeGraph(
+            stream_raises=GraphInterrupt(()),
+            state=_FakeStateSnapshot(values={"workflow_id": wf_id}),
+            post_stream_state=_FakeStateSnapshot(values={"workflow_id": wf_id}),
+        )
+        svc = _make_service(repo, graph)
+        result = svc.start(WorkflowStartRequest(ticket_key="AOS-23", workflow_id=wf_id))
+        assert result.interrupted is True
+        # Status comes from DB (PENDING_APPROVAL is what the await_approval
+        # node would have set today).
+        assert result.final_status == WorkflowStatus.PENDING_APPROVAL
+
+
+class TestResumeOperations:
+    def test_approve_plan_sets_pending_pr_approval_on_success(self, temp_db, repo):
+        wf_id = repo.create_workflow(ticket_key="AOS-30", status=WorkflowStatus.PENDING_APPROVAL)
+        graph = FakeGraph(
+            post_stream_state=_FakeStateSnapshot(
+                values={
+                    "workflow_id": wf_id,
+                    "ticket_key": "AOS-30",
+                    "execution_summary": {
+                        "status": "success",
+                        "pr_url": "http://pr/30",
+                    },
+                }
+            )
+        )
+        svc = _make_service(repo, graph)
+        result = svc.approve_plan(wf_id)
+        # The first stream call carries the resume Command for approval.
+        cmd = graph.stream_calls[0][0][0]
+        assert isinstance(cmd, Command)
+        assert result.final_status == WorkflowStatus.PENDING_PR_APPROVAL
+        assert result.pr_url == "http://pr/30"
+
+    def test_approve_plan_marks_failed_when_execution_fails(self, temp_db, repo):
+        wf_id = repo.create_workflow(ticket_key="AOS-31", status=WorkflowStatus.PENDING_APPROVAL)
+        graph = FakeGraph(
+            post_stream_state=_FakeStateSnapshot(
+                values={
+                    "workflow_id": wf_id,
+                    "ticket_key": "AOS-31",
+                    "execution_summary": {"status": "error", "error": "build broke"},
+                }
+            )
+        )
+        svc = _make_service(repo, graph)
+        result = svc.approve_plan(wf_id)
+        assert result.final_status == WorkflowStatus.FAILED
+
+    def test_reject_plan_drives_graph_with_reason(self, temp_db, repo):
+        wf_id = repo.create_workflow(ticket_key="AOS-32", status=WorkflowStatus.PENDING_APPROVAL)
+        graph = FakeGraph(
+            post_stream_state=_FakeStateSnapshot(
+                values={"workflow_id": wf_id, "ticket_key": "AOS-32"}
+            )
+        )
+        svc = _make_service(repo, graph)
+        svc.reject_plan(wf_id, reason="scope creep")
+        cmd = graph.stream_calls[0][0][0]
+        assert isinstance(cmd, Command)
+
+    def test_submit_clarification_passes_answers(self, temp_db, repo):
+        wf_id = repo.create_workflow(
+            ticket_key="AOS-33",
+            status=WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION,
+        )
+        answers = [{"concern": "a", "answer": "b"}]
+        graph = FakeGraph(
+            post_stream_state=_FakeStateSnapshot(
+                values={"workflow_id": wf_id, "ticket_key": "AOS-33"}
+            )
+        )
+        svc = _make_service(repo, graph)
+        svc.submit_clarification(wf_id, answers)
+        cmd = graph.stream_calls[0][0][0]
+        assert isinstance(cmd, Command)
+
+    def test_approve_pr_sets_completed(self, temp_db, repo):
+        wf_id = repo.create_workflow(ticket_key="AOS-34", status=WorkflowStatus.PENDING_PR_APPROVAL)
+        graph = FakeGraph(
+            post_stream_state=_FakeStateSnapshot(
+                values={"workflow_id": wf_id, "ticket_key": "AOS-34"}
+            )
+        )
+        svc = _make_service(repo, graph)
+        result = svc.approve_pr(wf_id)
+        assert result.final_status == WorkflowStatus.COMPLETED
+        assert repo.get_workflow(wf_id)["status"] == WorkflowStatus.COMPLETED
+
+    def test_reject_pr_sets_rejected(self, temp_db, repo):
+        wf_id = repo.create_workflow(ticket_key="AOS-35", status=WorkflowStatus.PENDING_PR_APPROVAL)
+        graph = FakeGraph(
+            post_stream_state=_FakeStateSnapshot(
+                values={"workflow_id": wf_id, "ticket_key": "AOS-35"}
+            )
+        )
+        svc = _make_service(repo, graph)
+        result = svc.reject_pr(wf_id, reason="missing tests")
+        assert result.final_status == WorkflowStatus.REJECTED
+        assert repo.get_workflow(wf_id)["status"] == WorkflowStatus.REJECTED
+
+    def test_comment_pr_passes_comments_payload(self, temp_db, repo):
+        wf_id = repo.create_workflow(ticket_key="AOS-36", status=WorkflowStatus.PENDING_PR_APPROVAL)
+        graph = FakeGraph(
+            post_stream_state=_FakeStateSnapshot(
+                values={"workflow_id": wf_id, "ticket_key": "AOS-36"}
+            )
+        )
+        svc = _make_service(repo, graph)
+        svc.comment_pr(wf_id, "please fix typo")
+        cmd = graph.stream_calls[0][0][0]
+        assert isinstance(cmd, Command)
+
+
+class TestRetry:
+    def test_retry_raises_when_workflow_missing(self, temp_db, repo):
+        svc = _make_service(repo, FakeGraph())
+        with pytest.raises(ValueError, match="not found"):
+            svc.retry("missing")
+
+    def test_retry_raises_when_not_retryable(self, temp_db, repo):
+        wf_id = repo.create_workflow(ticket_key="AOS-40", status=WorkflowStatus.COMPLETED)
+        svc = _make_service(repo, FakeGraph())
+        with pytest.raises(ValueError, match="not retryable"):
+            svc.retry(wf_id)
+
+    def test_retry_rewinds_and_marks_completed_on_success(self, temp_db, repo):
+        wf_id = repo.create_workflow(ticket_key="AOS-41", status=WorkflowStatus.FAILED)
+        # initial state advertises the failed_node so retry can resolve it.
+        initial = _FakeStateSnapshot(
+            values={"failed_node": "execute_plan"},
+            next_nodes=("execute_plan",),
+        )
+        # state_history needs a snapshot where "execute_plan" is next
+        history = [
+            _FakeStateSnapshot(
+                values={},
+                next_nodes=("execute_plan",),
+                config={"configurable": {"thread_id": wf_id, "checkpoint_id": "ck-1"}},
+            )
+        ]
+        post = _FakeStateSnapshot(
+            values={
+                "workflow_id": wf_id,
+                "ticket_key": "AOS-41",
+                "execution_summary": {"status": "success", "pr_url": "http://pr/41"},
+            }
+        )
+        graph = FakeGraph(state=initial, history=history, post_stream_state=post)
+        svc = _make_service(repo, graph)
+        result = svc.retry(wf_id)
+        assert result.final_status == WorkflowStatus.COMPLETED
+        # increment_retry_count bumped retry_count to 1
+        assert repo.get_workflow(wf_id)["retry_count"] == 1
