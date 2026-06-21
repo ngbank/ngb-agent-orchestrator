@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from typing import cast
 
 import click
@@ -70,6 +71,7 @@ def infer_branch_prefix(state: CodeGeneratorState) -> dict:
             max_tokens=64,
             temperature=0,
             response_format={"type": "json_object"},
+            drop_params=True,
         )
         if not hasattr(raw_response, "choices"):
             raise TypeError(f"Unexpected litellm response type: {type(raw_response)}")
@@ -78,6 +80,11 @@ def infer_branch_prefix(state: CodeGeneratorState) -> dict:
         # Strip markdown fences if present
         if raw.startswith("```"):
             raw = raw.split("```")[1].lstrip("json").strip()
+        # Fallback: extract the first {...} block when the model returns free-form text
+        if not raw.startswith("{"):
+            m = re.search(r"\{[^}]+\}", raw)
+            if m:
+                raw = m.group()
         data = json.loads(raw)
         prefix = data.get("prefix", "").lower().strip()
         if prefix not in _VALID_PREFIXES:

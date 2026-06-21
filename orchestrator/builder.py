@@ -46,6 +46,15 @@ def _route_after_approval(
     return "__end__"
 
 
+def _route_after_execute_plan(
+    state: OrchestratorState,
+) -> Literal["await_pr_approval", "__end__"]:
+    """Skip PR approval gate when code generation failed (no PR was created)."""
+    if state.get("failed_node"):
+        return "__end__"
+    return "await_pr_approval"
+
+
 def _route_after_pr_approval(
     state: OrchestratorState,
 ) -> Literal["execute_plan", "__end__"]:
@@ -89,7 +98,11 @@ def build_orchestrator(checkpointer=None):
         _route_after_approval,
         {"execute_plan": "execute_plan", "__end__": END},
     )
-    builder.add_edge("execute_plan", "await_pr_approval")
+    builder.add_conditional_edges(
+        "execute_plan",
+        _route_after_execute_plan,
+        {"await_pr_approval": "await_pr_approval", "__end__": END},
+    )
     builder.add_conditional_edges(
         "await_pr_approval",
         _route_after_pr_approval,
