@@ -101,6 +101,18 @@ Notes:
 |---|---|---|---|
 | `DB_PATH` | No | `state/local.db` | Path to the SQLite database |
 
+### Orchestrator HTTP Server
+
+The optional FastAPI server (`orchestrator-server` console script) reads these env vars at boot. See [docs/server.md](server.md) for the full run story.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ORCHESTRATOR_HOST` | No | `0.0.0.0` | Bind host passed to uvicorn |
+| `ORCHESTRATOR_PORT` | No | `8080` | Bind port passed to uvicorn |
+| `ORCHESTRATOR_LOG_LEVEL` | No | `info` | Uvicorn log level (`critical`/`error`/`warning`/`info`/`debug`/`trace`) |
+| `ORCHESTRATOR_RELOAD` | No | *(unset)* | When `1` / `true` / `yes`, enables uvicorn auto-reload (dev only) |
+| `ORCHESTRATOR_API_TOKEN` | No | *(unset)* | Bearer token required on every protected route. When unset or empty, **auth is disabled** and the server logs a warning at startup. `/healthz` and OpenAPI endpoints are always open. |
+
 ### OpenTelemetry (Day-0 Tracing)
 
 Tracing is always enabled. Configure the exporter via environment variables — no code changes needed to switch.
