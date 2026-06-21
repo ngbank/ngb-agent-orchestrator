@@ -2,17 +2,20 @@
 
 import sys
 import uuid
+from typing import TYPE_CHECKING
 
 import click
-from langgraph.errors import GraphInterrupt
 
 import dispatcher.commands.common as common
 from dispatcher.exceptions import TicketAuthError, TicketConfigError, TicketNotFoundError
-from state.workflow_repository import update_status
+from orchestrator.workflow_service import WorkflowStartRequest
 from state.workflow_status import WorkflowStatus
 
+if TYPE_CHECKING:
+    from orchestrator.workflow_service import WorkflowService
 
-def _handle_run(ticket: str, dry_run: bool) -> None:
+
+def _handle_run(service: "WorkflowService", ticket: str, dry_run: bool) -> None:
     click.echo(f"🚀 Starting workflow for ticket: {ticket}")
 
     if dry_run:
@@ -27,50 +30,25 @@ def _handle_run(ticket: str, dry_run: bool) -> None:
     # Pre-generate a UUID that acts as both the workflow DB ID and the
     # LangGraph thread_id, keeping the two systems in sync.
     workflow_id = str(uuid.uuid4())
-    thread_config = common.make_thread_config(workflow_id)
-    graph = None
 
     try:
-        graph = common.build_orchestrator()
-        final_state = common.run_graph_stream(
-            graph,
-            {"ticket_key": ticket, "dry_run": False, "workflow_id": workflow_id},
-            workflow_id=workflow_id,
-            ticket_key=ticket,
-            thread_config=thread_config,
-        )
+        result = service.start(WorkflowStartRequest(ticket_key=ticket, workflow_id=workflow_id))
 
-        if final_state is None:
-            final_state = {}
-
-        # Resolve the actual final state from the last stream event.
-        # In "updates" mode each event is a dict of {node_name: state_delta};
-        # we need to read the actual thread state for the final values.
-        resolved_state = graph.get_state(thread_config).values if graph else {}
-
-        if resolved_state.get("error"):
+        if result.error:
             sys.exit(1)
 
-        wf_id = resolved_state.get("workflow_id", workflow_id)
-        if resolved_state.get("approval_decision") != "approved":
-            # Graph suspended at await_approval — instructions already printed
-            # by the node.  Nothing more to do here.
+        if result.interrupted:
+            # Graph suspended at await_approval — the node already printed the
+            # approval instructions.
             return
 
-        update_status(
-            wf_id,
-            WorkflowStatus.COMPLETED,
-            actor="dispatcher",
-            reason="All stages completed successfully",
-        )
-        click.echo("🎉 Workflow completed successfully")
-        common._post_execution_comment(ticket, resolved_state.get("execution_summary"))
+        if result.final_status == WorkflowStatus.COMPLETED:
+            click.echo("🎉 Workflow completed successfully")
+            common._post_execution_comment(ticket, result.execution_summary)
+            return
 
-    except GraphInterrupt:
-        # The graph hit interrupt() inside await_approval.  The node already
-        # printed the approval instructions and the workflow status is already
-        # PENDING_APPROVAL in the DB.
-        pass
+        # Graph paused at await_approval without raising GraphInterrupt
+        # (uncommon, but possible) — nothing more to do here.
 
     except TicketNotFoundError as e:
         click.echo(f"❌ Ticket not found: {e}", err=True)
@@ -109,7 +87,12 @@ def _handle_run(ticket: str, dry_run: bool) -> None:
 
     except KeyboardInterrupt:
         click.echo("\n⚠️  Workflow interrupted by user", err=True)
-        common._mark_workflow_interrupted(workflow_id, graph, thread_config)
+        service.mark_interrupted(workflow_id, actor="dispatcher")
+        click.echo(
+            f"⚠️  Marked workflow {workflow_id} as FAILED. "
+            f"Resume with: dispatcher --retry --workflow-id {workflow_id}",
+            err=True,
+        )
         sys.exit(130)
 
     except Exception as e:

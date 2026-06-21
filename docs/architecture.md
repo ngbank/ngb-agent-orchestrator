@@ -15,8 +15,8 @@ User
  │
  ▼
 Dispatcher (dispatcher/run.py)
- │  Looks up or creates a workflow record in SQLite
- │  Builds and invokes the LangGraph orchestrator
+ │  Resolves a WorkflowService (default: LocalWorkflowService over SQLite)
+ │  service.start() builds and invokes the LangGraph orchestrator
  │
  ▼
 LangGraph Graph (graph/)
@@ -67,7 +67,23 @@ The CLI entry point. Handles three modes:
 - `--approve-plan --ticket KEY` — resumes a suspended workflow (approved)
 - `--reject --ticket KEY --reason "..."` — resumes a suspended workflow (rejected)
 
-Builds the LangGraph orchestrator and invokes it. On `GraphInterrupt` (the approval gate), it prints instructions and exits cleanly. The graph state is persisted to SQLite so it can be resumed later.
+The dispatcher never touches the LangGraph builder or the SQLite repository
+directly. It resolves a `WorkflowService` (default: `LocalWorkflowService`
+built by `orchestrator.workflow_service.build_local_workflow_service()`) and
+routes every command through it (`service.start`, `service.approve_plan`,
+`service.reject_plan`, `service.retry`, `service.read_logs`,
+`service.cancel`, etc.). The same surface backs the MCP server, the future
+A2A endpoint, and the TUI's mutating actions. This boundary is asserted by
+`tests/test_dispatcher.py::test_dispatcher_commands_have_no_direct_repo_or_builder_imports`.
+
+### `orchestrator/workflow_service/`
+
+Backend-agnostic service layer that owns "run / approve / retry / inspect"
+workflows. Defines the `WorkflowService` protocol (`protocols.py`), result
+DTOs (`dtos.py`), and the in-process implementation `LocalWorkflowService`
+(`local.py`), which composes a `WorkflowRepository` with a graph factory
+(usually `orchestrator.builder.build_orchestrator`). `build_local_workflow_service()`
+returns a ready-to-use instance.
 
 ### `graph/`
 

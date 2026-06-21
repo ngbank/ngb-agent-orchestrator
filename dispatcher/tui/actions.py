@@ -10,6 +10,7 @@ from dispatcher.commands.clarify import _handle_clarify
 from dispatcher.commands.pr import _handle_approve_pr, _handle_comment_pr, _handle_reject_pr
 from dispatcher.commands.retry import _handle_retry
 from dispatcher.commands.run_workflow import _handle_run
+from orchestrator.workflow_service import WorkflowService, build_local_workflow_service
 
 
 class ActionError(Exception):
@@ -18,10 +19,21 @@ class ActionError(Exception):
     pass
 
 
+def _service() -> WorkflowService:
+    """Build a fresh ``LocalWorkflowService`` for one TUI action.
+
+    AOS-139: every dispatcher handler now takes a ``WorkflowService`` as its
+    first argument, so the TUI must supply one. A new instance per call is
+    cheap (lazy graph_factory, repo from env) and avoids holding open SQLite
+    connections between actions.
+    """
+    return build_local_workflow_service()
+
+
 def approve_workflow(ticket_key: Optional[str], workflow_id: Optional[str]) -> str:
     """Approve a pending WorkPlan."""
     try:
-        _handle_approve(ticket_key or "", workflow_id)
+        _handle_approve(_service(), ticket_key or "", workflow_id)
         return "Workflow approved."
     except SystemExit as e:
         if e.code != 0:
@@ -34,7 +46,7 @@ def approve_workflow(ticket_key: Optional[str], workflow_id: Optional[str]) -> s
 def reject_workflow(ticket_key: Optional[str], workflow_id: Optional[str], reason: str) -> str:
     """Reject a pending WorkPlan."""
     try:
-        _handle_reject(ticket_key or "", reason, workflow_id)
+        _handle_reject(_service(), ticket_key or "", reason, workflow_id)
         return f"Workflow rejected: {reason}"
     except SystemExit as e:
         if e.code != 0:
@@ -47,7 +59,7 @@ def reject_workflow(ticket_key: Optional[str], workflow_id: Optional[str], reaso
 def clarify_workflow(ticket_key: Optional[str], workflow_id: Optional[str]) -> str:
     """Answer WorkPlan clarification questions via editor."""
     try:
-        _handle_clarify(ticket_key or "", workflow_id)
+        _handle_clarify(_service(), ticket_key or "", workflow_id)
         return "Clarification submitted."
     except SystemExit as e:
         if e.code != 0:
@@ -60,7 +72,7 @@ def clarify_workflow(ticket_key: Optional[str], workflow_id: Optional[str]) -> s
 def retry_workflow(ticket_key: Optional[str], workflow_id: Optional[str]) -> str:
     """Resume a failed workflow."""
     try:
-        _handle_retry(ticket_key or "", workflow_id)
+        _handle_retry(_service(), ticket_key or "", workflow_id)
         return "Retry initiated."
     except SystemExit as e:
         if e.code != 0:
@@ -75,7 +87,7 @@ def cancel_workflow(
 ) -> str:
     """Cancel an active workflow."""
     try:
-        _handle_cancel(ticket_key or "", reason, workflow_id)
+        _handle_cancel(_service(), ticket_key or "", reason, workflow_id)
         return "Workflow cancelled."
     except SystemExit as e:
         if e.code != 0:
@@ -88,7 +100,7 @@ def cancel_workflow(
 def approve_pr(ticket_key: Optional[str], workflow_id: Optional[str]) -> str:
     """Approve a pending PR."""
     try:
-        _handle_approve_pr(ticket_key or "", workflow_id)
+        _handle_approve_pr(_service(), ticket_key or "", workflow_id)
         return "PR approved."
     except SystemExit as e:
         if e.code != 0:
@@ -101,7 +113,7 @@ def approve_pr(ticket_key: Optional[str], workflow_id: Optional[str]) -> str:
 def comment_pr(ticket_key: Optional[str], workflow_id: Optional[str]) -> str:
     """Comment on a pending PR to trigger re-execution."""
     try:
-        _handle_comment_pr(ticket_key or "", workflow_id)
+        _handle_comment_pr(_service(), ticket_key or "", workflow_id)
         return "PR comment submitted."
     except SystemExit as e:
         if e.code != 0:
@@ -116,7 +128,7 @@ def reject_pr(
 ) -> str:
     """Reject a pending PR."""
     try:
-        _handle_reject_pr(ticket_key or "", reason, workflow_id)
+        _handle_reject_pr(_service(), ticket_key or "", reason, workflow_id)
         return f"PR rejected: {reason}"
     except SystemExit as e:
         if e.code != 0:
@@ -129,7 +141,7 @@ def reject_pr(
 def show_logs(ticket_key: Optional[str], workflow_id: Optional[str]) -> str:
     """Print captured Goose output logs for a workflow."""
     try:
-        _handle_logs(ticket_key, workflow_id)
+        _handle_logs(_service(), ticket_key, workflow_id)
         return "Logs printed to console."
     except SystemExit as e:
         if e.code != 0:
@@ -142,7 +154,7 @@ def show_logs(ticket_key: Optional[str], workflow_id: Optional[str]) -> str:
 def clear_database() -> str:
     """Prompt for confirmation then wipe all workflows and checkpoints."""
     try:
-        _handle_clear_db()
+        _handle_clear_db(_service())
         return "Database cleared."
     except SystemExit as e:
         if e.code != 0:
@@ -155,7 +167,7 @@ def clear_database() -> str:
 def run_workflow(ticket_key: str, dry_run: bool = False) -> str:
     """Start a new workflow for a ticket."""
     try:
-        _handle_run(ticket_key, dry_run)
+        _handle_run(_service(), ticket_key, dry_run)
         return f"Workflow started for {ticket_key}."
     except SystemExit as e:
         if e.code != 0:
