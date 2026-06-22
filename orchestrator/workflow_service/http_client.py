@@ -1,19 +1,19 @@
 """HttpWorkflowService — remote :class:`WorkflowService` implementation.
 
-A thin HTTP client that targets the FastAPI orchestrator server introduced in
-AOS-141 (REST surface) and AOS-142 (SSE streams).  Every method satisfies the
-same :class:`WorkflowService` Protocol as :class:`LocalWorkflowService` so the
-dispatcher CLI / TUI can switch between in-process and remote execution by
-configuration only.
+A thin HTTP client that targets the FastAPI orchestrator server.  Every
+method satisfies the same :class:`WorkflowService` Protocol as
+:class:`LocalWorkflowService` so the dispatcher CLI / TUI can switch
+between in-process and remote execution by configuration only.
 
-Scope today (B3 / AOS-143):
+Coverage:
 
-* Implemented over HTTP — REST: ``start``, ``get``, ``list``,
-  ``get_by_ticket``, ``get_latest_retryable_by_ticket``, ``cancel``.  SSE:
-  ``read_logs`` (drain once), ``stream_events`` (consume + auto-reconnect).
-* Not yet exposed by the server — every remaining Protocol method raises
-  :class:`NotImplementedError` with a clear message.  These land with B4 as
-  the server grows mutating endpoints (approve / retry / clarify / pr-*).
+* REST: ``start``, ``get``, ``list``, ``get_by_ticket``,
+  ``get_latest_retryable_by_ticket``, ``cancel``, ``approve_plan``,
+  ``reject_plan``, ``submit_clarification``, ``retry``, ``approve_pr``,
+  ``reject_pr``, ``comment_pr``, ``get_history``, ``get_audit_log``,
+  ``mark_interrupted``, ``clear_db``.
+* SSE: ``read_logs`` (drain once), ``stream_events`` (consume +
+  auto-reconnect).
 
 Operational notes:
 
@@ -23,6 +23,8 @@ Operational notes:
 * The :class:`HttpWorkflowService` owns an :class:`httpx.Client` by default
   and exposes :meth:`close` for explicit teardown; tests inject their own
   client via :class:`httpx.ASGITransport` to avoid real network I/O.
+* :class:`RemoteOperationNotSupported` remains exported for backward
+  compatibility but is no longer raised by any method.
 """
 
 from __future__ import annotations
@@ -169,16 +171,18 @@ class HttpWorkflowService:
         return [_summary_from_json(row) for row in response.json()]
 
     def get_history(self, workflow_id: str) -> List[WorkflowHistoryEntry]:
-        raise RemoteOperationNotSupported(
-            "get_history is not yet exposed by the orchestrator server "
-            "(scheduled for B4); use ORCHESTRATOR_MODE=local for this command."
-        )
+        response = self._request("GET", f"/workflows/{workflow_id}/history")
+        if response.status_code == 404:
+            raise ValueError(f"Workflow not found: {workflow_id}")
+        response.raise_for_status()
+        return [_history_from_json(row) for row in response.json()]
 
     def get_audit_log(self, workflow_id: str) -> List[WorkflowAuditEntry]:
-        raise RemoteOperationNotSupported(
-            "get_audit_log is not yet exposed by the orchestrator server "
-            "(scheduled for B4); use ORCHESTRATOR_MODE=local for this command."
-        )
+        response = self._request("GET", f"/workflows/{workflow_id}/audit-log")
+        if response.status_code == 404:
+            raise ValueError(f"Workflow not found: {workflow_id}")
+        response.raise_for_status()
+        return [_audit_from_json(workflow_id, row) for row in response.json()]
 
     def read_logs(
         self,
@@ -305,16 +309,23 @@ class HttpWorkflowService:
         failed_node: Optional[str] = None,
         actor: str = "system",
     ) -> None:
-        raise RemoteOperationNotSupported(
-            "mark_interrupted is not yet exposed by the orchestrator server "
-            "(scheduled for B4); use ORCHESTRATOR_MODE=local for this command."
+        body: Dict[str, Any] = {"actor": actor}
+        if failed_node is not None:
+            body["failed_node"] = failed_node
+        response = self._request(
+            "POST",
+            f"/admin/workflows/{workflow_id}/mark-interrupted",
+            json=body,
         )
+        if response.status_code == 404:
+            raise ValueError(f"Workflow not found: {workflow_id}")
+        response.raise_for_status()
 
     def clear_db(self) -> tuple[int, int]:
-        raise RemoteOperationNotSupported(
-            "clear_db is not yet exposed by the orchestrator server "
-            "(scheduled for B4); use ORCHESTRATOR_MODE=local for this command."
-        )
+        response = self._request("POST", "/admin/clear-db")
+        response.raise_for_status()
+        payload = response.json()
+        return (int(payload["workflows"]), int(payload["checkpoints"]))
 
     # ------------------------------------------------------------------
     # Graph-running operations
@@ -332,50 +343,61 @@ class HttpWorkflowService:
         return _run_result_from_json(response.json())
 
     def approve_plan(self, workflow_id: str) -> WorkflowRunResult:
-        raise RemoteOperationNotSupported(
-            "approve_plan is not yet exposed by the orchestrator server "
-            "(scheduled for B4); use ORCHESTRATOR_MODE=local for this command."
-        )
+        return self._post_run(f"/workflows/{workflow_id}/approve-plan", workflow_id)
 
     def reject_plan(self, workflow_id: str, reason: Optional[str]) -> WorkflowRunResult:
-        raise RemoteOperationNotSupported(
-            "reject_plan is not yet exposed by the orchestrator server "
-            "(scheduled for B4); use ORCHESTRATOR_MODE=local for this command."
-        )
+        body: Dict[str, Any] = {}
+        if reason is not None:
+            body["reason"] = reason
+        return self._post_run(f"/workflows/{workflow_id}/reject-plan", workflow_id, body=body)
 
     def submit_clarification(
         self,
         workflow_id: str,
         answers: List[Dict[str, str]],
     ) -> WorkflowRunResult:
-        raise RemoteOperationNotSupported(
-            "submit_clarification is not yet exposed by the orchestrator server "
-            "(scheduled for B4); use ORCHESTRATOR_MODE=local for this command."
-        )
+        body: Dict[str, Any] = {"answers": [dict(a) for a in answers]}
+        return self._post_run(f"/workflows/{workflow_id}/clarification", workflow_id, body=body)
 
     def retry(self, workflow_id: str) -> WorkflowRunResult:
-        raise RemoteOperationNotSupported(
-            "retry is not yet exposed by the orchestrator server "
-            "(scheduled for B4); use ORCHESTRATOR_MODE=local for this command."
-        )
+        return self._post_run(f"/workflows/{workflow_id}/retry", workflow_id)
 
     def approve_pr(self, workflow_id: str) -> WorkflowRunResult:
-        raise RemoteOperationNotSupported(
-            "approve_pr is not yet exposed by the orchestrator server "
-            "(scheduled for B4); use ORCHESTRATOR_MODE=local for this command."
-        )
+        return self._post_run(f"/workflows/{workflow_id}/approve-pr", workflow_id)
 
     def comment_pr(self, workflow_id: str, comments: str) -> WorkflowRunResult:
-        raise RemoteOperationNotSupported(
-            "comment_pr is not yet exposed by the orchestrator server "
-            "(scheduled for B4); use ORCHESTRATOR_MODE=local for this command."
-        )
+        body: Dict[str, Any] = {"comments": comments}
+        return self._post_run(f"/workflows/{workflow_id}/comment-pr", workflow_id, body=body)
 
     def reject_pr(self, workflow_id: str, reason: Optional[str]) -> WorkflowRunResult:
-        raise RemoteOperationNotSupported(
-            "reject_pr is not yet exposed by the orchestrator server "
-            "(scheduled for B4); use ORCHESTRATOR_MODE=local for this command."
-        )
+        body: Dict[str, Any] = {}
+        if reason is not None:
+            body["reason"] = reason
+        return self._post_run(f"/workflows/{workflow_id}/reject-pr", workflow_id, body=body)
+
+    def _post_run(
+        self,
+        path: str,
+        workflow_id: str,
+        *,
+        body: Optional[Dict[str, Any]] = None,
+    ) -> WorkflowRunResult:
+        """Shared POST + error-mapping helper for graph-running endpoints.
+
+        Maps 404 to ``ValueError("Workflow not found: ...")`` and 409 to
+        ``ValueError(<server detail>)`` so callers see the same exceptions
+        :class:`LocalWorkflowService` raises for invalid state transitions.
+        """
+        response = self._request("POST", path, json=body)
+        if response.status_code == 404:
+            raise ValueError(f"Workflow not found: {workflow_id}")
+        if response.status_code == 409:
+            detail = response.json().get("detail") or (
+                f"Workflow {workflow_id} is in an incompatible state for this action"
+            )
+            raise ValueError(detail)
+        response.raise_for_status()
+        return _run_result_from_json(response.json())
 
     # ------------------------------------------------------------------
     # Internals
@@ -632,6 +654,26 @@ def _run_result_from_json(row: Dict[str, Any]) -> WorkflowRunResult:
         pr_url=row.get("pr_url"),
         failed_node=row.get("failed_node"),
         final_state=None,
+    )
+
+
+def _history_from_json(row: Dict[str, Any]) -> WorkflowHistoryEntry:
+    return WorkflowHistoryEntry(
+        step=int(row["step"]),
+        node=row["node"],
+        outcome=row["outcome"],
+        result_keys=list(row.get("result_keys") or []),
+        error=row.get("error"),
+    )
+
+
+def _audit_from_json(workflow_id: str, row: Dict[str, Any]) -> WorkflowAuditEntry:
+    return WorkflowAuditEntry(
+        workflow_id=row.get("workflow_id") or workflow_id,
+        actor=row.get("actor", ""),
+        action=row.get("action", ""),
+        timestamp=row.get("timestamp", ""),
+        details=row.get("details"),
     )
 
 

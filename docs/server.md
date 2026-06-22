@@ -226,8 +226,24 @@ All `/workflows*` routes require a bearer token when
 | `GET` | `/workflows` | List workflows (optionally filter by `ticket_key`, `status`, `limit`) |
 | `GET` | `/workflows/{id}` | Fetch a full workflow record |
 | `POST` | `/workflows/{id}/cancel` | Cancel an in-flight workflow |
+| `POST` | `/workflows/{id}/approve-plan` | Approve a paused WorkPlan and resume |
+| `POST` | `/workflows/{id}/reject-plan` | Reject a paused WorkPlan and resume |
+| `POST` | `/workflows/{id}/clarification` | Submit clarification answers and resume |
+| `POST` | `/workflows/{id}/retry` | Retry a failed / interrupted workflow |
+| `POST` | `/workflows/{id}/approve-pr` | Approve the workflow's PR and mark COMPLETED |
+| `POST` | `/workflows/{id}/reject-pr` | Reject the workflow's PR and mark REJECTED |
+| `POST` | `/workflows/{id}/comment-pr` | Post review comments on the PR and resume |
+| `GET` | `/workflows/{id}/history` | Return the node traversal history |
+| `GET` | `/workflows/{id}/audit-log` | Return the audit log entries |
 | `GET` | `/workflows/{id}/events` | **SSE** — stream workflow lifecycle events |
 | `GET` | `/workflows/{id}/logs` | **SSE** — stream captured stage log content |
+| `POST` | `/admin/clear-db` | **Admin** — wipe all workflows + checkpoints |
+| `POST` | `/admin/workflows/{id}/mark-interrupted` | **Admin** — mark in-flight workflow FAILED |
+
+Mutating routes return `404` when the workflow id is unknown and `409`
+when the workflow is in an incompatible state for that action (e.g.
+`retry` against a non-retryable workflow). Admin routes have a stricter
+auth posture — see [Admin endpoints](#admin-endpoints) below.
 
 ### `POST /workflows`
 
@@ -273,6 +289,68 @@ Returns:
 - `204 No Content` on success
 - `404 Not Found` when the workflow id does not exist
 - `409 Conflict` when the workflow is already terminal
+
+### Approval / clarification / retry
+
+All four routes return a `WorkflowRunResponse` on `200 OK`, `404` when
+the workflow id is unknown, and `409` when the workflow is in an
+incompatible state for the action (e.g. approving a workflow that is not
+paused at `await_approval`, or retrying a workflow that is not
+retryable).
+
+| Route | Body |
+|---|---|
+| `POST /workflows/{id}/approve-plan` | – |
+| `POST /workflows/{id}/reject-plan` | `{"reason": "optional"}` |
+| `POST /workflows/{id}/clarification` | `{"answers": [{"concern": "...", "answer": "..."}, ...]}` |
+| `POST /workflows/{id}/retry` | – |
+
+`concern` text in clarification answers must be non-empty; an empty list
+of answers is allowed but the server will surface whatever the
+underlying graph state requires.
+
+### PR review flow
+
+Same response/error shape as the approval routes.
+
+| Route | Body |
+|---|---|
+| `POST /workflows/{id}/approve-pr` | – |
+| `POST /workflows/{id}/reject-pr` | `{"reason": "optional"}` |
+| `POST /workflows/{id}/comment-pr` | `{"comments": "non-empty review text"}` |
+
+### `GET /workflows/{id}/history`
+
+Returns the node traversal history, oldest first. Each entry has:
+
+```json
+{
+    "step": 3,
+    "node": "execute",
+    "outcome": "ok",
+    "result_keys": ["execution_summary"],
+    "error": null
+}
+```
+
+`outcome` is one of `ok`, `error`, `interrupted`. `404` when the
+workflow id is unknown.
+
+### `GET /workflows/{id}/audit-log`
+
+Returns the audit log entries for the workflow, oldest first:
+
+```json
+{
+    "workflow_id": "wf-1",
+    "actor": "dispatcher",
+    "action": "status_change",
+    "timestamp": "2026-06-22T00:00:00",
+    "details": {"to": "pending_approval"}
+}
+```
+
+`404` when the workflow id is unknown.
 
 ### `GET /workflows/{id}/events` (SSE)
 
@@ -353,11 +431,29 @@ will be replaced by a production-grade scheme in a follow-up epic.
 
 | `ORCHESTRATOR_API_TOKEN` | Behaviour |
 |---|---|
-| unset / empty | Auth disabled — every request allowed; warning logged at startup |
+| unset / empty | Auth disabled — every `/workflows*` request allowed; warning logged at startup |
 | any non-empty value | `/workflows*` requires `Authorization: Bearer <token>` |
 
 `/healthz` and OpenAPI endpoints are intentionally left open so load
 balancers and tooling can probe the service without credentials.
+
+## Admin endpoints
+
+`/admin/*` routes (`clear-db`, `mark-interrupted`) follow a stricter
+posture than the rest of the API. They are destructive enough that an
+open development server must never expose them:
+
+| `ORCHESTRATOR_API_TOKEN` | Behaviour for `/admin/*` |
+|---|---|
+| unset / empty | All admin routes return `503 Service Unavailable` — admin is **disabled**, not just unauthenticated |
+| set, request has no/wrong `Authorization` header | `401 Unauthorized` |
+| set, request carries matching `Bearer <token>` | Request proceeds |
+
+In production, set `ORCHESTRATOR_API_TOKEN` to a value known only to
+trusted operators. The dispatcher reads the same value from
+`ORCHESTRATOR_API_TOKEN` (see
+[docs/configuration.md](configuration.md#dispatcher--orchestrator-transport))
+when running in `ORCHESTRATOR_MODE=remote`.
 
 ---
 

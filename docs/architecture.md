@@ -147,13 +147,20 @@ Key properties:
 
 ### `orchestrator/server/`
 
-Optional FastAPI HTTP surface that exposes the non-streaming subset of
-`WorkflowService` as REST endpoints (`POST /workflows`, `GET /workflows`,
-`GET /workflows/{id}`, `POST /workflows/{id}/cancel`, `GET /healthz`).
-Routes delegate to an injected `WorkflowService` so tests can wire in a
-fake. Defaults to `LocalWorkflowService` for production. Bearer-token
-auth is read from `ORCHESTRATOR_API_TOKEN` (disabled when unset).
-OpenAPI is exposed at `/openapi.json` and Swagger UI at `/docs`. See
+Optional FastAPI HTTP surface that exposes the full `WorkflowService`
+contract as REST endpoints — workflow lifecycle (`POST /workflows`,
+`GET /workflows`, `GET /workflows/{id}`, `POST /workflows/{id}/cancel`),
+approval / clarification / retry (`POST /workflows/{id}/approve-plan`,
+`reject-plan`, `clarification`, `retry`), PR review (`approve-pr`,
+`reject-pr`, `comment-pr`), reads (`history`, `audit-log`), SSE
+(`events`, `logs`), and admin operations under `/admin/*` (`clear-db`,
+`mark-interrupted`). Also serves `GET /healthz`. Routes delegate to an
+injected `WorkflowService` so tests can wire in a fake. Defaults to
+`LocalWorkflowService` for production. Bearer-token auth is read from
+`ORCHESTRATOR_API_TOKEN` (disabled when unset); `/admin/*` routes
+additionally return `503` when the token is unset so destructive
+operations are never exposed by an unauthenticated dev server. OpenAPI
+is exposed at `/openapi.json` and Swagger UI at `/docs`. See
 [docs/server.md](server.md) for the run story.
 
 ### `graph/`

@@ -69,6 +69,21 @@ class _FakeWorkflowService:
         self.list_calls: List[Dict[str, Any]] = []
         self.events: Dict[str, List[WorkflowEventDTO]] = {}
         self.log_bytes: Dict[str, Dict[str, bytes]] = {}
+        # AOS-147 — per-method recorders + canned results / exceptions.
+        self.approve_plan_calls: List[str] = []
+        self.reject_plan_calls: List[Dict[str, Any]] = []
+        self.submit_clarification_calls: List[Dict[str, Any]] = []
+        self.retry_calls: List[str] = []
+        self.approve_pr_calls: List[str] = []
+        self.reject_pr_calls: List[Dict[str, Any]] = []
+        self.comment_pr_calls: List[Dict[str, Any]] = []
+        self.mark_interrupted_calls: List[Dict[str, Any]] = []
+        self.clear_db_calls: List[None] = []
+        self.history: Dict[str, List[WorkflowHistoryEntry]] = {}
+        self.audit_log: Dict[str, List[WorkflowAuditEntry]] = {}
+        self.mutation_result: Optional[WorkflowRunResult] = None
+        self.mutation_exc: Optional[BaseException] = None
+        self.clear_db_result: tuple[int, int] = (0, 0)
 
     def seed(self, detail: WorkflowDetail) -> None:
         self.workflows[detail.id] = detail
@@ -109,11 +124,11 @@ class _FakeWorkflowService:
             out.append(self._summary(d))
         return out[:limit]
 
-    def get_history(self, workflow_id: str) -> List[WorkflowHistoryEntry]:  # pragma: no cover
-        return []
+    def get_history(self, workflow_id: str) -> List[WorkflowHistoryEntry]:
+        return list(self.history.get(workflow_id, []))
 
-    def get_audit_log(self, workflow_id: str) -> List[WorkflowAuditEntry]:  # pragma: no cover
-        return []
+    def get_audit_log(self, workflow_id: str) -> List[WorkflowAuditEntry]:
+        return list(self.audit_log.get(workflow_id, []))
 
     def read_logs(
         self,
@@ -168,11 +183,19 @@ class _FakeWorkflowService:
                 pr_url=existing.pr_url,
             )
 
-    def mark_interrupted(self, *a, **k) -> None:  # pragma: no cover
-        return None
+    def mark_interrupted(
+        self,
+        workflow_id: str,
+        failed_node: Optional[str] = None,
+        actor: str = "system",
+    ) -> None:
+        self.mark_interrupted_calls.append(
+            {"workflow_id": workflow_id, "failed_node": failed_node, "actor": actor}
+        )
 
-    def clear_db(self) -> tuple[int, int]:  # pragma: no cover
-        return (0, 0)
+    def clear_db(self) -> tuple[int, int]:
+        self.clear_db_calls.append(None)
+        return self.clear_db_result
 
     # Graph ops -------------------------------------------------------
     def start(self, request: WorkflowStartRequest) -> WorkflowRunResult:
@@ -186,26 +209,51 @@ class _FakeWorkflowService:
             interrupted=True,
         )
 
-    def approve_plan(self, *a, **k):  # pragma: no cover
-        raise NotImplementedError
+    def approve_plan(self, workflow_id: str) -> WorkflowRunResult:
+        self.approve_plan_calls.append(workflow_id)
+        return self._mutation_result_or_default(workflow_id)
 
-    def reject_plan(self, *a, **k):  # pragma: no cover
-        raise NotImplementedError
+    def reject_plan(self, workflow_id: str, reason: Optional[str]) -> WorkflowRunResult:
+        self.reject_plan_calls.append({"workflow_id": workflow_id, "reason": reason})
+        return self._mutation_result_or_default(workflow_id)
 
-    def submit_clarification(self, *a, **k):  # pragma: no cover
-        raise NotImplementedError
+    def submit_clarification(
+        self,
+        workflow_id: str,
+        answers: List[Dict[str, str]],
+    ) -> WorkflowRunResult:
+        self.submit_clarification_calls.append(
+            {"workflow_id": workflow_id, "answers": list(answers)}
+        )
+        return self._mutation_result_or_default(workflow_id)
 
-    def retry(self, *a, **k):  # pragma: no cover
-        raise NotImplementedError
+    def retry(self, workflow_id: str) -> WorkflowRunResult:
+        self.retry_calls.append(workflow_id)
+        return self._mutation_result_or_default(workflow_id)
 
-    def approve_pr(self, *a, **k):  # pragma: no cover
-        raise NotImplementedError
+    def approve_pr(self, workflow_id: str) -> WorkflowRunResult:
+        self.approve_pr_calls.append(workflow_id)
+        return self._mutation_result_or_default(workflow_id)
 
-    def comment_pr(self, *a, **k):  # pragma: no cover
-        raise NotImplementedError
+    def comment_pr(self, workflow_id: str, comments: str) -> WorkflowRunResult:
+        self.comment_pr_calls.append({"workflow_id": workflow_id, "comments": comments})
+        return self._mutation_result_or_default(workflow_id)
 
-    def reject_pr(self, *a, **k):  # pragma: no cover
-        raise NotImplementedError
+    def reject_pr(self, workflow_id: str, reason: Optional[str]) -> WorkflowRunResult:
+        self.reject_pr_calls.append({"workflow_id": workflow_id, "reason": reason})
+        return self._mutation_result_or_default(workflow_id)
+
+    def _mutation_result_or_default(self, workflow_id: str) -> WorkflowRunResult:
+        if self.mutation_exc is not None:
+            raise self.mutation_exc
+        if self.mutation_result is not None:
+            return self.mutation_result
+        existing = self.workflows.get(workflow_id)
+        return WorkflowRunResult(
+            workflow_id=workflow_id,
+            ticket_key=existing.ticket_key if existing else None,
+            final_status=existing.status if existing else WorkflowStatus.PENDING,
+        )
 
 
 def _make_detail(
@@ -643,29 +691,243 @@ class TestHeaders:
 
 
 # ---------------------------------------------------------------------------
-# Methods without a server endpoint must raise RemoteOperationNotSupported
+# Approval / clarification / retry / PR review (AOS-147)
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "method, args",
-    [
-        ("get_history", ("wf-1",)),
-        ("get_audit_log", ("wf-1",)),
-        ("mark_interrupted", ("wf-1",)),
-        ("clear_db", ()),
-        ("approve_plan", ("wf-1",)),
-        ("reject_plan", ("wf-1", "nope")),
-        ("submit_clarification", ("wf-1", [])),
-        ("retry", ("wf-1",)),
-        ("approve_pr", ("wf-1",)),
-        ("comment_pr", ("wf-1", "looks good")),
-        ("reject_pr", ("wf-1", "nope")),
-    ],
-)
-def test_unsupported_methods_raise(http_service: HttpWorkflowService, method, args) -> None:
-    with pytest.raises(RemoteOperationNotSupported):
-        getattr(http_service, method)(*args)
+def _expected_run_result(workflow_id: str = "wf-1") -> WorkflowRunResult:
+    return WorkflowRunResult(
+        workflow_id=workflow_id,
+        ticket_key="AOS-143",
+        final_status=WorkflowStatus.PENDING_PR_APPROVAL,
+        execution_summary={"status": "success"},
+        pr_url="https://example.test/pr/1",
+    )
+
+
+class TestApproval:
+    def test_approve_plan_forwards_call(
+        self,
+        fake_service: _FakeWorkflowService,
+        http_service: HttpWorkflowService,
+    ) -> None:
+        fake_service.seed(_make_detail("wf-1"))
+        fake_service.mutation_result = _expected_run_result("wf-1")
+        result = http_service.approve_plan("wf-1")
+        assert result.final_status == WorkflowStatus.PENDING_PR_APPROVAL
+        assert result.pr_url == "https://example.test/pr/1"
+        assert fake_service.approve_plan_calls == ["wf-1"]
+
+    def test_approve_plan_404_raises_value_error(self, http_service: HttpWorkflowService) -> None:
+        with pytest.raises(ValueError, match="not found"):
+            http_service.approve_plan("nope")
+
+    def test_approve_plan_409_raises_value_error(
+        self,
+        fake_service: _FakeWorkflowService,
+        http_service: HttpWorkflowService,
+    ) -> None:
+        fake_service.seed(_make_detail("wf-1"))
+        fake_service.mutation_exc = ValueError("not awaiting approval")
+        with pytest.raises(ValueError, match="not awaiting approval"):
+            http_service.approve_plan("wf-1")
+
+    def test_reject_plan_passes_reason(
+        self,
+        fake_service: _FakeWorkflowService,
+        http_service: HttpWorkflowService,
+    ) -> None:
+        fake_service.seed(_make_detail("wf-1"))
+        fake_service.mutation_result = _expected_run_result("wf-1")
+        http_service.reject_plan("wf-1", "bad scope")
+        assert fake_service.reject_plan_calls == [{"workflow_id": "wf-1", "reason": "bad scope"}]
+
+    def test_reject_plan_with_none_reason(
+        self,
+        fake_service: _FakeWorkflowService,
+        http_service: HttpWorkflowService,
+    ) -> None:
+        fake_service.seed(_make_detail("wf-1"))
+        fake_service.mutation_result = _expected_run_result("wf-1")
+        http_service.reject_plan("wf-1", None)
+        assert fake_service.reject_plan_calls == [{"workflow_id": "wf-1", "reason": None}]
+
+    def test_submit_clarification_forwards_answers(
+        self,
+        fake_service: _FakeWorkflowService,
+        http_service: HttpWorkflowService,
+    ) -> None:
+        fake_service.seed(_make_detail("wf-1"))
+        fake_service.mutation_result = _expected_run_result("wf-1")
+        answers = [
+            {"concern": "what about retries?", "answer": "exponential backoff"},
+        ]
+        http_service.submit_clarification("wf-1", answers)
+        assert fake_service.submit_clarification_calls == [
+            {"workflow_id": "wf-1", "answers": answers}
+        ]
+
+    def test_retry_forwards_call(
+        self,
+        fake_service: _FakeWorkflowService,
+        http_service: HttpWorkflowService,
+    ) -> None:
+        fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.FAILED))
+        fake_service.mutation_result = _expected_run_result("wf-1")
+        http_service.retry("wf-1")
+        assert fake_service.retry_calls == ["wf-1"]
+
+    def test_retry_409_raises_value_error(
+        self,
+        fake_service: _FakeWorkflowService,
+        http_service: HttpWorkflowService,
+    ) -> None:
+        fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.COMPLETED))
+        fake_service.mutation_exc = ValueError("Workflow wf-1 is not retryable (status: completed)")
+        with pytest.raises(ValueError, match="not retryable"):
+            http_service.retry("wf-1")
+
+
+class TestPrReview:
+    def test_approve_pr_forwards_call(
+        self,
+        fake_service: _FakeWorkflowService,
+        http_service: HttpWorkflowService,
+    ) -> None:
+        fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.PENDING_PR_APPROVAL))
+        fake_service.mutation_result = _expected_run_result("wf-1")
+        http_service.approve_pr("wf-1")
+        assert fake_service.approve_pr_calls == ["wf-1"]
+
+    def test_reject_pr_passes_reason(
+        self,
+        fake_service: _FakeWorkflowService,
+        http_service: HttpWorkflowService,
+    ) -> None:
+        fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.PENDING_PR_APPROVAL))
+        fake_service.mutation_result = _expected_run_result("wf-1")
+        http_service.reject_pr("wf-1", "tests failing")
+        assert fake_service.reject_pr_calls == [{"workflow_id": "wf-1", "reason": "tests failing"}]
+
+    def test_comment_pr_passes_comments(
+        self,
+        fake_service: _FakeWorkflowService,
+        http_service: HttpWorkflowService,
+    ) -> None:
+        fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.PENDING_PR_APPROVAL))
+        fake_service.mutation_result = _expected_run_result("wf-1")
+        http_service.comment_pr("wf-1", "please tighten the API")
+        assert fake_service.comment_pr_calls == [
+            {"workflow_id": "wf-1", "comments": "please tighten the API"}
+        ]
+
+
+class TestHistoryAndAuditLog:
+    def test_get_history_returns_entries(
+        self,
+        fake_service: _FakeWorkflowService,
+        http_service: HttpWorkflowService,
+    ) -> None:
+        fake_service.seed(_make_detail("wf-1"))
+        fake_service.history["wf-1"] = [
+            WorkflowHistoryEntry(step=1, node="plan", outcome="ok", result_keys=["work_plan"]),
+            WorkflowHistoryEntry(step=2, node="execute", outcome="error", error="boom"),
+        ]
+        entries = http_service.get_history("wf-1")
+        assert [e.node for e in entries] == ["plan", "execute"]
+        assert entries[0].result_keys == ["work_plan"]
+        assert entries[1].error == "boom"
+
+    def test_get_history_404(self, http_service: HttpWorkflowService) -> None:
+        with pytest.raises(ValueError, match="not found"):
+            http_service.get_history("nope")
+
+    def test_get_audit_log_returns_entries(
+        self,
+        fake_service: _FakeWorkflowService,
+        http_service: HttpWorkflowService,
+    ) -> None:
+        fake_service.seed(_make_detail("wf-1"))
+        fake_service.audit_log["wf-1"] = [
+            WorkflowAuditEntry(
+                workflow_id="wf-1",
+                actor="dispatcher",
+                action="status_change",
+                timestamp="2026-06-22T00:00:00",
+                details={"to": "pending_approval"},
+            ),
+        ]
+        entries = http_service.get_audit_log("wf-1")
+        assert [e.action for e in entries] == ["status_change"]
+        assert entries[0].details == {"to": "pending_approval"}
+
+    def test_get_audit_log_404(self, http_service: HttpWorkflowService) -> None:
+        with pytest.raises(ValueError, match="not found"):
+            http_service.get_audit_log("nope")
+
+
+class TestAdmin:
+    """Admin endpoints require ``ORCHESTRATOR_API_TOKEN`` on the server."""
+
+    def test_clear_db_forwards_call_and_returns_counts(
+        self,
+        monkeypatch,
+        fake_service: _FakeWorkflowService,
+    ) -> None:
+        monkeypatch.setenv(API_TOKEN_ENV, "admin-token")
+        fake_service.clear_db_result = (3, 7)
+        svc = _build_http_service(fake_service, token="admin-token")
+        try:
+            result = svc.clear_db()
+            assert result == (3, 7)
+            assert len(fake_service.clear_db_calls) == 1
+        finally:
+            svc.close()
+
+    def test_clear_db_503_when_admin_disabled(
+        self,
+        fake_service: _FakeWorkflowService,
+        http_service: HttpWorkflowService,
+    ) -> None:
+        # http_service fixture builds the app with admin disabled by default.
+        with pytest.raises(httpx.HTTPStatusError) as exc:
+            http_service.clear_db()
+        assert exc.value.response.status_code == 503
+        assert fake_service.clear_db_calls == []
+
+    def test_mark_interrupted_forwards_fields(
+        self,
+        monkeypatch,
+        fake_service: _FakeWorkflowService,
+    ) -> None:
+        monkeypatch.setenv(API_TOKEN_ENV, "admin-token")
+        fake_service.seed(_make_detail("wf-1"))
+        svc = _build_http_service(fake_service, token="admin-token")
+        try:
+            svc.mark_interrupted("wf-1", failed_node="execute", actor="ops-bot")
+            assert fake_service.mark_interrupted_calls == [
+                {"workflow_id": "wf-1", "failed_node": "execute", "actor": "ops-bot"}
+            ]
+        finally:
+            svc.close()
+
+    def test_mark_interrupted_404_raises_value_error(
+        self,
+        monkeypatch,
+        fake_service: _FakeWorkflowService,
+    ) -> None:
+        monkeypatch.setenv(API_TOKEN_ENV, "admin-token")
+        svc = _build_http_service(fake_service, token="admin-token")
+        try:
+            with pytest.raises(ValueError, match="not found"):
+                svc.mark_interrupted("nope")
+        finally:
+            svc.close()
+
+
+def test_remote_operation_not_supported_still_exported() -> None:
+    """Back-compat: the exception class is preserved even though no method raises it now."""
+    assert issubclass(RemoteOperationNotSupported, NotImplementedError)
 
 
 # ---------------------------------------------------------------------------
