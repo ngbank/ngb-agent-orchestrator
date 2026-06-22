@@ -45,6 +45,21 @@ semantics for the operations they both expose.
 
 ## Running the server
 
+There are four ways to run the server. They all boot the same FastAPI
+app (`orchestrator/server/app.py`); pick the one that matches what you
+are doing right now.
+
+### When to use which
+
+| Situation | Use | Lifetime |
+|---|---|---|
+| Quick debugging — want stdout in your face, will Ctrl-C when done | `orchestrator-server` | foreground; dies with terminal |
+| Hot reload while editing server code | `uvicorn orchestrator.server.app:app --reload` | foreground; dies with terminal |
+| Want it running in the background while you do other work | `orchestrator-server-ctl start` | detached; survives terminal close |
+| Want it isolated (different Python, persistent volumes, prod-like) | `docker compose up` | container; survives terminal close |
+
+### 1 — Foreground console script
+
 ```bash
 # Install editable + deps once
 .venv/bin/python -m pip install -e .
@@ -52,12 +67,20 @@ semantics for the operations they both expose.
 
 # Boot via console-script (reads ORCHESTRATOR_HOST/PORT/LOG_LEVEL/RELOAD)
 orchestrator-server
+```
 
-# Or directly with uvicorn (useful with --reload during dev)
+`Ctrl-C` stops it. Closing the terminal stops it.
+
+### 2 — Foreground uvicorn with `--reload`
+
+```bash
 uvicorn orchestrator.server.app:app --host 0.0.0.0 --port 8080 --reload
 ```
 
-### Detached background process (recommended for local dev)
+Restarts the server on file changes — useful when editing
+`orchestrator/server/` itself.
+
+### 3 — Detached background process (recommended for local dev)
 
 The repo ships a thin Bash wrapper at
 [`bin/orchestrator-server-ctl`](../bin/orchestrator-server-ctl) that
@@ -86,6 +109,24 @@ The helper honours the same `ORCHESTRATOR_HOST` / `ORCHESTRATOR_PORT`
 env vars as `orchestrator-server` itself (probe target is rewritten to
 `127.0.0.1` when bound to `0.0.0.0`). Override `ORCHESTRATOR_RUN_DIR`
 to relocate the pid/log directory.
+
+### 4 — Container
+
+See [Running with Docker](#running-with-docker) below.
+
+### `orchestrator-server` vs `orchestrator-server-ctl`
+
+They live at different layers:
+
+- **`orchestrator-server`** is the Python console script (registered by
+    `pip install -e .` via [`pyproject.toml`](../pyproject.toml)) that
+    invokes `orchestrator.server.app:run()` and boots uvicorn in the
+    **foreground**. This is the actual server binary.
+- **`orchestrator-server-ctl`** is a Bash lifecycle wrapper around it
+    (`start` / `stop` / `restart` / `status` / `logs`). It ultimately
+    spawns the same `orchestrator-server` binary — it just detaches the
+    process, tracks the PID, captures logs, and adds an idempotency
+    guard so a second `start` doesn't spawn a duplicate.
 
 Once running:
 
