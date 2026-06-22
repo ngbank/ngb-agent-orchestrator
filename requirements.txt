@@ -24,6 +24,9 @@ jira>=3.10.5
 PyJWT[crypto]>=2.9.0
 requests>=2.32.0
 
+# HTTP client (used by HttpWorkflowService remote-mode dispatcher transport)
+httpx>=0.28.0
+
 # LangGraph — state machine orchestration with resumable checkpointing
 langgraph>=1.2.4
 langchain-core>=1.4.2

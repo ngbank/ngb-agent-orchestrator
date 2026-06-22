@@ -44,14 +44,20 @@ def _resolve_service(ctx: click.Context) -> "WorkflowService":
     """Return the WorkflowService for this invocation.
 
     Tests inject a fake via ``runner.invoke(run, args, obj=fake_service)``;
-    production builds the default ``LocalWorkflowService`` lazily so commands
-    that do not need it (``--help``, ``--tui``) avoid the import cost.
+    production picks the implementation from ``ORCHESTRATOR_MODE`` (defaults to
+    ``local``), wired through :func:`build_workflow_service_from_env`.  The
+    service is built lazily so commands that do not need it (``--help``,
+    ``--tui``) avoid the import / network cost.
     """
     if ctx.obj is not None:
         return ctx.obj
-    from orchestrator.workflow_service import build_local_workflow_service
+    from orchestrator.workflow_service import build_workflow_service_from_env
 
-    service = build_local_workflow_service()
+    try:
+        service = build_workflow_service_from_env()
+    except ValueError as exc:
+        click.echo(f"❌ {exc}", err=True)
+        sys.exit(2)
     ctx.obj = service
     return service
 

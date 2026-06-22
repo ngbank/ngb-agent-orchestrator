@@ -113,6 +113,23 @@ The optional FastAPI server (`orchestrator-server` console script) reads these e
 | `ORCHESTRATOR_RELOAD` | No | *(unset)* | When `1` / `true` / `yes`, enables uvicorn auto-reload (dev only) |
 | `ORCHESTRATOR_API_TOKEN` | No | *(unset)* | Bearer token required on every protected route. When unset or empty, **auth is disabled** and the server logs a warning at startup. `/healthz` and OpenAPI endpoints are always open. |
 
+### Dispatcher → Orchestrator Transport
+
+The dispatcher CLI and TUI talk to a `WorkflowService` Protocol.  These vars
+choose between the in-process default and a remote orchestrator server.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ORCHESTRATOR_MODE` | No | `local` | `local` runs the orchestrator in-process via `LocalWorkflowService`. `remote` routes every call through `HttpWorkflowService` to the orchestrator server. |
+| `ORCHESTRATOR_URL` | When `ORCHESTRATOR_MODE=remote` | — | Base URL of the orchestrator server, e.g. `http://orchestrator.internal:8080`. |
+| `ORCHESTRATOR_TOKEN` | No | *(unset)* | Bearer token sent on every request to the remote server. Must match the server's `ORCHESTRATOR_API_TOKEN` when auth is enabled. |
+
+Remote mode currently supports the subset of operations the server exposes
+(`start`, `get`, `list`, `get_by_ticket`, `cancel`, plus `read_logs` and
+`stream_events` via SSE).  Mutating commands such as `--approve-plan`,
+`--retry`, and `--clarify` will land in remote mode in a follow-up epic; use
+`ORCHESTRATOR_MODE=local` for those today.
+
 ### OpenTelemetry (Day-0 Tracing)
 
 Tracing is always enabled. Configure the exporter via environment variables — no code changes needed to switch.
