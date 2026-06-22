@@ -13,7 +13,7 @@ import urllib.request
 from pathlib import Path
 from typing import IO, List, Optional
 
-from orchestrator.paths import logs_base_dir, workflow_logs_dir
+from orchestrator.paths import logs_base_dir, state_base_dir, workflow_logs_dir
 
 
 def _get_actor() -> str:
@@ -218,14 +218,26 @@ def goose_session(
     port = _free_port()
     config_yaml = _litellm_config_yaml(model)
 
-    # Write the config into the system temp dir (not the repo root) so server
-    # mode never pollutes the project working tree. The proxy subprocess
-    # resolves the OTel callback via its Python import path
-    # (``otel.litellm_proxy_setup.proxy_handler_instance``); we inject
-    # ``PYTHONPATH=<repo_root>`` below so the import works regardless of the
-    # config file's location.
+    # Write the config under the shared XDG state base
+    # (``$XDG_STATE_HOME/ngb-agent-orchestrator/run/goose-proxy/`` or the
+    # ``~/.local/state/...`` fallback) — the same root used for the SQLite
+    # DB and per-workflow logs — so the host CLI and the containerised
+    # server agree on where transient subprocess artefacts live, and the
+    # project working tree never gets polluted.  The file is removed when
+    # the context exits regardless of success or failure.
+    #
+    # The proxy subprocess resolves the OTel callback via its Python
+    # import path (``otel.litellm_proxy_setup.proxy_handler_instance``);
+    # we inject ``PYTHONPATH=<repo_root>`` below so the import works
+    # regardless of the config file's location.
     repo_root = Path(__file__).resolve().parents[1]
-    config_fd, config_path = tempfile.mkstemp(suffix="_litellm.yaml", prefix="goose_proxy_")
+    proxy_config_dir = state_base_dir() / "run" / "goose-proxy"
+    proxy_config_dir.mkdir(parents=True, exist_ok=True)
+    config_fd, config_path = tempfile.mkstemp(
+        suffix="_litellm.yaml",
+        prefix="goose_proxy_",
+        dir=str(proxy_config_dir),
+    )
     os.close(config_fd)
     proxy_log_fh: Optional[IO[str]] = None
     try:
