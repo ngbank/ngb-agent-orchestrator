@@ -76,14 +76,30 @@ routes every command through it (`service.start`, `service.approve_plan`,
 A2A endpoint, and the TUI's mutating actions. This boundary is asserted by
 `tests/test_dispatcher.py::test_dispatcher_commands_have_no_direct_repo_or_builder_imports`.
 
+The transport is selected by `ORCHESTRATOR_MODE` (default `local`). Setting
+`ORCHESTRATOR_MODE=remote` plus `ORCHESTRATOR_URL` swaps in
+`HttpWorkflowService`, which talks to the FastAPI server documented under
+[`orchestrator/server/`](#orchestratorserver) over HTTPS/SSE. See
+[docs/configuration.md](configuration.md#dispatcher--orchestrator-transport)
+for the env-var contract.
+
 ### `orchestrator/workflow_service/`
 
 Backend-agnostic service layer that owns "run / approve / retry / inspect"
 workflows. Defines the `WorkflowService` protocol (`protocols.py`), result
-DTOs (`dtos.py`), and the in-process implementation `LocalWorkflowService`
-(`local.py`), which composes a `WorkflowRepository` with a graph factory
-(usually `orchestrator.builder.build_orchestrator`). `build_local_workflow_service()`
-returns a ready-to-use instance.
+DTOs (`dtos.py`), the in-process implementation `LocalWorkflowService`
+(`local.py`) — which composes a `WorkflowRepository` with a graph factory
+(usually `orchestrator.builder.build_orchestrator`) — and the HTTP-backed
+`HttpWorkflowService` (`http_client.py`) used when the dispatcher runs in
+remote mode. `build_local_workflow_service()` and
+`build_http_workflow_service(base_url, ...)` return ready-to-use instances;
+`build_workflow_service_from_env()` (in `factory.py`) picks between them
+based on `ORCHESTRATOR_MODE`.
+
+The remote-mode client currently supports the read / cancel / start /
+`read_logs` / `stream_events` surface; the approval, clarification, retry,
+and PR-comment endpoints are scheduled for the B4 work item and raise
+`RemoteOperationNotSupported` until then.
 
 ### `orchestrator/server/`
 

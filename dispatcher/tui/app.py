@@ -32,7 +32,7 @@ from orchestrator.workflow_service import (
     WorkflowDetail,
     WorkflowService,
     WorkflowSummary,
-    build_local_workflow_service,
+    build_workflow_service_from_env,
 )
 
 
@@ -298,6 +298,6 @@ def run_tui() -> None:
     """Entry point for the TUI application."""
     load_dotenv()
     load_runtime_secrets_from_keyvault()
-    service = build_local_workflow_service()
+    service = build_workflow_service_from_env()
     app = WorkflowTUI(service)
     app.run()
