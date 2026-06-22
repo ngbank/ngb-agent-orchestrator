@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.7
-#
 # Multi-stage build for the orchestrator HTTP server.
 #
 # Stage 1 (builder): installs runtime dependencies into an isolated prefix.
