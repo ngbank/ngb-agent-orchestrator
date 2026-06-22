@@ -2,14 +2,16 @@
 
 import json
 import os
+import sys
 import tempfile
+import types
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 from opentelemetry.sdk.trace.export import SpanExportResult
 
-from otel.exporters import LocalJsonFileExporter, MultiExporter
+from otel.exporters import LocalJsonFileExporter, MultiExporter, create_exporter
 from otel.redaction import redact_attributes, should_redact
 
 DEFAULT_TEST_WORKFLOW_ID = "test-workflow-123"
@@ -354,3 +356,120 @@ class TestRedaction:
                 os.environ["OTEL_DEBUG_LOCAL"] = original_debug
             elif "OTEL_DEBUG_LOCAL" in os.environ:
                 del os.environ["OTEL_DEBUG_LOCAL"]
+
+
+class TestCreateExporter:
+    """Tests for create_exporter backend routing and validation."""
+
+    def _install_http_exporter_stub(self, monkeypatch):
+        module = types.ModuleType("opentelemetry.exporter.otlp.proto.http.trace_exporter")
+        factory = MagicMock(name="OTLPSpanExporter")
+        module.OTLPSpanExporter = factory
+        monkeypatch.setitem(
+            sys.modules, "opentelemetry.exporter.otlp.proto.http.trace_exporter", module
+        )
+        return factory
+
+    def test_create_exporter_betterstack_uses_bearer_header(self, monkeypatch):
+        mock_http_exporter = self._install_http_exporter_stub(monkeypatch)
+
+        monkeypatch.setenv("OTEL_EXPORTERS", "betterstack")
+        monkeypatch.delenv("OTEL_BETTERSTACK_INSECURE", raising=False)
+        monkeypatch.setenv(
+            "OTEL_BETTERSTACK_ENDPOINT", "https://s2532474.eu-fsn-3.betterstackdata.com"
+        )
+        monkeypatch.setenv("OTEL_BETTERSTACK_SOURCE_TOKEN", "token-123")
+
+        exporter = create_exporter()
+
+        assert isinstance(exporter, MultiExporter)
+        mock_http_exporter.assert_called_once_with(
+            endpoint="https://s2532474.eu-fsn-3.betterstackdata.com/v1/traces",
+            headers={"Authorization": "Bearer token-123"},
+            session=None,
+        )
+
+    def test_create_exporter_betterstack_insecure_disables_tls_verification(self, monkeypatch):
+        mock_http_exporter = self._install_http_exporter_stub(monkeypatch)
+
+        monkeypatch.setenv("OTEL_EXPORTERS", "betterstack")
+        monkeypatch.setenv("OTEL_BETTERSTACK_SOURCE_TOKEN", "token-123")
+        monkeypatch.setenv("OTEL_BETTERSTACK_INSECURE", "true")
+
+        create_exporter()
+
+        session = mock_http_exporter.call_args.kwargs["session"]
+        assert session is not None
+        assert type(session).__name__ == "_InsecureSession"
+
+    def test_create_exporter_betterstack_preserves_explicit_path(self, monkeypatch):
+        mock_http_exporter = self._install_http_exporter_stub(monkeypatch)
+
+        monkeypatch.setenv("OTEL_EXPORTERS", "betterstack")
+        monkeypatch.delenv("OTEL_BETTERSTACK_INSECURE", raising=False)
+        monkeypatch.setenv(
+            "OTEL_BETTERSTACK_ENDPOINT", "https://in-otel.logs.betterstack.com/v1/traces"
+        )
+        monkeypatch.setenv("OTEL_BETTERSTACK_SOURCE_TOKEN", "token-123")
+
+        create_exporter()
+
+        assert mock_http_exporter.call_args.kwargs["endpoint"] == (
+            "https://in-otel.logs.betterstack.com/v1/traces"
+        )
+
+    def test_create_exporter_elastic_uses_apikey_header(self, monkeypatch):
+        mock_http_exporter = self._install_http_exporter_stub(monkeypatch)
+
+        monkeypatch.setenv("OTEL_EXPORTERS", "elastic")
+        monkeypatch.setenv("OTEL_ELASTIC_ENDPOINT", "https://elastic.example.local/v1/traces")
+        monkeypatch.setenv("OTEL_ELASTIC_API_KEY", "api-key-123")
+
+        exporter = create_exporter()
+
+        assert isinstance(exporter, MultiExporter)
+        mock_http_exporter.assert_called_once_with(
+            endpoint="https://elastic.example.local/v1/traces",
+            headers={"Authorization": "ApiKey api-key-123"},
+        )
+
+    def test_create_exporter_betterstack_requires_source_token(self, monkeypatch):
+        self._install_http_exporter_stub(monkeypatch)
+
+        monkeypatch.setenv("OTEL_EXPORTERS", "betterstack")
+        monkeypatch.delenv("OTEL_BETTERSTACK_SOURCE_TOKEN", raising=False)
+
+        with pytest.raises(ValueError, match="OTEL_BETTERSTACK_SOURCE_TOKEN"):
+            create_exporter()
+
+    def test_create_exporter_elastic_requires_endpoint(self, monkeypatch):
+        self._install_http_exporter_stub(monkeypatch)
+
+        monkeypatch.setenv("OTEL_EXPORTERS", "elastic")
+        monkeypatch.delenv("OTEL_ELASTIC_ENDPOINT", raising=False)
+        monkeypatch.setenv("OTEL_ELASTIC_API_KEY", "api-key-123")
+
+        with pytest.raises(ValueError, match="OTEL_ELASTIC_ENDPOINT"):
+            create_exporter()
+
+    def test_create_exporter_elastic_requires_api_key(self, monkeypatch):
+        self._install_http_exporter_stub(monkeypatch)
+
+        monkeypatch.setenv("OTEL_EXPORTERS", "elastic")
+        monkeypatch.setenv("OTEL_ELASTIC_ENDPOINT", "https://elastic.example.local/v1/traces")
+        monkeypatch.delenv("OTEL_ELASTIC_API_KEY", raising=False)
+
+        with pytest.raises(ValueError, match="OTEL_ELASTIC_API_KEY"):
+            create_exporter()
+
+    def test_create_exporter_betterstack_console_combination(self, monkeypatch):
+        mock_http_exporter = self._install_http_exporter_stub(monkeypatch)
+
+        monkeypatch.setenv("OTEL_EXPORTERS", "betterstack,console")
+        monkeypatch.setenv("OTEL_BETTERSTACK_SOURCE_TOKEN", "token-123")
+
+        exporter = create_exporter()
+
+        assert isinstance(exporter, MultiExporter)
+        assert len(exporter.exporters) == 3
+        mock_http_exporter.assert_called_once()

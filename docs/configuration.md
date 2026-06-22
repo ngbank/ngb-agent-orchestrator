@@ -37,6 +37,8 @@ Required secret names in the vault:
 - `JIRA-OAUTH-CLIENT-SECRET`
 - `AZURE-API-KEY`
 - `ANTHROPIC-API-KEY`
+- `OTEL-BETTERSTACK-ENDPOINT`
+- `OTEL-BETTERSTACK-SOURCE-TOKEN`
 - `GITHUB-APP-ID`
 - `GITHUB-APP-PRIVATE-KEY`
 - `GITHUB-APP-INSTALLATION-ID`
@@ -151,8 +153,13 @@ Tracing is always enabled. Configure the exporter via environment variables — 
 
 | Variable | Default | Description |
 |---|---|---|
-| `OTEL_EXPORTERS` | *(empty)* | Comma-separated list of additional exporters: `console` (stdout) and/or `otlp` (remote collector). File logging is **always on** regardless of this value. Leave empty for file-only export. |
+| `OTEL_EXPORTERS` | *(empty)* | Comma-separated list of additional exporters: `console` (stdout), `otlp` (remote gRPC collector), `betterstack` (OTLP HTTP), and/or `elastic` (OTLP HTTP). File logging is **always on** regardless of this value. Leave empty for file-only export. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | gRPC endpoint for OTLP exporter (only used when `OTEL_EXPORTERS` includes `otlp`) |
+| `OTEL_BETTERSTACK_ENDPOINT` | `https://in-otel.logs.betterstack.com` | Better Stack OTLP HTTP ingest host or full traces endpoint. If only the host is provided, the exporter appends `/v1/traces` automatically. |
+| `OTEL_BETTERSTACK_SOURCE_TOKEN` | *(none)* | Better Stack source token used as `Authorization: Bearer <token>` (required for `betterstack`) |
+| `OTEL_BETTERSTACK_INSECURE` | `false` | When `true`, disables TLS certificate verification for Better Stack OTLP HTTP export. Use only for local troubleshooting when the endpoint certificate chain is not trusted locally. |
+| `OTEL_ELASTIC_ENDPOINT` | *(none)* | Elastic APM/Fleet OTLP HTTP ingest endpoint, including path if required by your deployment (required for `elastic`) |
+| `OTEL_ELASTIC_API_KEY` | *(none)* | Elastic API key sent as `Authorization: ApiKey <key>` (required for `elastic`) |
 | `OTEL_SERVICE_NAME` | `ngb-agent-orchestrator` | Service name attached to all spans |
 | `OTEL_DEBUG_LOCAL` | `false` | When `true`, disables redaction in local artifacts for troubleshooting (never enable in production) |
 | `OTEL_REDACT_PAYLOADS` | `true` | Control redaction: `true` to enable, `false` to disable. Defaults to `true` (secure by default) — independent of exporter type. |
@@ -218,6 +225,35 @@ Then set:
 ```bash
 OTEL_EXPORTERS=otlp
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+```
+
+#### Better Stack OTLP HTTP Export (dev)
+
+Use Better Stack in local/dev by setting:
+
+```bash
+OTEL_EXPORTERS=betterstack
+OTEL_BETTERSTACK_ENDPOINT=https://s2532474.eu-fsn-3.betterstackdata.com
+OTEL_BETTERSTACK_SOURCE_TOKEN=<token from AKV>
+OTEL_BETTERSTACK_INSECURE=true
+```
+
+This Better Stack setting is for OTLP traces, not the plain JSON log-ingest API. When the configured value is just the ingest host, the exporter sends traces to `https://<host>/v1/traces`.
+
+You can combine exporters for local debugging and remote visibility:
+
+```bash
+OTEL_EXPORTERS=betterstack,console
+```
+
+#### Elastic OTLP HTTP Export (staging/prod)
+
+Use Elastic outside dev by setting:
+
+```bash
+OTEL_EXPORTERS=elastic
+OTEL_ELASTIC_ENDPOINT=https://<your-elastic-endpoint>
+OTEL_ELASTIC_API_KEY=<api-key>
 ```
 
 ### Optional
