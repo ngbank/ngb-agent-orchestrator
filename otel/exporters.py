@@ -13,12 +13,23 @@ comma-separated list of zero or more of:
     - ``otlp``     -- sends spans to a local OTel Collector via gRPC.
                                      Requires ``OTEL_EXPORTER_OTLP_ENDPOINT`` (default:
                                      ``http://localhost:4317``).
+    - ``betterstack`` -- sends spans to Better Stack via OTLP HTTP.
+                         Requires ``OTEL_BETTERSTACK_SOURCE_TOKEN``.
+                         Optional ``OTEL_BETTERSTACK_ENDPOINT``
+                         (default: ``https://in-otel.logs.betterstack.com``).
+                         Optional ``OTEL_BETTERSTACK_INSECURE=true`` disables
+                         TLS certificate verification for local troubleshooting.
+    - ``elastic``  -- sends spans to Elastic via OTLP HTTP.
+                      Requires ``OTEL_ELASTIC_ENDPOINT`` and
+                      ``OTEL_ELASTIC_API_KEY``.
 
 Supported combinations::
 
     OTEL_EXPORTERS=console        -- file + stdout
     OTEL_EXPORTERS=otlp           -- file + remote collector
     OTEL_EXPORTERS=console,otlp   -- file + stdout + remote collector
+    OTEL_EXPORTERS=betterstack,console -- file + Better Stack + stdout
+    OTEL_EXPORTERS=elastic,console -- file + Elastic + stdout
     OTEL_EXPORTERS=               -- file only (no forwarding)
 
 Redaction can be controlled via:
@@ -33,8 +44,10 @@ import os
 from collections import defaultdict
 from pathlib import Path
 from threading import Lock
-from typing import Sequence
+from typing import Any, Sequence
+from urllib.parse import urlparse
 
+import requests
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import ConsoleSpanExporter, SpanExporter, SpanExportResult
 
@@ -47,6 +60,47 @@ _UNKNOWN_WORKFLOW_ID = "unknown"
 
 def _otlp_endpoint() -> str:
     return os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
+
+
+def _betterstack_endpoint() -> str:
+    return _betterstack_traces_endpoint(
+        os.getenv("OTEL_BETTERSTACK_ENDPOINT", "https://in-otel.logs.betterstack.com")
+    )
+
+
+def _betterstack_traces_endpoint(endpoint: str) -> str:
+    parsed = urlparse(endpoint)
+    if not parsed.path or parsed.path == "/":
+        return endpoint.rstrip("/") + "/v1/traces"
+    return endpoint
+
+
+def _required_env(name: str) -> str:
+    value = os.getenv(name, "").strip()
+    if not value:
+        raise ValueError(f"{name} is required when OTEL_EXPORTERS includes this backend")
+    return value
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+class _InsecureSession(requests.Session):
+    """Requests session that always disables TLS verification."""
+
+    def post(
+        self,
+        url: str | bytes,
+        data: Any = None,
+        json: Any | None = None,
+        **kwargs: Any,
+    ) -> requests.Response:
+        kwargs["verify"] = False
+        return super().post(url, data=data, json=json, **kwargs)
 
 
 def _logs_base_dir() -> Path:
@@ -216,7 +270,8 @@ def create_exporter() -> SpanExporter:
 
     ``LocalJsonFileExporter`` is always included -- file logging is unconditional.
     Additional exporters are read from the ``OTEL_EXPORTERS`` environment variable
-    (comma-separated list of ``console`` and/or ``otlp``).
+    (comma-separated list of ``console``, ``otlp``, ``betterstack``, and/or
+    ``elastic``).
 
     Returns:
         A ``SpanExporter`` instance ready to attach to a tracer provider.
@@ -247,9 +302,49 @@ def create_exporter() -> SpanExporter:
                     "Install it with: pip install opentelemetry-exporter-otlp-proto-grpc"
                 ) from exc
             exporters.append(OTLPSpanExporter(endpoint=_otlp_endpoint(), insecure=True))
+        elif name == "betterstack":
+            try:
+                from opentelemetry.exporter.otlp.proto.http.trace_exporter import (  # noqa: E501  # pyright: ignore[reportMissingImports]
+                    OTLPSpanExporter,
+                )
+            except ImportError as exc:
+                raise ImportError(
+                    "betterstack exporter requires 'opentelemetry-exporter-otlp-proto-http'. "
+                    "Install it with: pip install opentelemetry-exporter-otlp-proto-http"
+                ) from exc
+
+            source_token = _required_env("OTEL_BETTERSTACK_SOURCE_TOKEN")
+            insecure = _env_flag("OTEL_BETTERSTACK_INSECURE")
+            exporters.append(
+                OTLPSpanExporter(
+                    endpoint=_betterstack_endpoint(),
+                    headers={"Authorization": f"Bearer {source_token}"},
+                    session=_InsecureSession() if insecure else None,
+                )
+            )
+        elif name == "elastic":
+            try:
+                from opentelemetry.exporter.otlp.proto.http.trace_exporter import (  # noqa: E501  # pyright: ignore[reportMissingImports]
+                    OTLPSpanExporter,
+                )
+            except ImportError as exc:
+                raise ImportError(
+                    "elastic exporter requires 'opentelemetry-exporter-otlp-proto-http'. "
+                    "Install it with: pip install opentelemetry-exporter-otlp-proto-http"
+                ) from exc
+
+            endpoint = _required_env("OTEL_ELASTIC_ENDPOINT")
+            api_key = _required_env("OTEL_ELASTIC_API_KEY")
+            exporters.append(
+                OTLPSpanExporter(
+                    endpoint=endpoint,
+                    headers={"Authorization": f"ApiKey {api_key}"},
+                )
+            )
         else:
             raise ValueError(
-                f"Unknown exporter {name!r} in OTEL_EXPORTERS. " "Valid values: 'console', 'otlp'."
+                f"Unknown exporter {name!r} in OTEL_EXPORTERS. "
+                "Valid values: 'console', 'otlp', 'betterstack', 'elastic'."
             )
 
     if len(exporters) == 1:

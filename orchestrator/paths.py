@@ -48,6 +48,16 @@ def logs_base_dir() -> Path:
     return state_base_dir() / "logs"
 
 
+def proxy_sessions_dir() -> Path:
+    """Return the directory used for ephemeral litellm proxy session configs.
+
+    Follows the same XDG-state convention as ``logs_base_dir``:
+      - ``$XDG_STATE_HOME/ngb-agent-orchestrator/proxy-sessions``
+      - ``~/.local/state/ngb-agent-orchestrator/proxy-sessions``  (fallback)
+    """
+    return state_base_dir() / "proxy-sessions"
+
+
 def workflow_logs_dir(workflow_id: str, ensure_dir: bool = True) -> Path:
     """Return per-workflow logs directory under the configured base."""
     path = logs_base_dir() / workflow_id

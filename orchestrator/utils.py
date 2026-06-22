@@ -13,7 +13,7 @@ import urllib.request
 from pathlib import Path
 from typing import IO, List, Optional
 
-from orchestrator.paths import logs_base_dir, workflow_logs_dir
+from orchestrator.paths import logs_base_dir, proxy_sessions_dir, workflow_logs_dir
 
 
 def _get_actor() -> str:
@@ -218,15 +218,22 @@ def goose_session(
     port = _free_port()
     config_yaml = _litellm_config_yaml(model)
 
-    # Write the config into the system temp dir (not the repo root) so server
-    # mode never pollutes the project working tree. The proxy subprocess
-    # resolves the OTel callback via its Python import path
-    # (``otel.litellm_proxy_setup.proxy_handler_instance``); we inject
-    # ``PYTHONPATH=<repo_root>`` below so the import works regardless of the
-    # config file's location.
+    import shutil as _shutil
+
     repo_root = Path(__file__).resolve().parents[1]
-    config_fd, config_path = tempfile.mkstemp(suffix="_litellm.yaml", prefix="goose_proxy_")
-    os.close(config_fd)
+    # LiteLLM's ``get_instance_fn`` resolves callback modules by file path
+    # relative to the config file's directory — it builds:
+    #   <config_dir>/otel/litellm_proxy_setup.py
+    # and requires that file to exist before falling back to Python import.
+    # We create an isolated session dir under the XDG state location and
+    # symlink ``otel/`` into it, so the file check passes while the config
+    # lives outside the working tree.
+    proxy_sessions_dir().mkdir(parents=True, exist_ok=True)
+    config_dir = Path(
+        tempfile.mkdtemp(prefix="goose_proxy_session_", dir=str(proxy_sessions_dir()))
+    )
+    (config_dir / "otel").symlink_to(repo_root / "otel")
+    config_path = str(config_dir / "goose_proxy_litellm.yaml")
     proxy_log_fh: Optional[IO[str]] = None
     try:
         with open(config_path, "w") as f:
@@ -309,10 +316,7 @@ def goose_session(
     finally:
         if proxy_log_fh is not None:
             proxy_log_fh.close()
-        try:
-            os.unlink(config_path)
-        except FileNotFoundError:
-            pass
+        _shutil.rmtree(config_dir, ignore_errors=True)
 
 
 def run_and_tee(
