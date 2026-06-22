@@ -165,13 +165,19 @@ dispatcher --clear-db
 By default, the dispatcher runs the orchestrator **in-process** — no server required. If you want to share one orchestrator across multiple dispatchers, IDEs, or the TUI, start the FastAPI server and point the dispatcher at it.
 
 ```bash
-# Option 1: console script (uses .env from your shell)
+# Option 1: detached background process (recommended for local dev)
+orchestrator-server-ctl start          # detach + survives terminal close
+orchestrator-server-ctl status         # PID + /healthz probe
+orchestrator-server-ctl logs -f        # follow the server log
+orchestrator-server-ctl stop           # graceful SIGTERM, then SIGKILL
+
+# Option 2: console script in the foreground (uses .env from your shell)
 orchestrator-server
 
-# Option 2: uvicorn directly (handy for --reload during dev)
+# Option 3: uvicorn directly (handy for --reload during dev)
 uvicorn orchestrator.server.app:app --host 0.0.0.0 --port 8080
 
-# Option 3: container (multi-stage Dockerfile, non-root, /healthz)
+# Option 4: container (multi-stage Dockerfile, non-root, /healthz)
 docker compose up --build
 # or:
 docker build -t ngb-orchestrator:dev .
@@ -181,6 +187,8 @@ docker run --rm -p 8080:8080 --env-file .env \
 # Verify
 curl http://localhost:8080/healthz   # → {"status":"ok"}
 ```
+
+The `orchestrator-server-ctl` helper lives in [`bin/`](bin/orchestrator-server-ctl) and is put on `PATH` by direnv (see [`.envrc`](.envrc)). PID and log files are written to `.run/` at the repo root.
 
 Then route the CLI through the server by setting two env vars (typically in `.env`):
 

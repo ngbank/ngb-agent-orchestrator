@@ -57,6 +57,36 @@ orchestrator-server
 uvicorn orchestrator.server.app:app --host 0.0.0.0 --port 8080 --reload
 ```
 
+### Detached background process (recommended for local dev)
+
+The repo ships a thin Bash wrapper at
+[`bin/orchestrator-server-ctl`](../bin/orchestrator-server-ctl) that
+runs the console script under `nohup` + `disown`, so the server
+survives the terminal that launched it (the spawned process is
+reparented to PID 1). `bin/` is placed on `$PATH` by `.envrc`, so any
+direnv-allowed shell can call the helper bare:
+
+```bash
+orchestrator-server-ctl start          # start detached; ~5s readiness probe
+orchestrator-server-ctl status         # pid, bind, /healthz state
+orchestrator-server-ctl logs           # tail the server log
+orchestrator-server-ctl logs -f        # follow it
+orchestrator-server-ctl restart
+orchestrator-server-ctl stop           # SIGTERM, then SIGKILL after 10s
+```
+
+Runtime files live in `.run/` at the repo root (gitignored):
+
+| File | Purpose |
+|---|---|
+| `.run/orchestrator-server.pid` | PID of the detached server |
+| `.run/orchestrator-server.log` | Combined stdout + stderr |
+
+The helper honours the same `ORCHESTRATOR_HOST` / `ORCHESTRATOR_PORT`
+env vars as `orchestrator-server` itself (probe target is rewritten to
+`127.0.0.1` when bound to `0.0.0.0`). Override `ORCHESTRATOR_RUN_DIR`
+to relocate the pid/log directory.
+
 Once running:
 
 - Liveness: `GET http://localhost:8080/healthz`
