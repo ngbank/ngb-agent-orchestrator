@@ -14,7 +14,7 @@ SQLite-based state tracking system for workflow execution. Each workflow record 
 
 ### Setup
 
-The database is automatically initialized when you first import the module. By default, it creates `state/local.db`.
+The database is automatically initialized when you first import the module. By default, it lives under the user's XDG state directory at `$XDG_STATE_HOME/ngb-agent-orchestrator/db/local.db` (or `~/.local/state/ngb-agent-orchestrator/db/local.db` when `XDG_STATE_HOME` is unset).
 
 ```python
 from state import state_store
@@ -24,14 +24,14 @@ from state import state_store
 
 ### Configuration
 
-Set the database path via environment variable (optional):
+Override the database path via environment variable (optional):
 
 ```bash
 # .env file
-DB_PATH=state/local.db
+DB_PATH=/path/to/custom.db
 ```
 
-If not set, defaults to `state/local.db`.
+If not set, the orchestrator uses the XDG default above and creates the parent directory on first use.
 
 ## Usage
 
@@ -205,11 +205,12 @@ SQLite was chosen for:
 state/
 ├── __init__.py                    # Module exports
 ├── state_store.py                 # Core implementation
-├── migrations/                    # SQL migrations
-│   ├── __init__.py
-│   └── 001_initial_schema.sql    # Initial schema
-└── local.db                       # Database file (gitignored)
+└── migrations/                    # SQL migrations
+    ├── __init__.py
+    └── 001_initial_schema.sql    # Initial schema
 ```
+
+The SQLite database itself lives outside the repo at `$XDG_STATE_HOME/ngb-agent-orchestrator/db/local.db` by default.
 
 ## API Reference
 

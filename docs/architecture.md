@@ -128,7 +128,7 @@ flowchart LR
 
     Local --> Graph["LangGraph<br/>(orchestrator/builder.py)"]
     LocalSrv --> Graph
-    Graph --> SQL[("SQLite<br/>state/local.db")]
+    Graph --> SQL[("SQLite<br/>~/.local/state/ngb-agent-orchestrator/db/local.db")]
 ```
 
 Key properties:
@@ -229,7 +229,7 @@ Status → COMPLETED or FAILED
 
 ## Graph Checkpointing
 
-The LangGraph graph uses `SqliteSaver` (backed by the same `state/local.db`) as its checkpointer. This means:
+The LangGraph graph uses `SqliteSaver` (backed by the same SQLite database under `$XDG_STATE_HOME/ngb-agent-orchestrator/db/local.db`) as its checkpointer. This means:
 
 - The full graph state is serialised to SQLite at every node boundary.
 - When `await_approval` calls `interrupt()`, the process can exit cleanly.

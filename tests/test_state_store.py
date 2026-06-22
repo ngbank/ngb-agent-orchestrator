@@ -272,20 +272,31 @@ def test_audit_log_content(test_db):
         assert entry["workflow_id"] == workflow_id
 
 
-def test_get_db_path_default(test_db):
-    """Test that default DB path is correct."""
-    # Temporarily remove DB_PATH env var
-    db_path_backup = os.environ.get("DB_PATH")
-    if "DB_PATH" in os.environ:
-        del os.environ["DB_PATH"]
+def test_get_db_path_uses_xdg_state_home_by_default(monkeypatch, tmp_path):
+    """Without DB_PATH, get_db_path() resolves under XDG_STATE_HOME."""
+    monkeypatch.delenv("DB_PATH", raising=False)
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-state"))
 
-    try:
-        db_path = state_store.get_db_path()
-        assert db_path == "state/local.db"
-    finally:
-        # Restore
-        if db_path_backup:
-            os.environ["DB_PATH"] = db_path_backup
+    db_path = state_store.get_db_path()
+
+    expected = tmp_path / "xdg-state" / "ngb-agent-orchestrator" / "db" / "local.db"
+    assert db_path == str(expected)
+    # Parent dir is created on first use.
+    assert expected.parent.is_dir()
+
+
+def test_get_db_path_falls_back_to_home_local_state(monkeypatch, tmp_path):
+    """Without DB_PATH or XDG_STATE_HOME, get_db_path() falls back to ~/.local/state."""
+    monkeypatch.delenv("DB_PATH", raising=False)
+    monkeypatch.delenv("XDG_STATE_HOME", raising=False)
+    fake_home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(fake_home))
+
+    db_path = state_store.get_db_path()
+
+    expected = fake_home / ".local" / "state" / "ngb-agent-orchestrator" / "db" / "local.db"
+    assert db_path == str(expected)
+    assert expected.parent.is_dir()
 
 
 def test_get_db_path_from_env(test_db):
@@ -299,6 +310,45 @@ def test_get_db_path_from_env(test_db):
     with patch("pathlib.Path.mkdir"):
         db_path = state_store.get_db_path()
         assert db_path == custom_path
+
+
+def test_get_db_path_env_overrides_xdg(monkeypatch, tmp_path):
+    """An explicit DB_PATH override beats XDG_STATE_HOME."""
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-state"))
+    override = tmp_path / "override" / "custom.db"
+    monkeypatch.setenv("DB_PATH", str(override))
+
+    db_path = state_store.get_db_path()
+
+    assert db_path == str(override)
+    assert override.parent.is_dir()
+
+
+def test_get_db_path_warns_on_legacy_db(monkeypatch, tmp_path, caplog):
+    """A legacy ./state/local.db relative to CWD triggers a one-line warning."""
+    import logging
+
+    from state import sqlite_state_store
+
+    # Reset the module-level "already warned" guard so the warning fires.
+    monkeypatch.setattr(sqlite_state_store, "_legacy_warning_emitted", False)
+
+    # CWD with a legacy state/local.db that should trigger the warning.
+    cwd = tmp_path / "project"
+    legacy = cwd / "state" / "local.db"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text("")
+    monkeypatch.chdir(cwd)
+
+    # Resolve to a clean XDG path that does NOT yet contain a DB.
+    xdg = tmp_path / "xdg-state"
+    monkeypatch.setenv("XDG_STATE_HOME", str(xdg))
+    monkeypatch.delenv("DB_PATH", raising=False)
+
+    with caplog.at_level(logging.WARNING, logger="state.sqlite_state_store"):
+        sqlite_state_store.get_db_path()
+
+    assert any("Legacy SQLite DB detected" in record.message for record in caplog.records)
 
 
 def test_workflow_status_is_enum(test_db):

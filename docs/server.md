@@ -24,7 +24,7 @@ no other code paths to flip.
 flowchart LR
     subgraph local["ORCHESTRATOR_MODE=local (default)"]
         CLI1["dispatcher / TUI"] --> LS1["LocalWorkflowService<br/>(in-process)"]
-        LS1 --> SQL1[("SQLite<br/>state/local.db")]
+        LS1 --> SQL1[("SQLite<br/>~/.local/state/ngb-agent-orchestrator/db/local.db")]
         LS1 --> LG1["LangGraph<br/>nodes"]
     end
 
@@ -140,8 +140,20 @@ Once running:
 
 The repo ships a multi-stage `Dockerfile` (Python 3.12-slim, non-root
 `orchestrator` user, default `CMD ["orchestrator-server"]`,
-`HEALTHCHECK` against `/healthz`) and a `docker-compose.yml` wiring the
-server to two named volumes for SQLite state and per-workflow logs.
+`HEALTHCHECK` against `/healthz`) and a `docker-compose.yml` that
+bind-mounts the host's XDG state directory into the container so the
+local CLI and the containerised server share one SQLite DB and one
+per-workflow logs tree.
+
+The host directory is `${XDG_STATE_HOME:-$HOME/.local/state}/ngb-agent-orchestrator`.
+It is mounted into the container at
+`/home/orchestrator/.local/state/ngb-agent-orchestrator`, which is exactly
+where the in-container code resolves its XDG default. No `DB_PATH` or
+`LOGS_DIR` overrides are needed.
+
+> **Linux note:** the container runs as UID 1001. Files created under the
+> bind-mounted directory inherit that ownership. On macOS / Podman this is
+> remapped automatically by the VM's user namespace.
 
 ### Quick start with compose
 
@@ -149,13 +161,15 @@ server to two named volumes for SQLite state and per-workflow logs.
 docker compose up --build       # build + run in the foreground
 docker compose up -d            # detached
 docker compose logs -f orchestrator
-docker compose down             # stop (state volume persists)
-docker compose down -v          # stop + drop the SQLite volume
+docker compose down             # stop (host state dir persists)
 ```
 
 The compose file reads `.env` from the project root, so the same secret
 material that powers local CLI runs (Key Vault output, GitHub App, etc.)
 applies to the containerised server.
+
+> If your `.env` still defines `DB_PATH` or `LOGS_DIR` from earlier setups,
+> remove them so the in-container code resolves the shared XDG path.
 
 ### Bare `docker run`
 
@@ -163,8 +177,7 @@ applies to the containerised server.
 docker build -t ngb-orchestrator:dev .
 docker run --rm -p 8080:8080 \
     --env-file .env \
-    -v "$PWD/state:/app/state" \
-    -v "$PWD/logs:/app/logs" \
+    -v "${XDG_STATE_HOME:-$HOME/.local/state}/ngb-agent-orchestrator:/home/orchestrator/.local/state/ngb-agent-orchestrator" \
     ngb-orchestrator:dev
 ```
 
@@ -172,8 +185,8 @@ docker run --rm -p 8080:8080 \
 
 | Path | Purpose |
 |---|---|
-| `/app/state/local.db` | SQLite DB — mount a volume here to persist runs |
-| `/app/logs/<workflow_id>/` | Per-workflow stage logs + `otel.jsonl` |
+| `/home/orchestrator/.local/state/ngb-agent-orchestrator/db/local.db` | SQLite DB — bind-mount the host XDG state dir here to persist runs and share state with the host CLI |
+| `/home/orchestrator/.local/state/ngb-agent-orchestrator/logs/<workflow_id>/` | Per-workflow stage logs + `otel.jsonl` |
 | `/app/recipes/`, `/app/schemas/`, `/app/config/` | Read-only assets baked into the image |
 | `/usr/local/bin/orchestrator-server` | Console script (the default `CMD`) |
 

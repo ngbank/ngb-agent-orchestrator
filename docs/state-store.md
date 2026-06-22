@@ -6,14 +6,16 @@ The orchestrator uses a SQLite database to track workflow state, store WorkPlans
 
 ## Database Location
 
-Default path: `state/local.db` (relative to the project root).
+Default path: `$XDG_STATE_HOME/ngb-agent-orchestrator/db/local.db` (or `~/.local/state/ngb-agent-orchestrator/db/local.db` when `XDG_STATE_HOME` is unset).
+
+This sits alongside the run-logs directory (`$XDG_STATE_HOME/ngb-agent-orchestrator/logs/`) so the host CLI and the containerised server share one persistent state root.
 
 Override with the `DB_PATH` environment variable:
 ```bash
 DB_PATH=/path/to/custom.db
 ```
 
-The `state/` directory and `.db` files are gitignored.
+The legacy `./state/` directory and any `.db` files in it remain gitignored. See [`docs/configuration.md`](configuration.md#migrating-from-statelocaldb) for instructions on migrating an existing `./state/local.db`.
 
 ---
 

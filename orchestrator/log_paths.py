@@ -1,11 +1,16 @@
-"""Shared log path helpers.
+"""Shared state + log path helpers.
 
-Default base directory follows XDG state conventions:
+The orchestrator stores all persistent artefacts (SQLite DB, run logs) under a
+single XDG-state parent directory so the host CLI and the containerised server
+share one notion of "where state lives":
 
-  - $XDG_STATE_HOME/ngb-agent-orchestrator/logs
-  - ~/.local/state/ngb-agent-orchestrator/logs (fallback)
+  - $XDG_STATE_HOME/ngb-agent-orchestrator/
+  - ~/.local/state/ngb-agent-orchestrator/        (fallback)
 
-Set LOGS_DIR to override the base explicitly.
+Subdirectories:
+
+  - <state-base>/db/local.db   — SQLite database (override with DB_PATH)
+  - <state-base>/logs/         — per-workflow run logs (override with LOGS_DIR)
 """
 
 from __future__ import annotations
@@ -16,17 +21,31 @@ from pathlib import Path
 APP_DIR_NAME = "ngb-agent-orchestrator"
 
 
+def state_base_dir() -> Path:
+    """Return the shared XDG state base directory for the orchestrator.
+
+    Resolution order:
+      1. ``$XDG_STATE_HOME/ngb-agent-orchestrator`` when ``XDG_STATE_HOME`` is set.
+      2. ``~/.local/state/ngb-agent-orchestrator`` otherwise.
+
+    This helper does not honour ``DB_PATH`` or ``LOGS_DIR``; those overrides are
+    applied by the subsystem-specific resolvers (``get_db_path``,
+    ``logs_base_dir``).
+    """
+    xdg_state_home = os.getenv("XDG_STATE_HOME")
+    if xdg_state_home:
+        return Path(xdg_state_home).expanduser() / APP_DIR_NAME
+
+    return Path.home() / ".local" / "state" / APP_DIR_NAME
+
+
 def logs_base_dir() -> Path:
     """Return the configured logs base directory."""
     override = os.getenv("LOGS_DIR")
     if override:
         return Path(override).expanduser()
 
-    xdg_state_home = os.getenv("XDG_STATE_HOME")
-    if xdg_state_home:
-        return Path(xdg_state_home).expanduser() / APP_DIR_NAME / "logs"
-
-    return Path.home() / ".local" / "state" / APP_DIR_NAME / "logs"
+    return state_base_dir() / "logs"
 
 
 def workflow_logs_dir(workflow_id: str, ensure_dir: bool = True) -> Path:

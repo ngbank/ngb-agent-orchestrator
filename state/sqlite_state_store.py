@@ -13,6 +13,7 @@ All workflow CRUD operations have been moved to :mod:`state.workflow_repository`
 operations on workflow records.
 """
 
+import logging
 import os
 import sqlite3
 import uuid
@@ -20,13 +21,57 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional
 
+from orchestrator.log_paths import state_base_dir
+
+logger = logging.getLogger(__name__)
+
+_LEGACY_DB_PATH = Path("state") / "local.db"
+_legacy_warning_emitted = False
+
 
 def get_db_path() -> str:
-    """Get the database path from environment or use default."""
-    db_path = os.getenv("DB_PATH", "state/local.db")
-    # Ensure directory exists
-    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-    return db_path
+    """Resolve the SQLite database path.
+
+    Resolution order:
+      1. ``DB_PATH`` env var (explicit override).
+      2. ``$XDG_STATE_HOME/ngb-agent-orchestrator/db/local.db`` when
+         ``XDG_STATE_HOME`` is set.
+      3. ``~/.local/state/ngb-agent-orchestrator/db/local.db`` otherwise.
+
+    The parent directory is created on first use. When the XDG default is in
+    effect and a legacy ``./state/local.db`` exists relative to the current
+    working directory, a one-line warning is logged pointing at the new
+    location.  The legacy file is never moved automatically.
+    """
+    override = os.getenv("DB_PATH")
+    if override:
+        db_path = Path(override).expanduser()
+    else:
+        db_path = state_base_dir() / "db" / "local.db"
+        _maybe_warn_legacy_db(db_path)
+
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    return str(db_path)
+
+
+def _maybe_warn_legacy_db(new_path: Path) -> None:
+    """Log a one-shot warning when a legacy ./state/local.db is shadowed."""
+    global _legacy_warning_emitted
+    if _legacy_warning_emitted:
+        return
+    if new_path.exists():
+        return
+    if not _LEGACY_DB_PATH.exists():
+        return
+
+    legacy_abs = _LEGACY_DB_PATH.resolve()
+    logger.warning(
+        "Legacy SQLite DB detected at %s but the orchestrator now resolves to %s. "
+        "Move the file manually to migrate (see docs/configuration.md).",
+        legacy_abs,
+        new_path,
+    )
+    _legacy_warning_emitted = True
 
 
 def get_connection() -> sqlite3.Connection:
