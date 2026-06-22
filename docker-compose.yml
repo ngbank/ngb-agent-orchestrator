@@ -1,0 +1,42 @@
+# Local-dev wiring for the orchestrator HTTP server.
+#
+# Usage:
+#   docker compose up --build              # build + run in the foreground
+#   docker compose up -d                   # detached
+#   docker compose logs -f orchestrator    # follow logs
+#   docker compose down                    # stop (volume persists)
+#   docker compose down -v                 # stop + drop SQLite volume
+#
+# Smoke test once it's up:
+#   curl http://localhost:8080/healthz
+#
+# To point the dispatcher at this server:
+#   export ORCHESTRATOR_MODE=remote
+#   export ORCHESTRATOR_URL=http://localhost:8080
+#   # plus ORCHESTRATOR_TOKEN if ORCHESTRATOR_API_TOKEN is set in .env
+
+services:
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ngb-orchestrator:dev
+    container_name: ngb-orchestrator
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      ORCHESTRATOR_HOST: "0.0.0.0"
+      ORCHESTRATOR_PORT: "8080"
+      ORCHESTRATOR_LOG_LEVEL: "info"
+      DB_PATH: "/app/state/local.db"
+      LOGS_DIR: "/app/logs"
+    volumes:
+      - orchestrator-state:/app/state
+      - orchestrator-logs:/app/logs
+    restart: unless-stopped
+
+volumes:
+  orchestrator-state:
+  orchestrator-logs:

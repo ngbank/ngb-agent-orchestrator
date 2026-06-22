@@ -101,6 +101,50 @@ The remote-mode client currently supports the read / cancel / start /
 and PR-comment endpoints are scheduled for the B4 work item and raise
 `RemoteOperationNotSupported` until then.
 
+### WorkflowService boundary — local vs remote topology
+
+The `WorkflowService` Protocol is the single seam between every caller
+(dispatcher CLI, TUI, MCP server, future A2A endpoint) and the
+orchestrator engine. The transport is selected once at process startup
+by `build_workflow_service_from_env()` (in
+`orchestrator/workflow_service/factory.py`) based on
+`ORCHESTRATOR_MODE` — no call site needs to know which mode is active.
+
+```mermaid
+flowchart LR
+    subgraph callers["Callers"]
+        CLI["dispatcher CLI"]
+        TUI["dispatcher TUI"]
+        MCP["MCP server"]
+    end
+
+    callers -->|"build_workflow_service_from_env()"| WS["WorkflowService<br/>(Protocol)"]
+
+    WS -.->|"ORCHESTRATOR_MODE=local"| Local["LocalWorkflowService<br/>orchestrator/workflow_service/local.py"]
+    WS -.->|"ORCHESTRATOR_MODE=remote"| Http["HttpWorkflowService<br/>orchestrator/workflow_service/http_client.py"]
+
+    Http -->|"HTTPS + bearer + SSE"| Server["FastAPI app<br/>orchestrator/server/app.py"]
+    Server --> LocalSrv["LocalWorkflowService<br/>(in server process)"]
+
+    Local --> Graph["LangGraph<br/>(orchestrator/builder.py)"]
+    LocalSrv --> Graph
+    Graph --> SQL[("SQLite<br/>state/local.db")]
+```
+
+Key properties:
+
+- **One implementation of behaviour.** Both modes ultimately invoke
+    `LocalWorkflowService`, which composes a `WorkflowRepository` with
+    `orchestrator.builder.build_orchestrator()`. The HTTP layer is a
+    thin transport — no business logic lives in the FastAPI routes.
+- **No leakage past the seam.** `dispatcher/commands/*` never imports
+    from `orchestrator.builder` or `state.*` directly; the boundary is
+    asserted by `tests/test_dispatcher.py::test_dispatcher_commands_have_no_direct_repo_or_builder_imports`.
+- **Run story is documented separately.** Packaging, Docker, env vars,
+    and the dispatcher remote-mode wiring live in
+    [docs/server.md](server.md) and
+    [docs/configuration.md](configuration.md#dispatcher--orchestrator-transport).
+
 ### `orchestrator/server/`
 
 Optional FastAPI HTTP surface that exposes the non-streaming subset of

@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+# orchestrator-server-ctl — start / stop / inspect the local orchestrator
+# HTTP server as a detached background process.
+#
+# Usage:
+#   orchestrator-server-ctl start            # detach + return immediately
+#   orchestrator-server-ctl stop             # graceful SIGTERM, then SIGKILL
+#   orchestrator-server-ctl restart
+#   orchestrator-server-ctl status           # PID + /healthz probe
+#   orchestrator-server-ctl logs [-f]        # tail (or follow) the server log
+#
+# Lives at `bin/` and is put on $PATH by `.envrc` (via `PATH_add bin`), so
+# direnv-allowed shells can call it bare.
+#
+# The server is launched via the `orchestrator-server` console script
+# (provided by `pip install -e .`) and reads ORCHESTRATOR_HOST/PORT/etc
+# from the environment — see docs/server.md and docs/configuration.md.
+
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Paths — anchored to the repo root (the parent of this script's dir).
+# ---------------------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+RUN_DIR="${ORCHESTRATOR_RUN_DIR:-$REPO_ROOT/.run}"
+PID_FILE="$RUN_DIR/orchestrator-server.pid"
+LOG_FILE="$RUN_DIR/orchestrator-server.log"
+
+HOST="${ORCHESTRATOR_HOST:-0.0.0.0}"
+PORT="${ORCHESTRATOR_PORT:-8080}"
+# Hostname used for the /healthz probe — 0.0.0.0 isn't routable on macOS.
+PROBE_HOST="$HOST"
+if [[ "$PROBE_HOST" == "0.0.0.0" || -z "$PROBE_HOST" ]]; then
+    PROBE_HOST="127.0.0.1"
+fi
+HEALTH_URL="http://$PROBE_HOST:$PORT/healthz"
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+log()  { printf '[orch-ctl] %s\n' "$*" >&2; }
+die()  { log "ERROR: $*"; exit 1; }
+
+ensure_run_dir() { mkdir -p "$RUN_DIR"; }
+
+# Echo the PID if the recorded process is alive; otherwise echo nothing.
+running_pid() {
+    [[ -f "$PID_FILE" ]] || return 0
+    local pid
+    pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+    [[ -n "$pid" ]] || return 0
+    if kill -0 "$pid" 2>/dev/null; then
+        printf '%s' "$pid"
+    fi
+}
+
+require_binary() {
+    command -v "$1" >/dev/null 2>&1 \
+        || die "$1 not found on PATH — run 'pip install -e .' inside .venv and re-allow direnv"
+}
+
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
+cmd_start() {
+    require_binary orchestrator-server
+    ensure_run_dir
+
+    local pid
+    pid="$(running_pid)"
+    if [[ -n "$pid" ]]; then
+        log "already running (pid $pid) — $HEALTH_URL"
+        return 0
+    fi
+
+    # Stale pid file from a previous crash.
+    if [[ -f "$PID_FILE" ]]; then
+        log "removing stale pid file ($PID_FILE)"
+        rm -f "$PID_FILE"
+    fi
+
+    log "starting orchestrator-server on $HOST:$PORT (log: $LOG_FILE)"
+
+    # Detach: nohup keeps the child alive after the launching shell exits,
+    # `</dev/null` releases stdin, and `disown` removes it from the shell's
+    # job table so the child isn't sent SIGHUP on shell close.
+    nohup orchestrator-server >>"$LOG_FILE" 2>&1 </dev/null &
+    local child_pid=$!
+    disown "$child_pid" 2>/dev/null || true
+    echo "$child_pid" > "$PID_FILE"
+
+    # Brief readiness probe (don't block forever — log the user's recourse).
+    local i
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+        if ! kill -0 "$child_pid" 2>/dev/null; then
+            rm -f "$PID_FILE"
+            die "process exited during startup — inspect $LOG_FILE"
+        fi
+        if curl -fsS -o /dev/null -m 2 "$HEALTH_URL" 2>/dev/null; then
+            log "ready: $HEALTH_URL (pid $child_pid)"
+            return 0
+        fi
+        sleep 0.5
+    done
+
+    log "started (pid $child_pid) — healthcheck not green yet, see $LOG_FILE"
+}
+
+cmd_stop() {
+    local pid
+    pid="$(running_pid)"
+    if [[ -z "$pid" ]]; then
+        [[ -f "$PID_FILE" ]] && rm -f "$PID_FILE"
+        log "not running"
+        return 0
+    fi
+
+    log "stopping pid $pid (SIGTERM)"
+    kill -TERM "$pid" 2>/dev/null || true
+
+    # Wait up to ~10s for graceful shutdown.
+    local i
+    for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+        if ! kill -0 "$pid" 2>/dev/null; then
+            rm -f "$PID_FILE"
+            log "stopped"
+            return 0
+        fi
+        sleep 0.5
+    done
+
+    log "process still alive after 10s — sending SIGKILL"
+    kill -KILL "$pid" 2>/dev/null || true
+    rm -f "$PID_FILE"
+}
+
+cmd_restart() {
+    cmd_stop
+    cmd_start
+}
+
+cmd_status() {
+    local pid
+    pid="$(running_pid)"
+    if [[ -z "$pid" ]]; then
+        if [[ -f "$PID_FILE" ]]; then
+            echo "status: stopped (stale pid file at $PID_FILE)"
+        else
+            echo "status: stopped"
+        fi
+        return 1
+    fi
+
+    echo "status:  running"
+    echo "pid:     $pid"
+    echo "pidfile: $PID_FILE"
+    echo "logfile: $LOG_FILE"
+    echo "bind:    $HOST:$PORT"
+
+    if curl -fsS -o /dev/null -m 2 "$HEALTH_URL" 2>/dev/null; then
+        echo "health:  ok ($HEALTH_URL)"
+    else
+        echo "health:  unreachable ($HEALTH_URL) — server may still be starting"
+    fi
+}
+
+cmd_logs() {
+    [[ -f "$LOG_FILE" ]] || die "no log file at $LOG_FILE"
+    if [[ "${1:-}" == "-f" || "${1:-}" == "--follow" ]]; then
+        tail -n 200 -f "$LOG_FILE"
+    else
+        tail -n "${1:-100}" "$LOG_FILE"
+    fi
+}
+
+usage() {
+    sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+# ---------------------------------------------------------------------------
+# Dispatch
+# ---------------------------------------------------------------------------
+case "${1:-}" in
+    start)   shift; cmd_start   "$@" ;;
+    stop)    shift; cmd_stop    "$@" ;;
+    restart) shift; cmd_restart "$@" ;;
+    status)  shift; cmd_status  "$@" ;;
+    logs)    shift; cmd_logs    "$@" ;;
+    -h|--help|help|"") usage ;;
+    *)       usage; exit 2 ;;
+esac

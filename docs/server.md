@@ -7,12 +7,58 @@ following workflow events and log output in real time. The CLI continues
 to work against the in-process `LocalWorkflowService` and is **not**
 affected by the server.
 
-The `HttpWorkflowService` client (B3) and packaging polish (B4) are
-tracked in separate tickets and are **not** part of this work.
+The `HttpWorkflowService` client (B3, AOS-143) routes the dispatcher
+through this server when `ORCHESTRATOR_MODE=remote`. See
+[docs/configuration.md](configuration.md#dispatcher--orchestrator-transport)
+for the env-var contract.
+
+---
+
+## Local vs remote topology
+
+The dispatcher always talks to a `WorkflowService` Protocol — the
+transport is selected once at startup via `ORCHESTRATOR_MODE`. There are
+no other code paths to flip.
+
+```mermaid
+flowchart LR
+    subgraph local["ORCHESTRATOR_MODE=local (default)"]
+        CLI1["dispatcher / TUI"] --> LS1["LocalWorkflowService<br/>(in-process)"]
+        LS1 --> SQL1[("SQLite<br/>state/local.db")]
+        LS1 --> LG1["LangGraph<br/>nodes"]
+    end
+
+    subgraph remote["ORCHESTRATOR_MODE=remote"]
+        CLI2["dispatcher / TUI"] --> HC["HttpWorkflowService<br/>(httpx + SSE)"]
+        HC -->|HTTPS + bearer| API["FastAPI app<br/>orchestrator/server"]
+        API --> LS2["LocalWorkflowService<br/>(in server process)"]
+        LS2 --> SQL2[("SQLite<br/>(server-owned)")]
+        LS2 --> LG2["LangGraph<br/>nodes"]
+    end
+```
+
+The HTTP layer is a thin transport: every behaviour lives in
+`LocalWorkflowService`, so the local and remote modes have identical
+semantics for the operations they both expose.
 
 ---
 
 ## Running the server
+
+There are four ways to run the server. They all boot the same FastAPI
+app (`orchestrator/server/app.py`); pick the one that matches what you
+are doing right now.
+
+### When to use which
+
+| Situation | Use | Lifetime |
+|---|---|---|
+| Quick debugging — want stdout in your face, will Ctrl-C when done | `orchestrator-server` | foreground; dies with terminal |
+| Hot reload while editing server code | `uvicorn orchestrator.server.app:app --reload` | foreground; dies with terminal |
+| Want it running in the background while you do other work | `orchestrator-server-ctl start` | detached; survives terminal close |
+| Want it isolated (different Python, persistent volumes, prod-like) | `docker compose up` | container; survives terminal close |
+
+### 1 — Foreground console script
 
 ```bash
 # Install editable + deps once
@@ -21,16 +67,137 @@ tracked in separate tickets and are **not** part of this work.
 
 # Boot via console-script (reads ORCHESTRATOR_HOST/PORT/LOG_LEVEL/RELOAD)
 orchestrator-server
-
-# Or directly with uvicorn
-uvicorn orchestrator.server.app:app --host 0.0.0.0 --port 8080
 ```
+
+`Ctrl-C` stops it. Closing the terminal stops it.
+
+### 2 — Foreground uvicorn with `--reload`
+
+```bash
+uvicorn orchestrator.server.app:app --host 0.0.0.0 --port 8080 --reload
+```
+
+Restarts the server on file changes — useful when editing
+`orchestrator/server/` itself.
+
+### 3 — Detached background process (recommended for local dev)
+
+The repo ships a thin Bash wrapper at
+[`bin/orchestrator-server-ctl`](../bin/orchestrator-server-ctl) that
+runs the console script under `nohup` + `disown`, so the server
+survives the terminal that launched it (the spawned process is
+reparented to PID 1). `bin/` is placed on `$PATH` by `.envrc`, so any
+direnv-allowed shell can call the helper bare:
+
+```bash
+orchestrator-server-ctl start          # start detached; ~5s readiness probe
+orchestrator-server-ctl status         # pid, bind, /healthz state
+orchestrator-server-ctl logs           # tail the server log
+orchestrator-server-ctl logs -f        # follow it
+orchestrator-server-ctl restart
+orchestrator-server-ctl stop           # SIGTERM, then SIGKILL after 10s
+```
+
+Runtime files live in `.run/` at the repo root (gitignored):
+
+| File | Purpose |
+|---|---|
+| `.run/orchestrator-server.pid` | PID of the detached server |
+| `.run/orchestrator-server.log` | Combined stdout + stderr |
+
+The helper honours the same `ORCHESTRATOR_HOST` / `ORCHESTRATOR_PORT`
+env vars as `orchestrator-server` itself (probe target is rewritten to
+`127.0.0.1` when bound to `0.0.0.0`). Override `ORCHESTRATOR_RUN_DIR`
+to relocate the pid/log directory.
+
+### 4 — Container
+
+See [Running with Docker](#running-with-docker) below.
+
+### `orchestrator-server` vs `orchestrator-server-ctl`
+
+They live at different layers:
+
+- **`orchestrator-server`** is the Python console script (registered by
+    `pip install -e .` via [`pyproject.toml`](../pyproject.toml)) that
+    invokes `orchestrator.server.app:run()` and boots uvicorn in the
+    **foreground**. This is the actual server binary.
+- **`orchestrator-server-ctl`** is a Bash lifecycle wrapper around it
+    (`start` / `stop` / `restart` / `status` / `logs`). It ultimately
+    spawns the same `orchestrator-server` binary — it just detaches the
+    process, tracks the PID, captures logs, and adds an idempotency
+    guard so a second `start` doesn't spawn a duplicate.
 
 Once running:
 
 - Liveness: `GET http://localhost:8080/healthz`
 - OpenAPI schema: `GET http://localhost:8080/openapi.json`
 - Swagger UI: `GET http://localhost:8080/docs`
+
+---
+
+## Running with Docker
+
+The repo ships a multi-stage `Dockerfile` (Python 3.12-slim, non-root
+`orchestrator` user, default `CMD ["orchestrator-server"]`,
+`HEALTHCHECK` against `/healthz`) and a `docker-compose.yml` wiring the
+server to two named volumes for SQLite state and per-workflow logs.
+
+### Quick start with compose
+
+```bash
+docker compose up --build       # build + run in the foreground
+docker compose up -d            # detached
+docker compose logs -f orchestrator
+docker compose down             # stop (state volume persists)
+docker compose down -v          # stop + drop the SQLite volume
+```
+
+The compose file reads `.env` from the project root, so the same secret
+material that powers local CLI runs (Key Vault output, GitHub App, etc.)
+applies to the containerised server.
+
+### Bare `docker run`
+
+```bash
+docker build -t ngb-orchestrator:dev .
+docker run --rm -p 8080:8080 \
+    --env-file .env \
+    -v "$PWD/state:/app/state" \
+    -v "$PWD/logs:/app/logs" \
+    ngb-orchestrator:dev
+```
+
+### Layout inside the image
+
+| Path | Purpose |
+|---|---|
+| `/app/state/local.db` | SQLite DB — mount a volume here to persist runs |
+| `/app/logs/<workflow_id>/` | Per-workflow stage logs + `otel.jsonl` |
+| `/app/recipes/`, `/app/schemas/`, `/app/config/` | Read-only assets baked into the image |
+| `/usr/local/bin/orchestrator-server` | Console script (the default `CMD`) |
+
+### Smoke test
+
+```bash
+curl http://localhost:8080/healthz
+# → {"status":"ok"}
+```
+
+### Pointing the dispatcher at it
+
+```bash
+export ORCHESTRATOR_MODE=remote
+export ORCHESTRATOR_URL=http://localhost:8080
+# export ORCHESTRATOR_TOKEN=<bearer>   # if ORCHESTRATOR_API_TOKEN is set on the server
+
+dispatcher --list
+```
+
+The read / cancel / start / `read_logs` / `stream_events` surface works
+end-to-end. Approval, clarification, retry, and PR-comment commands are
+not yet exposed over HTTP — fall back to `ORCHESTRATOR_MODE=local` for
+those.
 
 ---
 

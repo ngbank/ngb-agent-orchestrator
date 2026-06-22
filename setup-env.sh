@@ -7,19 +7,24 @@
 #   --python   Install Python 3.13.x via pyenv and pin .python-version
 #   --deps     Create/update the .venv and install pip dependencies
 #   --env      Generate .env from .env.example and sync secrets from Azure Key Vault
+#   --docker   Build the orchestrator-server container image (ngb-orchestrator:dev)
 #   --clean    Remove .venv/ (and legacy venv/) and .env, then run all stages from scratch
 #
 # Examples:
-#   ./setup-env.sh                   # run all stages
+#   ./setup-env.sh                   # run all stages (including --docker)
 #   ./setup-env.sh --clean           # wipe and rebuild everything
 #   ./setup-env.sh --deps            # reinstall dependencies only
 #   ./setup-env.sh --python --deps   # reinstall Python + deps, skip .env
 #   ./setup-env.sh --env             # keep existing .env values where present, fill missing from Key Vault
 #   ./setup-env.sh --env --env-overwrite  # re-pull and overwrite all managed values from Key Vault
 #   ./setup-env.sh --env --env-keep       # explicit keep mode (same as default)
+#   ./setup-env.sh --docker          # (re)build the container image only
 #
 # Prerequisites for --env:
 #   az login   # REQUIRED before running --env locally
+#
+# Prerequisites for --docker:
+#   docker (or podman) available on PATH and a running daemon/machine
 
 set -euo pipefail
 
@@ -28,6 +33,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 PYTHON_MAJOR="3.13"
 DEFAULT_AZURE_KEYVAULT_NAME="agent-os-kv"
+DOCKER_IMAGE_TAG="ngb-orchestrator:dev"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -47,6 +53,7 @@ usage() {
 DO_PYTHON=false
 DO_DEPS=false
 DO_ENV=false
+DO_DOCKER=false
 DO_CLEAN=false
 ENV_SYNC_MODE="keep"
 
@@ -54,6 +61,7 @@ if [[ $# -eq 0 ]]; then
     DO_PYTHON=true
     DO_DEPS=true
     DO_ENV=true
+    DO_DOCKER=true
 else
     for arg in "$@"; do
         case "$arg" in
@@ -62,9 +70,10 @@ else
             --env)    DO_ENV=true ;;
             --env-keep) DO_ENV=true; ENV_SYNC_MODE="keep" ;;
             --env-overwrite) DO_ENV=true; ENV_SYNC_MODE="overwrite" ;;
+            --docker) DO_DOCKER=true ;;
             --clean)  DO_CLEAN=true ;;
             --help|-h) usage ;;
-            *) error "Unknown flag: $arg. Valid flags: --python, --deps, --env, --env-keep, --env-overwrite, --clean" ;;
+            *) error "Unknown flag: $arg. Valid flags: --python, --deps, --env, --env-keep, --env-overwrite, --docker, --clean" ;;
         esac
     done
 fi
@@ -74,6 +83,7 @@ if $DO_CLEAN; then
     DO_PYTHON=true
     DO_DEPS=true
     DO_ENV=true
+    DO_DOCKER=true
 fi
 
 VENV_DIR="$(pwd)/.venv"
@@ -108,6 +118,26 @@ fi
 if $DO_PYTHON; then
     command -v pyenv &>/dev/null \
         || error "'pyenv' is not installed or not on PATH. Install from: https://github.com/pyenv/pyenv#installation"
+fi
+
+if $DO_DOCKER; then
+    # Prefer docker; fall back to podman (which ships a docker-compatible CLI on macOS).
+    if command -v docker &>/dev/null; then
+        DOCKER_BIN="docker"
+    elif command -v podman &>/dev/null; then
+        DOCKER_BIN="podman"
+        info "Using podman as a docker substitute."
+    else
+        error "Neither 'docker' nor 'podman' is on PATH. Install Docker Desktop or Podman before running --docker."
+    fi
+    # Verify the daemon / VM is reachable before attempting a build.
+    if ! "$DOCKER_BIN" info &>/dev/null; then
+        if [[ "$DOCKER_BIN" == "podman" ]]; then
+            error "Podman is installed but its machine is not running. Start it with: podman machine start"
+        else
+            error "Docker daemon is not reachable. Start Docker Desktop and retry."
+        fi
+    fi
 fi
 
 success "Prerequisites satisfied."
@@ -329,14 +359,35 @@ PYTHON_EOF
 fi
 
 # ---------------------------------------------------------------------------
+# Stage: docker
+# ---------------------------------------------------------------------------
+if $DO_DOCKER; then
+    info "Building container image '${DOCKER_IMAGE_TAG}' with ${DOCKER_BIN}..."
+
+    # Detect buildx with a non-default driver: the resulting image stays in the
+    # build cache unless --load is passed. Plain `docker build` and podman both
+    # load into the local image store by default.
+    DOCKER_BUILD_ARGS=(build -t "$DOCKER_IMAGE_TAG")
+    if [[ "$DOCKER_BIN" == "docker" ]] && docker buildx version &>/dev/null; then
+        DOCKER_BUILD_ARGS+=(--load)
+    fi
+    DOCKER_BUILD_ARGS+=(.)
+
+    "$DOCKER_BIN" "${DOCKER_BUILD_ARGS[@]}" \
+        || error "Container build failed. Inspect the output above."
+    success "Image '${DOCKER_IMAGE_TAG}' built."
+fi
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo ""
 echo "================================================================"
 echo " Done!"
 $DO_PYTHON && echo " Python:  $(pyenv version-name 2>/dev/null || echo 'n/a')"
-$DO_DEPS  && echo " Venv:    ${VENV_DIR}"
-$DO_ENV   && echo " .env:    $(pwd)/.env"
+$DO_DEPS   && echo " Venv:    ${VENV_DIR}"
+$DO_ENV    && echo " .env:    $(pwd)/.env"
+$DO_DOCKER && echo " Image:   ${DOCKER_IMAGE_TAG} (built with ${DOCKER_BIN:-docker})"
 echo "================================================================"
 $DO_ENV && echo " Re-enter this directory (or run 'direnv reload') to activate."
 echo "================================================================"
