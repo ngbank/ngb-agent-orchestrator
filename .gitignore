@@ -51,3 +51,8 @@ logs/
 
 # Local server runtime state (pid + log for bin/orchestrator-server-ctl)
 .run/
+
+# Goose proxy LiteLLM config files. Current code writes these to the
+# system temp dir, but stale processes (started before the fix) may have
+# left ones in the repo root.
+goose_proxy_*.yaml
