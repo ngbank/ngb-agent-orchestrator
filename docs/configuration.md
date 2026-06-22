@@ -99,7 +99,20 @@ Notes:
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `DB_PATH` | No | `state/local.db` | Path to the SQLite database |
+| `DB_PATH` | No | `$XDG_STATE_HOME/ngb-agent-orchestrator/db/local.db` (or `~/.local/state/ngb-agent-orchestrator/db/local.db` when `XDG_STATE_HOME` is unset) | Path to the SQLite database. The parent directory is created on first use and is shared with `LOGS_DIR` under one XDG state root. |
+
+#### Migrating from `./state/local.db`
+
+Earlier versions defaulted to `./state/local.db` relative to the current working directory, which silently created a new DB whenever you ran from a different directory. The new default resolves to the user's XDG state directory so the host CLI and the containerised server share one DB.
+
+The orchestrator does **not** auto-move existing data. If you have a legacy `./state/local.db`, move it manually once:
+
+```bash
+mkdir -p "${XDG_STATE_HOME:-$HOME/.local/state}/ngb-agent-orchestrator/db"
+mv state/local.db "${XDG_STATE_HOME:-$HOME/.local/state}/ngb-agent-orchestrator/db/local.db"
+```
+
+A one-line warning is logged on startup whenever the new XDG DB is missing but a legacy `./state/local.db` exists relative to the current directory.
 
 ### Orchestrator HTTP Server
 
@@ -212,7 +225,7 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 |---|---|---|
 | `DEFAULT_PROJECT_KEY` | `AOS` | Default JIRA project for commands that accept a project |
 | `LOG_LEVEL` | `INFO` | Python logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Affects all application and third-party logs |
-| `LOGS_DIR` | `$XDG_STATE_HOME/ngb-agent-orchestrator/logs` (or `~/.local/state/ngb-agent-orchestrator/logs` when `XDG_STATE_HOME` is unset) | Base directory for run logs. Each workflow writes into a `{workflow_id}/` subdirectory containing stage logs, `llm_token_usage.jsonl`, and `otel.jsonl` (always written) |
+| `LOGS_DIR` | `$XDG_STATE_HOME/ngb-agent-orchestrator/logs` (or `~/.local/state/ngb-agent-orchestrator/logs` when `XDG_STATE_HOME` is unset) | Base directory for run logs. Each workflow writes into a `{workflow_id}/` subdirectory containing stage logs, `llm_token_usage.jsonl`, and `otel.jsonl` (always written). Shares the same XDG state root as `DB_PATH` so the host CLI and the containerised server see the same logs by default. |
 
 ---
 

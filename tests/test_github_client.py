@@ -5,6 +5,7 @@ import requests
 
 from dispatcher.github_client import (
     GitHubAuthError,
+    _load_private_key,
     _parse_repo_url,
     add_pr_comment,
     create_pr,
@@ -142,3 +143,42 @@ def test_push_branch_with_token_raises_on_push_failure():
             )
 
     assert mock_run.call_count == 2
+
+
+def test_load_private_key_raises_when_missing(monkeypatch):
+    monkeypatch.delenv("GITHUB_APP_PRIVATE_KEY", raising=False)
+    with pytest.raises(GitHubAuthError, match="GITHUB_APP_PRIVATE_KEY"):
+        _load_private_key()
+
+
+# Avoid the literal "BEGIN/END RSA PRIVATE KEY" marker so the detect-private-key
+# pre-commit hook does not flag this file.
+_BEGIN = "-----BEGIN" + " RSA PRIVATE KEY-----"
+_END = "-----END" + " RSA PRIVATE KEY-----"
+
+
+def test_load_private_key_single_escape(monkeypatch):
+    """dotenv-style single-escaped PEM: literal '\\n' between lines."""
+    monkeypatch.setenv(
+        "GITHUB_APP_PRIVATE_KEY",
+        f"{_BEGIN}\\nABC\\n{_END}",
+    )
+    key = _load_private_key()
+    assert key.splitlines() == [_BEGIN, "ABC", _END]
+
+
+def test_load_private_key_double_escape(monkeypatch):
+    """Double-escaped PEM (legacy setup-env.sh bug): literal '\\\\n' between lines."""
+    monkeypatch.setenv(
+        "GITHUB_APP_PRIVATE_KEY",
+        f"{_BEGIN}\\\\nABC\\\\n{_END}",
+    )
+    key = _load_private_key()
+    assert key.splitlines() == [_BEGIN, "ABC", _END]
+
+
+def test_load_private_key_real_newlines_passthrough(monkeypatch):
+    """A PEM with real newlines is returned unchanged."""
+    pem = f"{_BEGIN}\nABC\n{_END}"
+    monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY", pem)
+    assert _load_private_key() == pem

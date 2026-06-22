@@ -4,11 +4,23 @@
 #   docker compose up --build              # build + run in the foreground
 #   docker compose up -d                   # detached
 #   docker compose logs -f orchestrator    # follow logs
-#   docker compose down                    # stop (volume persists)
-#   docker compose down -v                 # stop + drop SQLite volume
+#   docker compose down                    # stop (host state dir persists)
 #
 # Smoke test once it's up:
 #   curl http://localhost:8080/healthz
+#
+# State layout:
+#   The host's XDG state dir is bind-mounted into the container, so the
+#   containerised server and the local CLI share one database and one logs
+#   tree by default:
+#
+#     ${XDG_STATE_HOME:-$HOME/.local/state}/ngb-agent-orchestrator/
+#     ├── db/local.db
+#     └── logs/<workflow_id>/...
+#
+#   Note: on Linux the container runs as UID 1001 (the `orchestrator` user);
+#   bind-mounted files inherit that ownership. On macOS / Podman this is
+#   transparently remapped by the VM's user namespace.
 #
 # To point the dispatcher at this server:
 #   export ORCHESTRATOR_MODE=remote
@@ -30,13 +42,6 @@ services:
       ORCHESTRATOR_HOST: "0.0.0.0"
       ORCHESTRATOR_PORT: "8080"
       ORCHESTRATOR_LOG_LEVEL: "info"
-      DB_PATH: "/app/state/local.db"
-      LOGS_DIR: "/app/logs"
     volumes:
-      - orchestrator-state:/app/state
-      - orchestrator-logs:/app/logs
+      - ${XDG_STATE_HOME:-$HOME/.local/state}/ngb-agent-orchestrator:/home/orchestrator/.local/state/ngb-agent-orchestrator
     restart: unless-stopped
-
-volumes:
-  orchestrator-state:
-  orchestrator-logs:

@@ -92,9 +92,13 @@ def _load_private_key() -> str:
     if not key_raw:
         raise GitHubAuthError("GITHUB_APP_PRIVATE_KEY env var is not set")
 
-    # Normalize escaped newlines to actual newlines
-    key = key_raw.replace("\\n", "\n")
-    return key
+    # Normalize escaped newlines to actual newlines.  The value may arrive
+    # either with a single level of escaping (literal "\n") from dotenv, or
+    # double-escaped ("\\n") if a buggy setup writer over-escaped backslashes.
+    # Collapse any run of backslashes followed by "n" into a single newline so
+    # the result is correct regardless of which form we received.  PEM payloads
+    # are base64 and never contain backslashes, so this is safe.
+    return re.sub(r"\\+n", "\n", key_raw)
 
 
 def _parse_repo_url(url: str) -> tuple[str, str]:

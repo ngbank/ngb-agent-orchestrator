@@ -12,10 +12,10 @@
 # Run (auth disabled, in-memory state):
 #   docker run --rm -p 8080:8080 ngb-orchestrator:dev
 #
-# Run (persistent SQLite + .env):
+# Run (persistent SQLite + logs via the host's XDG state dir):
 #   docker run --rm -p 8080:8080 \
 #     --env-file .env \
-#     -v "$PWD/state:/app/state" \
+#     -v "${XDG_STATE_HOME:-$HOME/.local/state}/ngb-agent-orchestrator:/home/orchestrator/.local/state/ngb-agent-orchestrator" \
 #     ngb-orchestrator:dev
 #
 # Smoke test:
@@ -66,9 +66,7 @@ FROM python:${PYTHON_VERSION}-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     ORCHESTRATOR_HOST=0.0.0.0 \
-    ORCHESTRATOR_PORT=8080 \
-    DB_PATH=/app/state/local.db \
-    LOGS_DIR=/app/logs
+    ORCHESTRATOR_PORT=8080
 
 # Non-root user.
 RUN groupadd --system --gid 1001 orchestrator \
@@ -85,9 +83,11 @@ COPY --from=builder /build/recipes ./recipes
 COPY --from=builder /build/schemas ./schemas
 COPY --from=builder /build/config ./config
 
-# Writable mount points for SQLite state and per-workflow log dirs.
-RUN mkdir -p /app/state /app/logs \
-    && chown -R orchestrator:orchestrator /app
+# Pre-create the XDG state dir under the orchestrator user's $HOME so a host
+# bind-mount lands on an owned, writable directory. The orchestrator resolves
+# DB + logs to ~/.local/state/ngb-agent-orchestrator by default.
+RUN mkdir -p /home/orchestrator/.local/state/ngb-agent-orchestrator \
+    && chown -R orchestrator:orchestrator /app /home/orchestrator/.local
 
 USER orchestrator
 

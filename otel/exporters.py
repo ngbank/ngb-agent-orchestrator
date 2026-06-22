@@ -38,7 +38,7 @@ from typing import Sequence
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import ConsoleSpanExporter, SpanExporter, SpanExportResult
 
-from orchestrator.log_paths import logs_base_dir
+from orchestrator.paths import logs_base_dir
 from otel.redaction import redact_attributes, redact_events
 
 _JSON_EXPORT_LOCK = Lock()

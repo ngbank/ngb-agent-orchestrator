@@ -11,7 +11,7 @@ from typing import Any
 
 from litellm.integrations.custom_logger import CustomLogger
 
-from orchestrator.log_paths import workflow_logs_dir
+from orchestrator.paths import workflow_logs_dir
 
 _WRITE_LOCK = Lock()
 
