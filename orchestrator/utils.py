@@ -13,7 +13,7 @@ import urllib.request
 from pathlib import Path
 from typing import IO, List, Optional
 
-from orchestrator.log_paths import logs_base_dir, workflow_logs_dir
+from orchestrator.paths import logs_base_dir, workflow_logs_dir
 
 
 def _get_actor() -> str:

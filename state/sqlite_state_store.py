@@ -21,7 +21,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional
 
-from orchestrator.log_paths import state_base_dir
+from orchestrator.paths import state_base_dir
 
 logger = logging.getLogger(__name__)
 
