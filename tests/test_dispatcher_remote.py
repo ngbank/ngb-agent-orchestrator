@@ -118,6 +118,9 @@ class _FakeService:
     def mark_interrupted(self, *a, **k) -> None:  # pragma: no cover
         return None
 
+    def mark_failed(self, *a, **k) -> None:  # pragma: no cover
+        return None
+
     def clear_db(self) -> tuple[int, int]:  # pragma: no cover
         return (0, 0)
 

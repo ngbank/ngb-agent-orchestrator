@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Optional
 import click
 
 import dispatcher.commands.common as common  # noqa: F401  (kept for parity)
+from dispatcher.commands.follow import submit_and_follow
 from state.workflow_status import WorkflowStatus
 
 if TYPE_CHECKING:
@@ -41,6 +42,7 @@ def _handle_approve_pr(
     service: "WorkflowService",
     ticket_key: Optional[str],
     workflow_id: Optional[str] = None,
+    detach: bool = False,
 ) -> None:
     resolved_id = _resolve_pending_pr(service, ticket_key, workflow_id, "--approve-pr")
 
@@ -58,7 +60,13 @@ def _handle_approve_pr(
         sys.exit(1)
 
     try:
-        service.approve_pr(resolved_id)
+        submit_and_follow(
+            service,
+            service.approve_pr,
+            resolved_id,
+            workflow_id_hint=resolved_id,
+            detach=detach,
+        )
         click.echo("🎉 Workflow completed successfully — PR approved")
     except Exception as e:
         click.echo(f"❌ Error resuming workflow: {e}", err=True)
@@ -69,6 +77,7 @@ def _handle_comment_pr(
     service: "WorkflowService",
     ticket_key: Optional[str],
     workflow_id: Optional[str] = None,
+    detach: bool = False,
 ) -> None:
     """Collect PR review comments via file-based editing and resume for incremental fixes."""
     if workflow_id:
@@ -152,7 +161,14 @@ def _handle_comment_pr(
         sys.exit(1)
 
     try:
-        result = service.comment_pr(resolved_id, comments_text)
+        result = submit_and_follow(
+            service,
+            service.comment_pr,
+            resolved_id,
+            comments_text,
+            workflow_id_hint=resolved_id,
+            detach=detach,
+        )
 
         if result.error:
             click.echo(f"❌ Workflow error: {result.error}", err=True)
@@ -185,6 +201,7 @@ def _handle_reject_pr(
     ticket_key: Optional[str],
     reason: Optional[str],
     workflow_id: Optional[str] = None,
+    detach: bool = False,
 ) -> None:
     resolved_id = _resolve_pending_pr(service, ticket_key, workflow_id, "--reject-pr")
 
@@ -202,7 +219,14 @@ def _handle_reject_pr(
         sys.exit(1)
 
     try:
-        service.reject_pr(resolved_id, reason)
+        submit_and_follow(
+            service,
+            service.reject_pr,
+            resolved_id,
+            reason,
+            workflow_id_hint=resolved_id,
+            detach=detach,
+        )
         click.echo(f"🚫 PR rejected for workflow {resolved_id}" + (f": {reason}" if reason else ""))
     except Exception as e:
         click.echo(f"❌ Error resuming workflow: {e}", err=True)

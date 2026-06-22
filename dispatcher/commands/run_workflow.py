@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import click
 
 import dispatcher.commands.common as common
+from dispatcher.commands.follow import submit_and_follow
 from dispatcher.exceptions import TicketAuthError, TicketConfigError, TicketNotFoundError
 from orchestrator.workflow_service import WorkflowStartRequest
 from state.workflow_status import WorkflowStatus
@@ -15,7 +16,12 @@ if TYPE_CHECKING:
     from orchestrator.workflow_service import WorkflowService
 
 
-def _handle_run(service: "WorkflowService", ticket: str, dry_run: bool) -> None:
+def _handle_run(
+    service: "WorkflowService",
+    ticket: str,
+    dry_run: bool,
+    detach: bool = False,
+) -> None:
     click.echo(f"🚀 Starting workflow for ticket: {ticket}")
 
     if dry_run:
@@ -32,7 +38,13 @@ def _handle_run(service: "WorkflowService", ticket: str, dry_run: bool) -> None:
     workflow_id = str(uuid.uuid4())
 
     try:
-        result = service.start(WorkflowStartRequest(ticket_key=ticket, workflow_id=workflow_id))
+        result = submit_and_follow(
+            service,
+            service.start,
+            WorkflowStartRequest(ticket_key=ticket, workflow_id=workflow_id),
+            workflow_id_hint=workflow_id,
+            detach=detach,
+        )
 
         if result.error:
             sys.exit(1)

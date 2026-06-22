@@ -41,6 +41,33 @@ Preview what would happen without touching JIRA or the database:
 python -m dispatcher.run --ticket AOS-41 --dry-run
 ```
 
+### Detached Submission (remote mode only)
+
+In remote mode (`ORCHESTRATOR_MODE=remote`) every mutation call is
+fire-and-forget — the orchestrator server returns `202 Accepted`
+immediately and runs the graph drive on a background worker. By default
+the dispatcher CLI subscribes to the `/workflows/{id}/events` SSE stream
+and prints `node_start` / `node_end` / `interrupt` / `completed` /
+`failed` events as they arrive, so the operator sees the same kind of
+feedback they got from the old synchronous calls.
+
+Use `--detach` to submit the request and exit immediately without
+streaming the lifecycle. The workflow keeps running on the server; you
+can check on it later with `--list`, `--history`, or the TUI.
+
+```bash
+# Submit and return as soon as the server enqueues the work.
+python -m dispatcher.run --ticket AOS-41 --detach
+
+# Same for any mutation route.
+python -m dispatcher.run --approve-plan --workflow-id <uuid> --detach
+```
+
+Press `Ctrl-C` during a non-detached follow to detach from the stream
+without affecting the server-side workflow. `--detach` is rejected (exit
+code `2`) when used against a `local` service since local invocations are
+already synchronous and have no SSE stream to skip.
+
 ---
 
 ## Approving or Rejecting

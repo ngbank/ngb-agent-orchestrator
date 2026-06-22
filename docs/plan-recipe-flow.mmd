@@ -178,3 +178,5 @@ sequenceDiagram
     end
 
     Note over User,Formatter: WorkPlan Status Classification:<br/>• "pass" - Clear scope, ready to implement<br/>• "concerns" - Has risks or dependencies<br/>• "blocked" - Missing info or ambiguous<br/><br/>WorkPlan Comment Sections:<br/>• Plan Summary (approach and status)<br/>• Task List (with files affected)<br/>• Risks<br/>• Questions for Reviewer<br/>• Approval Instructions<br/>  - dispatcher approve {ticket_key}<br/>  - dispatcher reject {ticket_key}
+
+    Note over User,Dispatcher: Remote-mode submission contract (AOS-149):<br/>In ORCHESTRATOR_MODE=remote every mutation route (POST /workflows,<br/>approve-plan, retry, comment-pr, ...) returns 202 Accepted immediately<br/>and runs the graph drive on the server's BackgroundDispatcher thread<br/>pool. The dispatcher CLI subscribes to GET /workflows/{id}/events (SSE)<br/>by default so the operator sees the same node_start / node_end /<br/>interrupt / completed lifecycle they got from the old synchronous calls.<br/>Pass --detach to submit and exit without following; press Ctrl-C to<br/>detach mid-stream without affecting the server-side workflow.
