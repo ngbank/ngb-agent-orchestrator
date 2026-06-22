@@ -296,12 +296,57 @@ class LocalWorkflowService:
             ),
         )
 
+    def mark_failed(
+        self,
+        workflow_id: str,
+        reason: str,
+        actor: str = "system",
+    ) -> None:
+        workflow = self._repo.get_workflow(workflow_id)
+        if workflow is None or workflow["status"].is_terminal():
+            return
+        self._repo.update_status(
+            workflow_id,
+            WorkflowStatus.FAILED,
+            actor=actor,
+            reason=reason,
+        )
+
     def clear_db(self) -> tuple[int, int]:
         return self._repo.clear_db()
 
     # ------------------------------------------------------------------
     # Graph-running operations
     # ------------------------------------------------------------------
+
+    def prepare_start(self, request: WorkflowStartRequest) -> WorkflowStartRequest:
+        """Reserve a workflow_id and persist a PENDING row.
+
+        Server-side helper used by the HTTP transport's fire-and-forget
+        dispatch: callers invoke ``prepare_start`` synchronously so
+        ``GET /workflows/{id}`` reflects the new workflow before the
+        background graph drive runs, then submit ``start(prepared)`` to a
+        worker thread.  The graph's ``create_workflow_record`` node is
+        idempotent and will reuse the row this method creates.
+
+        Dry-run requests are returned unchanged with no DB write.
+        """
+        if request.dry_run:
+            return request
+        if request.workflow_id and self._repo.get_workflow(request.workflow_id) is not None:
+            return request
+        workflow_id = request.workflow_id or str(uuid.uuid4())
+        self._repo.create_workflow(
+            ticket_key=request.ticket_key,
+            work_plan=None,
+            status=WorkflowStatus.PENDING,
+            workflow_id=workflow_id,
+        )
+        return WorkflowStartRequest(
+            ticket_key=request.ticket_key,
+            workflow_id=workflow_id,
+            dry_run=request.dry_run,
+        )
 
     def start(self, request: WorkflowStartRequest) -> WorkflowRunResult:
         # Dry-run is a no-op at the service layer; the CLI handles the

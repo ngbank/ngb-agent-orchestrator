@@ -78,6 +78,7 @@ class _FakeWorkflowService:
         self.reject_pr_calls: List[Dict[str, Any]] = []
         self.comment_pr_calls: List[Dict[str, Any]] = []
         self.mark_interrupted_calls: List[Dict[str, Any]] = []
+        self.mark_failed_calls: List[Dict[str, Any]] = []
         self.clear_db_calls: List[None] = []
         self.history: Dict[str, List[WorkflowHistoryEntry]] = {}
         self.audit_log: Dict[str, List[WorkflowAuditEntry]] = {}
@@ -193,11 +194,37 @@ class _FakeWorkflowService:
             {"workflow_id": workflow_id, "failed_node": failed_node, "actor": actor}
         )
 
+    def mark_failed(
+        self,
+        workflow_id: str,
+        reason: str,
+        actor: str = "system",
+    ) -> None:
+        self.mark_failed_calls.append(
+            {"workflow_id": workflow_id, "reason": reason, "actor": actor}
+        )
+
     def clear_db(self) -> tuple[int, int]:
         self.clear_db_calls.append(None)
         return self.clear_db_result
 
     # Graph ops -------------------------------------------------------
+    def prepare_start(self, request: WorkflowStartRequest) -> WorkflowStartRequest:
+        if request.dry_run:
+            return request
+        wf_id = request.workflow_id or "wf-prepared"
+        if wf_id not in self.workflows:
+            self.workflows[wf_id] = _make_detail(
+                wf_id,
+                status=WorkflowStatus.PENDING,
+                ticket_key=request.ticket_key,
+            )
+        return WorkflowStartRequest(
+            ticket_key=request.ticket_key,
+            workflow_id=wf_id,
+            dry_run=request.dry_run,
+        )
+
     def start(self, request: WorkflowStartRequest) -> WorkflowRunResult:
         self.start_calls.append(request)
         if self.start_result is not None:
@@ -291,7 +318,12 @@ def _build_http_service(
     """
     from fastapi.testclient import TestClient
 
-    app = create_app(service=fake)
+    from orchestrator.server.background import SyncBackgroundDispatcher
+
+    # Inject a sync dispatcher so the fire-and-forget routes execute the
+    # underlying fake call inline (the test wants to observe the fake's
+    # ``_calls`` list) without needing the FastAPI lifespan.
+    app = create_app(service=fake, background_dispatcher=SyncBackgroundDispatcher())
     client = TestClient(app, base_url="http://testserver")
     return build_http_workflow_service(base_url="http://testserver", token=token, client=client)
 
@@ -711,26 +743,37 @@ class TestApproval:
         fake_service: _FakeWorkflowService,
         http_service: HttpWorkflowService,
     ) -> None:
+        # Fire-and-forget: the route returns a snapshot from the current
+        # workflow row (the seeded detail) rather than the eventual result
+        # of the background graph drive.
         fake_service.seed(_make_detail("wf-1"))
         fake_service.mutation_result = _expected_run_result("wf-1")
         result = http_service.approve_plan("wf-1")
-        assert result.final_status == WorkflowStatus.PENDING_PR_APPROVAL
-        assert result.pr_url == "https://example.test/pr/1"
+        # Status snapshot reflects the seeded row.
+        assert result.final_status == WorkflowStatus.IN_PROGRESS
+        # The graph drive ran inline via SyncBackgroundDispatcher.
         assert fake_service.approve_plan_calls == ["wf-1"]
 
     def test_approve_plan_404_raises_value_error(self, http_service: HttpWorkflowService) -> None:
         with pytest.raises(ValueError, match="not found"):
             http_service.approve_plan("nope")
 
-    def test_approve_plan_409_raises_value_error(
+    def test_approve_plan_failure_marks_workflow_failed(
         self,
         fake_service: _FakeWorkflowService,
         http_service: HttpWorkflowService,
     ) -> None:
+        # Fire-and-forget: when the background graph drive raises, the
+        # dispatcher's on_failure handler calls mark_failed.  The HTTP
+        # client itself does not see the exception (the route already
+        # returned 202).
         fake_service.seed(_make_detail("wf-1"))
         fake_service.mutation_exc = ValueError("not awaiting approval")
-        with pytest.raises(ValueError, match="not awaiting approval"):
-            http_service.approve_plan("wf-1")
+        # Should not raise — server returns 202 immediately.
+        http_service.approve_plan("wf-1")
+        assert len(fake_service.mark_failed_calls) == 1
+        assert fake_service.mark_failed_calls[0]["workflow_id"] == "wf-1"
+        assert "not awaiting approval" in fake_service.mark_failed_calls[0]["reason"]
 
     def test_reject_plan_passes_reason(
         self,
@@ -782,9 +825,11 @@ class TestApproval:
         fake_service: _FakeWorkflowService,
         http_service: HttpWorkflowService,
     ) -> None:
+        # The server now pre-validates retryability synchronously based on
+        # the workflow's current status.  COMPLETED is not retryable, so
+        # the route returns 409 before dispatching.
         fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.COMPLETED))
-        fake_service.mutation_exc = ValueError("Workflow wf-1 is not retryable (status: completed)")
-        with pytest.raises(ValueError, match="not retryable"):
+        with pytest.raises(ValueError, match="cannot be retried"):
             http_service.retry("wf-1")
 
 

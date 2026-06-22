@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from orchestrator.server.app import create_app
 from orchestrator.server.auth import API_TOKEN_ENV
+from orchestrator.server.background import SyncBackgroundDispatcher
 from orchestrator.workflow_service.dtos import (
     WorkflowAuditEntry,
     WorkflowDetail,
@@ -37,6 +38,7 @@ class FakeWorkflowService:
 
     def __init__(self) -> None:
         self.start_calls: List[WorkflowStartRequest] = []
+        self.prepare_start_calls: List[WorkflowStartRequest] = []
         self.cancel_calls: List[Dict[str, Any]] = []
         self.list_calls: List[Dict[str, Any]] = []
         self.workflows: Dict[str, WorkflowDetail] = {}
@@ -61,6 +63,7 @@ class FakeWorkflowService:
         self.reject_pr_calls: List[Dict[str, Any]] = []
         self.comment_pr_calls: List[Dict[str, Any]] = []
         self.mark_interrupted_calls: List[Dict[str, Any]] = []
+        self.mark_failed_calls: List[Dict[str, Any]] = []
         self.clear_db_calls: List[None] = []
         self.history: Dict[str, List[WorkflowHistoryEntry]] = {}
         self.audit_log: Dict[str, List[WorkflowAuditEntry]] = {}
@@ -208,35 +211,100 @@ class FakeWorkflowService:
             {"workflow_id": workflow_id, "failed_node": failed_node, "actor": actor}
         )
 
+    def mark_failed(
+        self,
+        workflow_id: str,
+        reason: str,
+        actor: str = "system",
+    ) -> None:
+        self.mark_failed_calls.append(
+            {"workflow_id": workflow_id, "reason": reason, "actor": actor}
+        )
+
     def clear_db(self) -> tuple[int, int]:
         self.clear_db_calls.append(None)
         return self.clear_db_result
 
     # ------------------------- graph ops ------------------------------
+    def prepare_start(self, request: WorkflowStartRequest) -> WorkflowStartRequest:
+        self.prepare_start_calls.append(request)
+        if request.dry_run:
+            return request
+        wf_id = request.workflow_id or "wf-prepared"
+        if wf_id not in self.workflows:
+            self.workflows[wf_id] = _make_detail(
+                wf_id,
+                status=WorkflowStatus.PENDING,
+                ticket_key=request.ticket_key,
+            )
+        return WorkflowStartRequest(
+            ticket_key=request.ticket_key,
+            workflow_id=wf_id,
+            dry_run=request.dry_run,
+        )
+
     def start(self, request: WorkflowStartRequest) -> WorkflowRunResult:
         self.start_calls.append(request)
         if self.start_exc is not None:
             raise self.start_exc
         if self.start_result is not None:
-            return self.start_result
-        return WorkflowRunResult(
-            workflow_id=request.workflow_id or "wf-generated",
-            ticket_key=request.ticket_key,
-            final_status=WorkflowStatus.PENDING_APPROVAL,
-            interrupted=True,
-        )
+            result = self.start_result
+        else:
+            result = WorkflowRunResult(
+                workflow_id=request.workflow_id or "wf-generated",
+                ticket_key=request.ticket_key,
+                final_status=WorkflowStatus.PENDING_APPROVAL,
+                interrupted=True,
+            )
+        # Mirror the post-run status into the prepared row (or create one
+        # for backward-compat callers that bypass prepare_start) so that
+        # ``service.get`` returns the post-run state when run inline.
+        wf_id = request.workflow_id or result.workflow_id or "wf-generated"
+        if wf_id in self.workflows:
+            self._mirror_result(wf_id, result)
+        else:
+            self.workflows[wf_id] = _make_detail(
+                wf_id,
+                status=result.final_status,
+                ticket_key=result.ticket_key or request.ticket_key,
+            )
+        return result
 
     def _mutation_result_or_default(self, workflow_id: str) -> WorkflowRunResult:
         if self.mutation_exc is not None:
             raise self.mutation_exc
         if self.mutation_result is not None:
-            return self.mutation_result
+            result = self.mutation_result
+        else:
+            existing = self.workflows.get(workflow_id)
+            result = WorkflowRunResult(
+                workflow_id=workflow_id,
+                ticket_key=existing.ticket_key if existing else None,
+                final_status=existing.status if existing else WorkflowStatus.PENDING,
+            )
+        # Mirror the terminal status into the fake workflow row so that
+        # ``service.get(workflow_id)`` (called by the route's
+        # ``_snapshot_response`` helper) reflects the post-run state.
+        self._mirror_result(workflow_id, result)
+        return result
+
+    def _mirror_result(self, workflow_id: str, result: WorkflowRunResult) -> None:
         existing = self.workflows.get(workflow_id)
-        return WorkflowRunResult(
-            workflow_id=workflow_id,
-            ticket_key=existing.ticket_key if existing else None,
-            final_status=existing.status if existing else WorkflowStatus.PENDING,
-        )
+        if existing is not None:
+            self.workflows[workflow_id] = WorkflowDetail(
+                id=existing.id,
+                ticket_key=existing.ticket_key,
+                status=result.final_status,
+                created_at=existing.created_at,
+                updated_at=existing.updated_at,
+                pr_url=existing.pr_url,
+                work_plan=existing.work_plan,
+                execution_summary=existing.execution_summary,
+                clarification_history=existing.clarification_history,
+                pr_comments=existing.pr_comments,
+                usage_summary=existing.usage_summary,
+                retry_count=existing.retry_count,
+            )
 
     def approve_plan(self, workflow_id: str) -> WorkflowRunResult:
         self.approve_plan_calls.append(workflow_id)
@@ -284,10 +352,20 @@ def fake_service() -> FakeWorkflowService:
 
 
 @pytest.fixture
-def client(monkeypatch, fake_service: FakeWorkflowService) -> TestClient:
+def sync_dispatcher() -> SyncBackgroundDispatcher:
+    """A sync dispatcher so route tests observe the terminal state inline."""
+    return SyncBackgroundDispatcher()
+
+
+@pytest.fixture
+def client(
+    monkeypatch,
+    fake_service: FakeWorkflowService,
+    sync_dispatcher: SyncBackgroundDispatcher,
+) -> TestClient:
     # Default: auth disabled.  Tests that exercise auth opt in via monkeypatch.
     monkeypatch.delenv(API_TOKEN_ENV, raising=False)
-    app = create_app(service=fake_service)
+    app = create_app(service=fake_service, background_dispatcher=sync_dispatcher)
     return TestClient(app)
 
 
@@ -347,15 +425,20 @@ def test_start_workflow_happy_path(client: TestClient, fake_service: FakeWorkflo
         interrupted=True,
     )
     response = client.post("/workflows", json={"ticket_key": "AOS-141"})
-    assert response.status_code == 201
+    # Fire-and-forget: 202 Accepted with a snapshot of the reserved row.
+    assert response.status_code == 202
     body = response.json()
-    assert body["workflow_id"] == "wf-1"
+    # The route allocates the workflow id via prepare_start and returns it
+    # in the snapshot — the start_result.workflow_id is informational.
+    assert body["workflow_id"] == "wf-prepared"
     assert body["ticket_key"] == "AOS-141"
+    # SyncBackgroundDispatcher ran the start inline so the mirrored row
+    # already reflects the post-run status.
     assert body["final_status"] == "pending_approval"
-    assert body["interrupted"] is True
     assert len(fake_service.start_calls) == 1
     assert fake_service.start_calls[0].ticket_key == "AOS-141"
     assert fake_service.start_calls[0].dry_run is False
+    assert fake_service.start_calls[0].workflow_id == "wf-prepared"
 
 
 def test_start_workflow_passes_optional_fields(
@@ -365,7 +448,8 @@ def test_start_workflow_passes_optional_fields(
         "/workflows",
         json={"ticket_key": "AOS-141", "dry_run": True, "workflow_id": "custom-id"},
     )
-    assert response.status_code == 201
+    # Dry-run still uses 202 (same response_model and status code).
+    assert response.status_code == 202
     req = fake_service.start_calls[0]
     assert req.dry_run is True
     assert req.workflow_id == "custom-id"
@@ -885,11 +969,12 @@ def test_approve_plan_happy_path(client: TestClient, fake_service: FakeWorkflowS
     fake_service.seed(_make_detail("wf-1"))
     fake_service.mutation_result = _make_run_result("wf-1")
     response = client.post("/workflows/wf-1/approve-plan")
-    assert response.status_code == 200
+    # Fire-and-forget: 202 Accepted with the post-run snapshot when the
+    # sync dispatcher ran the mirror inline.
+    assert response.status_code == 202
     body = response.json()
     assert body["workflow_id"] == "wf-1"
     assert body["final_status"] == "pending_pr_approval"
-    assert body["pr_url"] == "https://example.test/pr/1"
     assert fake_service.approve_plan_calls == ["wf-1"]
 
 
@@ -901,21 +986,28 @@ def test_approve_plan_404_when_missing(
     assert fake_service.approve_plan_calls == []
 
 
-def test_approve_plan_409_on_value_error(
+def test_approve_plan_marks_failed_on_value_error(
     client: TestClient, fake_service: FakeWorkflowService
 ) -> None:
+    # With fire-and-forget the route returns 202 immediately and any
+    # exception raised by the graph drive is captured by the dispatcher's
+    # on_failure handler, which marks the workflow FAILED.
     fake_service.seed(_make_detail("wf-1"))
     fake_service.mutation_exc = ValueError("not awaiting approval")
     response = client.post("/workflows/wf-1/approve-plan")
-    assert response.status_code == 409
-    assert "not awaiting approval" in response.json()["detail"]
+    assert response.status_code == 202
+    assert len(fake_service.mark_failed_calls) == 1
+    call = fake_service.mark_failed_calls[0]
+    assert call["workflow_id"] == "wf-1"
+    assert call["actor"] == "background-dispatcher"
+    assert "not awaiting approval" in call["reason"]
 
 
 def test_reject_plan_passes_reason(client: TestClient, fake_service: FakeWorkflowService) -> None:
     fake_service.seed(_make_detail("wf-1"))
     fake_service.mutation_result = _make_run_result("wf-1")
     response = client.post("/workflows/wf-1/reject-plan", json={"reason": "bad scope"})
-    assert response.status_code == 200
+    assert response.status_code == 202
     assert fake_service.reject_plan_calls == [{"workflow_id": "wf-1", "reason": "bad scope"}]
 
 
@@ -923,7 +1015,7 @@ def test_reject_plan_without_body(client: TestClient, fake_service: FakeWorkflow
     fake_service.seed(_make_detail("wf-1"))
     fake_service.mutation_result = _make_run_result("wf-1")
     response = client.post("/workflows/wf-1/reject-plan")
-    assert response.status_code == 200
+    assert response.status_code == 202
     assert fake_service.reject_plan_calls == [{"workflow_id": "wf-1", "reason": None}]
 
 
@@ -942,7 +1034,7 @@ def test_submit_clarification_happy_path(
         {"concern": "schema?", "answer": "v1 only"},
     ]
     response = client.post("/workflows/wf-1/clarification", json={"answers": answers})
-    assert response.status_code == 200
+    assert response.status_code == 202
     assert fake_service.submit_clarification_calls == [{"workflow_id": "wf-1", "answers": answers}]
 
 
@@ -976,18 +1068,21 @@ def test_retry_happy_path(client: TestClient, fake_service: FakeWorkflowService)
     fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.FAILED))
     fake_service.mutation_result = _make_run_result("wf-1")
     response = client.post("/workflows/wf-1/retry")
-    assert response.status_code == 200
+    assert response.status_code == 202
     assert fake_service.retry_calls == ["wf-1"]
 
 
 def test_retry_409_when_not_retryable(
     client: TestClient, fake_service: FakeWorkflowService
 ) -> None:
+    # The route now pre-validates retryability synchronously (before
+    # dispatching) using the workflow's current status, so the fake's
+    # ``retry`` method never runs.
     fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.COMPLETED))
-    fake_service.mutation_exc = ValueError("Workflow wf-1 is not retryable (status: completed)")
     response = client.post("/workflows/wf-1/retry")
     assert response.status_code == 409
-    assert "not retryable" in response.json()["detail"]
+    assert "cannot be retried" in response.json()["detail"]
+    assert fake_service.retry_calls == []
 
 
 def test_retry_404_when_missing(client: TestClient) -> None:
@@ -1004,7 +1099,7 @@ def test_approve_pr_happy_path(client: TestClient, fake_service: FakeWorkflowSer
     fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.PENDING_PR_APPROVAL))
     fake_service.mutation_result = _make_run_result("wf-1")
     response = client.post("/workflows/wf-1/approve-pr")
-    assert response.status_code == 200
+    assert response.status_code == 202
     assert fake_service.approve_pr_calls == ["wf-1"]
 
 
@@ -1017,7 +1112,7 @@ def test_reject_pr_passes_reason(client: TestClient, fake_service: FakeWorkflowS
     fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.PENDING_PR_APPROVAL))
     fake_service.mutation_result = _make_run_result("wf-1")
     response = client.post("/workflows/wf-1/reject-pr", json={"reason": "tests failing"})
-    assert response.status_code == 200
+    assert response.status_code == 202
     assert fake_service.reject_pr_calls == [{"workflow_id": "wf-1", "reason": "tests failing"}]
 
 
@@ -1027,7 +1122,7 @@ def test_comment_pr_happy_path(client: TestClient, fake_service: FakeWorkflowSer
     response = client.post(
         "/workflows/wf-1/comment-pr", json={"comments": "please tighten the API"}
     )
-    assert response.status_code == 200
+    assert response.status_code == 202
     assert fake_service.comment_pr_calls == [
         {"workflow_id": "wf-1", "comments": "please tighten the API"}
     ]

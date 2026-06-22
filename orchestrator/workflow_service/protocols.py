@@ -129,6 +129,20 @@ class WorkflowService(Protocol):
         """
         ...
 
+    def mark_failed(
+        self,
+        workflow_id: str,
+        reason: str,
+        actor: str = "system",
+    ) -> None:
+        """Mark an in-flight workflow as FAILED with an arbitrary reason.
+
+        Used by the server's fire-and-forget transport when a background
+        graph drive raises an uncaught exception.  Best-effort: no-op if
+        the workflow is already terminal.
+        """
+        ...
+
     def clear_db(self) -> tuple[int, int]:
         """Wipe all workflows and LangGraph checkpoints.  Returns (workflows, checkpoints)."""
         ...
