@@ -60,3 +60,43 @@ def require_bearer_token(authorization: Optional[str] = Header(default=None)) ->
             detail="Invalid bearer token",
             headers={"WWW-Authenticate": 'Bearer realm="orchestrator"'},
         )
+
+
+def require_admin_token(authorization: Optional[str] = Header(default=None)) -> None:
+    """FastAPI dependency for admin endpoints (``clear_db``, ``mark_interrupted``).
+
+    Admin routes are gated more strictly than the rest of the API: they
+    refuse to run at all unless ``ORCHESTRATOR_API_TOKEN`` is configured.
+    This avoids exposing destructive operations on an open development
+    server.
+
+    * ``ORCHESTRATOR_API_TOKEN`` unset → ``503 Service Unavailable`` with a
+      message instructing the operator to configure the token.
+    * Token configured + missing/wrong ``Authorization`` header → ``401``
+      (same wire format as :func:`require_bearer_token`).
+    * Token configured + matching header → request proceeds.
+    """
+    expected = _configured_token()
+    if expected is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                f"Admin endpoints are disabled; set {API_TOKEN_ENV} on the "
+                "server to enable them."
+            ),
+        )
+
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or malformed Authorization header",
+            headers={"WWW-Authenticate": 'Bearer realm="orchestrator-admin"'},
+        )
+
+    presented = authorization.split(" ", 1)[1].strip()
+    if presented != expected:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid bearer token",
+            headers={"WWW-Authenticate": 'Bearer realm="orchestrator-admin"'},
+        )

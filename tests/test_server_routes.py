@@ -50,6 +50,23 @@ class FakeWorkflowService:
         self.log_bytes: Dict[str, Dict[str, bytes]] = {}
         self.read_logs_calls: List[Dict[str, Any]] = []
         self.stream_events_calls: List[Dict[str, Any]] = []
+        # New in AOS-147: per-method call recorders, canned results, and
+        # canned exceptions so tests can drive the route layer without a
+        # real LocalWorkflowService.
+        self.approve_plan_calls: List[str] = []
+        self.reject_plan_calls: List[Dict[str, Any]] = []
+        self.submit_clarification_calls: List[Dict[str, Any]] = []
+        self.retry_calls: List[str] = []
+        self.approve_pr_calls: List[str] = []
+        self.reject_pr_calls: List[Dict[str, Any]] = []
+        self.comment_pr_calls: List[Dict[str, Any]] = []
+        self.mark_interrupted_calls: List[Dict[str, Any]] = []
+        self.clear_db_calls: List[None] = []
+        self.history: Dict[str, List[WorkflowHistoryEntry]] = {}
+        self.audit_log: Dict[str, List[WorkflowAuditEntry]] = {}
+        self.mutation_result: Optional[WorkflowRunResult] = None
+        self.mutation_exc: Optional[BaseException] = None
+        self.clear_db_result: tuple[int, int] = (0, 0)
 
     # ------------------------- helpers --------------------------------
     def seed(self, detail: WorkflowDetail) -> None:
@@ -119,10 +136,10 @@ class FakeWorkflowService:
         return results[:limit]
 
     def get_history(self, workflow_id: str) -> List[WorkflowHistoryEntry]:
-        return []
+        return list(self.history.get(workflow_id, []))
 
     def get_audit_log(self, workflow_id: str) -> List[WorkflowAuditEntry]:
-        return []
+        return list(self.audit_log.get(workflow_id, []))
 
     def read_logs(
         self,
@@ -181,11 +198,19 @@ class FakeWorkflowService:
                 pr_url=existing.pr_url,
             )
 
-    def mark_interrupted(self, *args, **kwargs) -> None:  # pragma: no cover - unused
-        return None
+    def mark_interrupted(
+        self,
+        workflow_id: str,
+        failed_node: Optional[str] = None,
+        actor: str = "system",
+    ) -> None:
+        self.mark_interrupted_calls.append(
+            {"workflow_id": workflow_id, "failed_node": failed_node, "actor": actor}
+        )
 
-    def clear_db(self) -> tuple[int, int]:  # pragma: no cover - unused
-        return (0, 0)
+    def clear_db(self) -> tuple[int, int]:
+        self.clear_db_calls.append(None)
+        return self.clear_db_result
 
     # ------------------------- graph ops ------------------------------
     def start(self, request: WorkflowStartRequest) -> WorkflowRunResult:
@@ -201,26 +226,51 @@ class FakeWorkflowService:
             interrupted=True,
         )
 
-    def approve_plan(self, workflow_id: str) -> WorkflowRunResult:  # pragma: no cover - unused
-        raise NotImplementedError
+    def _mutation_result_or_default(self, workflow_id: str) -> WorkflowRunResult:
+        if self.mutation_exc is not None:
+            raise self.mutation_exc
+        if self.mutation_result is not None:
+            return self.mutation_result
+        existing = self.workflows.get(workflow_id)
+        return WorkflowRunResult(
+            workflow_id=workflow_id,
+            ticket_key=existing.ticket_key if existing else None,
+            final_status=existing.status if existing else WorkflowStatus.PENDING,
+        )
 
-    def reject_plan(self, *args, **kwargs) -> WorkflowRunResult:  # pragma: no cover - unused
-        raise NotImplementedError
+    def approve_plan(self, workflow_id: str) -> WorkflowRunResult:
+        self.approve_plan_calls.append(workflow_id)
+        return self._mutation_result_or_default(workflow_id)
 
-    def submit_clarification(self, *args, **kwargs) -> WorkflowRunResult:  # pragma: no cover
-        raise NotImplementedError
+    def reject_plan(self, workflow_id: str, reason: Optional[str]) -> WorkflowRunResult:
+        self.reject_plan_calls.append({"workflow_id": workflow_id, "reason": reason})
+        return self._mutation_result_or_default(workflow_id)
 
-    def retry(self, workflow_id: str) -> WorkflowRunResult:  # pragma: no cover - unused
-        raise NotImplementedError
+    def submit_clarification(
+        self,
+        workflow_id: str,
+        answers: List[Dict[str, str]],
+    ) -> WorkflowRunResult:
+        self.submit_clarification_calls.append(
+            {"workflow_id": workflow_id, "answers": list(answers)}
+        )
+        return self._mutation_result_or_default(workflow_id)
 
-    def approve_pr(self, workflow_id: str) -> WorkflowRunResult:  # pragma: no cover - unused
-        raise NotImplementedError
+    def retry(self, workflow_id: str) -> WorkflowRunResult:
+        self.retry_calls.append(workflow_id)
+        return self._mutation_result_or_default(workflow_id)
 
-    def comment_pr(self, *args, **kwargs) -> WorkflowRunResult:  # pragma: no cover - unused
-        raise NotImplementedError
+    def approve_pr(self, workflow_id: str) -> WorkflowRunResult:
+        self.approve_pr_calls.append(workflow_id)
+        return self._mutation_result_or_default(workflow_id)
 
-    def reject_pr(self, *args, **kwargs) -> WorkflowRunResult:  # pragma: no cover - unused
-        raise NotImplementedError
+    def comment_pr(self, workflow_id: str, comments: str) -> WorkflowRunResult:
+        self.comment_pr_calls.append({"workflow_id": workflow_id, "comments": comments})
+        return self._mutation_result_or_default(workflow_id)
+
+    def reject_pr(self, workflow_id: str, reason: Optional[str]) -> WorkflowRunResult:
+        self.reject_pr_calls.append({"workflow_id": workflow_id, "reason": reason})
+        return self._mutation_result_or_default(workflow_id)
 
 
 # ---------------------------------------------------------------------------
@@ -814,3 +864,348 @@ def test_openapi_schema_exposes_streaming_routes(client: TestClient) -> None:
     paths = schema["paths"]
     assert "/workflows/{workflow_id}/events" in paths
     assert "/workflows/{workflow_id}/logs" in paths
+
+
+# ---------------------------------------------------------------------------
+# Mutating routes — approval / clarification / retry (AOS-147)
+# ---------------------------------------------------------------------------
+
+
+def _make_run_result(workflow_id: str = "wf-1") -> WorkflowRunResult:
+    return WorkflowRunResult(
+        workflow_id=workflow_id,
+        ticket_key="AOS-141",
+        final_status=WorkflowStatus.PENDING_PR_APPROVAL,
+        execution_summary={"status": "success"},
+        pr_url="https://example.test/pr/1",
+    )
+
+
+def test_approve_plan_happy_path(client: TestClient, fake_service: FakeWorkflowService) -> None:
+    fake_service.seed(_make_detail("wf-1"))
+    fake_service.mutation_result = _make_run_result("wf-1")
+    response = client.post("/workflows/wf-1/approve-plan")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["workflow_id"] == "wf-1"
+    assert body["final_status"] == "pending_pr_approval"
+    assert body["pr_url"] == "https://example.test/pr/1"
+    assert fake_service.approve_plan_calls == ["wf-1"]
+
+
+def test_approve_plan_404_when_missing(
+    client: TestClient, fake_service: FakeWorkflowService
+) -> None:
+    response = client.post("/workflows/nope/approve-plan")
+    assert response.status_code == 404
+    assert fake_service.approve_plan_calls == []
+
+
+def test_approve_plan_409_on_value_error(
+    client: TestClient, fake_service: FakeWorkflowService
+) -> None:
+    fake_service.seed(_make_detail("wf-1"))
+    fake_service.mutation_exc = ValueError("not awaiting approval")
+    response = client.post("/workflows/wf-1/approve-plan")
+    assert response.status_code == 409
+    assert "not awaiting approval" in response.json()["detail"]
+
+
+def test_reject_plan_passes_reason(client: TestClient, fake_service: FakeWorkflowService) -> None:
+    fake_service.seed(_make_detail("wf-1"))
+    fake_service.mutation_result = _make_run_result("wf-1")
+    response = client.post("/workflows/wf-1/reject-plan", json={"reason": "bad scope"})
+    assert response.status_code == 200
+    assert fake_service.reject_plan_calls == [{"workflow_id": "wf-1", "reason": "bad scope"}]
+
+
+def test_reject_plan_without_body(client: TestClient, fake_service: FakeWorkflowService) -> None:
+    fake_service.seed(_make_detail("wf-1"))
+    fake_service.mutation_result = _make_run_result("wf-1")
+    response = client.post("/workflows/wf-1/reject-plan")
+    assert response.status_code == 200
+    assert fake_service.reject_plan_calls == [{"workflow_id": "wf-1", "reason": None}]
+
+
+def test_reject_plan_404_when_missing(client: TestClient) -> None:
+    response = client.post("/workflows/nope/reject-plan", json={"reason": "x"})
+    assert response.status_code == 404
+
+
+def test_submit_clarification_happy_path(
+    client: TestClient, fake_service: FakeWorkflowService
+) -> None:
+    fake_service.seed(_make_detail("wf-1"))
+    fake_service.mutation_result = _make_run_result("wf-1")
+    answers = [
+        {"concern": "what about retries?", "answer": "use exponential backoff"},
+        {"concern": "schema?", "answer": "v1 only"},
+    ]
+    response = client.post("/workflows/wf-1/clarification", json={"answers": answers})
+    assert response.status_code == 200
+    assert fake_service.submit_clarification_calls == [{"workflow_id": "wf-1", "answers": answers}]
+
+
+def test_submit_clarification_rejects_empty_answer_text(client: TestClient) -> None:
+    # ``answer`` may legitimately be empty per the protocol, but ``concern`` must
+    # not be — verifies the schema's min_length constraint on concern.
+    response = client.post(
+        "/workflows/wf-1/clarification",
+        json={"answers": [{"concern": "", "answer": "x"}]},
+    )
+    assert response.status_code == 422
+
+
+def test_submit_clarification_rejects_missing_field(client: TestClient) -> None:
+    response = client.post(
+        "/workflows/wf-1/clarification",
+        json={"answers": [{"concern": "a"}]},
+    )
+    assert response.status_code == 422
+
+
+def test_submit_clarification_404_when_missing(client: TestClient) -> None:
+    response = client.post(
+        "/workflows/nope/clarification",
+        json={"answers": [{"concern": "a", "answer": "b"}]},
+    )
+    assert response.status_code == 404
+
+
+def test_retry_happy_path(client: TestClient, fake_service: FakeWorkflowService) -> None:
+    fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.FAILED))
+    fake_service.mutation_result = _make_run_result("wf-1")
+    response = client.post("/workflows/wf-1/retry")
+    assert response.status_code == 200
+    assert fake_service.retry_calls == ["wf-1"]
+
+
+def test_retry_409_when_not_retryable(
+    client: TestClient, fake_service: FakeWorkflowService
+) -> None:
+    fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.COMPLETED))
+    fake_service.mutation_exc = ValueError("Workflow wf-1 is not retryable (status: completed)")
+    response = client.post("/workflows/wf-1/retry")
+    assert response.status_code == 409
+    assert "not retryable" in response.json()["detail"]
+
+
+def test_retry_404_when_missing(client: TestClient) -> None:
+    response = client.post("/workflows/nope/retry")
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Mutating routes — PR review flow (AOS-147)
+# ---------------------------------------------------------------------------
+
+
+def test_approve_pr_happy_path(client: TestClient, fake_service: FakeWorkflowService) -> None:
+    fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.PENDING_PR_APPROVAL))
+    fake_service.mutation_result = _make_run_result("wf-1")
+    response = client.post("/workflows/wf-1/approve-pr")
+    assert response.status_code == 200
+    assert fake_service.approve_pr_calls == ["wf-1"]
+
+
+def test_approve_pr_404_when_missing(client: TestClient) -> None:
+    response = client.post("/workflows/nope/approve-pr")
+    assert response.status_code == 404
+
+
+def test_reject_pr_passes_reason(client: TestClient, fake_service: FakeWorkflowService) -> None:
+    fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.PENDING_PR_APPROVAL))
+    fake_service.mutation_result = _make_run_result("wf-1")
+    response = client.post("/workflows/wf-1/reject-pr", json={"reason": "tests failing"})
+    assert response.status_code == 200
+    assert fake_service.reject_pr_calls == [{"workflow_id": "wf-1", "reason": "tests failing"}]
+
+
+def test_comment_pr_happy_path(client: TestClient, fake_service: FakeWorkflowService) -> None:
+    fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.PENDING_PR_APPROVAL))
+    fake_service.mutation_result = _make_run_result("wf-1")
+    response = client.post(
+        "/workflows/wf-1/comment-pr", json={"comments": "please tighten the API"}
+    )
+    assert response.status_code == 200
+    assert fake_service.comment_pr_calls == [
+        {"workflow_id": "wf-1", "comments": "please tighten the API"}
+    ]
+
+
+def test_comment_pr_rejects_empty_comments(client: TestClient) -> None:
+    response = client.post("/workflows/wf-1/comment-pr", json={"comments": ""})
+    assert response.status_code == 422
+
+
+def test_comment_pr_404_when_missing(client: TestClient) -> None:
+    response = client.post("/workflows/nope/comment-pr", json={"comments": "hi"})
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Read routes — history / audit log (AOS-147)
+# ---------------------------------------------------------------------------
+
+
+def test_get_history_returns_entries(client: TestClient, fake_service: FakeWorkflowService) -> None:
+    fake_service.seed(_make_detail("wf-1"))
+    fake_service.history["wf-1"] = [
+        WorkflowHistoryEntry(step=1, node="plan", outcome="ok", result_keys=["work_plan"]),
+        WorkflowHistoryEntry(step=2, node="execute", outcome="error", error="boom"),
+    ]
+    response = client.get("/workflows/wf-1/history")
+    assert response.status_code == 200
+    body = response.json()
+    assert [row["node"] for row in body] == ["plan", "execute"]
+    assert body[0]["result_keys"] == ["work_plan"]
+    assert body[1]["error"] == "boom"
+
+
+def test_get_history_returns_empty_list_when_no_entries(
+    client: TestClient, fake_service: FakeWorkflowService
+) -> None:
+    fake_service.seed(_make_detail("wf-1"))
+    response = client.get("/workflows/wf-1/history")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_get_history_404_when_missing(client: TestClient) -> None:
+    response = client.get("/workflows/nope/history")
+    assert response.status_code == 404
+
+
+def test_get_audit_log_returns_entries(
+    client: TestClient, fake_service: FakeWorkflowService
+) -> None:
+    fake_service.seed(_make_detail("wf-1"))
+    fake_service.audit_log["wf-1"] = [
+        WorkflowAuditEntry(
+            workflow_id="wf-1",
+            actor="dispatcher",
+            action="status_change",
+            timestamp="2026-06-22T00:00:00",
+            details={"to": "pending_approval"},
+        ),
+    ]
+    response = client.get("/workflows/wf-1/audit-log")
+    assert response.status_code == 200
+    body = response.json()
+    assert body[0]["actor"] == "dispatcher"
+    assert body[0]["action"] == "status_change"
+    assert body[0]["details"] == {"to": "pending_approval"}
+
+
+def test_get_audit_log_404_when_missing(client: TestClient) -> None:
+    response = client.get("/workflows/nope/audit-log")
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Admin routes — clear_db / mark_interrupted (AOS-147)
+# ---------------------------------------------------------------------------
+
+
+def test_admin_clear_db_503_when_token_unset(
+    client: TestClient, fake_service: FakeWorkflowService
+) -> None:
+    # Default client has API_TOKEN_ENV deleted, so admin is disabled.
+    response = client.post("/admin/clear-db")
+    assert response.status_code == 503
+    assert "disabled" in response.json()["detail"].lower()
+    assert fake_service.clear_db_calls == []
+
+
+def test_admin_clear_db_401_when_token_set_but_missing(
+    monkeypatch, fake_service: FakeWorkflowService
+) -> None:
+    monkeypatch.setenv(API_TOKEN_ENV, "admin-token")
+    app = create_app(service=fake_service)
+    with TestClient(app) as authed_client:
+        response = authed_client.post("/admin/clear-db")
+        assert response.status_code == 401
+
+
+def test_admin_clear_db_happy_path(monkeypatch, fake_service: FakeWorkflowService) -> None:
+    monkeypatch.setenv(API_TOKEN_ENV, "admin-token")
+    fake_service.clear_db_result = (7, 12)
+    app = create_app(service=fake_service)
+    with TestClient(app) as authed_client:
+        response = authed_client.post(
+            "/admin/clear-db", headers={"Authorization": "Bearer admin-token"}
+        )
+        assert response.status_code == 200
+        assert response.json() == {"workflows": 7, "checkpoints": 12}
+        assert len(fake_service.clear_db_calls) == 1
+
+
+def test_admin_mark_interrupted_happy_path(monkeypatch, fake_service: FakeWorkflowService) -> None:
+    monkeypatch.setenv(API_TOKEN_ENV, "admin-token")
+    fake_service.seed(_make_detail("wf-1"))
+    app = create_app(service=fake_service)
+    with TestClient(app) as authed_client:
+        response = authed_client.post(
+            "/admin/workflows/wf-1/mark-interrupted",
+            headers={"Authorization": "Bearer admin-token"},
+            json={"failed_node": "execute", "actor": "ops-bot"},
+        )
+        assert response.status_code == 204
+        assert fake_service.mark_interrupted_calls == [
+            {"workflow_id": "wf-1", "failed_node": "execute", "actor": "ops-bot"}
+        ]
+
+
+def test_admin_mark_interrupted_without_body(
+    monkeypatch, fake_service: FakeWorkflowService
+) -> None:
+    monkeypatch.setenv(API_TOKEN_ENV, "admin-token")
+    fake_service.seed(_make_detail("wf-1"))
+    app = create_app(service=fake_service)
+    with TestClient(app) as authed_client:
+        response = authed_client.post(
+            "/admin/workflows/wf-1/mark-interrupted",
+            headers={"Authorization": "Bearer admin-token"},
+        )
+        assert response.status_code == 204
+        call = fake_service.mark_interrupted_calls[-1]
+        assert call["failed_node"] is None
+        assert call["actor"] == "api"
+
+
+def test_admin_mark_interrupted_404_when_missing(
+    monkeypatch, fake_service: FakeWorkflowService
+) -> None:
+    monkeypatch.setenv(API_TOKEN_ENV, "admin-token")
+    app = create_app(service=fake_service)
+    with TestClient(app) as authed_client:
+        response = authed_client.post(
+            "/admin/workflows/nope/mark-interrupted",
+            headers={"Authorization": "Bearer admin-token"},
+        )
+        assert response.status_code == 404
+
+
+def test_admin_mark_interrupted_503_when_admin_disabled(
+    client: TestClient, fake_service: FakeWorkflowService
+) -> None:
+    fake_service.seed(_make_detail("wf-1"))
+    response = client.post("/admin/workflows/wf-1/mark-interrupted")
+    assert response.status_code == 503
+    assert fake_service.mark_interrupted_calls == []
+
+
+def test_openapi_schema_exposes_new_routes(client: TestClient) -> None:
+    schema = client.get("/openapi.json").json()
+    paths = schema["paths"]
+    assert "/workflows/{workflow_id}/approve-plan" in paths
+    assert "/workflows/{workflow_id}/reject-plan" in paths
+    assert "/workflows/{workflow_id}/clarification" in paths
+    assert "/workflows/{workflow_id}/retry" in paths
+    assert "/workflows/{workflow_id}/approve-pr" in paths
+    assert "/workflows/{workflow_id}/reject-pr" in paths
+    assert "/workflows/{workflow_id}/comment-pr" in paths
+    assert "/workflows/{workflow_id}/history" in paths
+    assert "/workflows/{workflow_id}/audit-log" in paths
+    assert "/admin/clear-db" in paths
+    assert "/admin/workflows/{workflow_id}/mark-interrupted" in paths

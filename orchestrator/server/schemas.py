@@ -13,7 +13,10 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from orchestrator.workflow_service.dtos import (
+    WorkflowAuditEntry,
     WorkflowDetail,
+    WorkflowHistoryEntry,
+    WorkflowRunResult,
     WorkflowStartRequest,
     WorkflowSummary,
 )
@@ -49,6 +52,107 @@ class CancelWorkflowRequest(BaseModel):
 
     reason: Optional[str] = Field(None, description="Human-readable cancellation reason.")
     actor: str = Field("api", description="Actor recorded in the audit log.")
+
+
+class RejectPlanRequest(BaseModel):
+    """Request body for ``POST /workflows/{id}/reject-plan``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: Optional[str] = Field(None, description="Reason for rejecting the WorkPlan.")
+
+
+class ClarificationAnswer(BaseModel):
+    """One concern/answer pair in a clarification payload."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    concern: str = Field(..., min_length=1, description="The original concern text.")
+    answer: str = Field(..., description="Dispatcher-supplied answer.")
+
+
+class SubmitClarificationRequest(BaseModel):
+    """Request body for ``POST /workflows/{id}/clarification``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    answers: List[ClarificationAnswer] = Field(
+        ..., description="Ordered list of answers, one per outstanding concern."
+    )
+
+
+class RejectPrRequest(BaseModel):
+    """Request body for ``POST /workflows/{id}/reject-pr``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: Optional[str] = Field(None, description="Reason for rejecting the PR.")
+
+
+class CommentPrRequest(BaseModel):
+    """Request body for ``POST /workflows/{id}/comment-pr``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    comments: str = Field(..., min_length=1, description="Review comments to apply.")
+
+
+class MarkInterruptedRequest(BaseModel):
+    """Request body for ``POST /workflows/{id}/mark-interrupted``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    failed_node: Optional[str] = Field(
+        None, description="Node where the workflow was interrupted; informational."
+    )
+    actor: str = Field("api", description="Actor recorded in the audit log.")
+
+
+class ClearDbResponse(BaseModel):
+    """Response body for ``POST /admin/clear-db``."""
+
+    workflows: int = Field(..., description="Number of workflow rows deleted.")
+    checkpoints: int = Field(..., description="Number of LangGraph checkpoint rows deleted.")
+
+
+class WorkflowHistoryEntryResponse(BaseModel):
+    """One entry returned by ``GET /workflows/{id}/history``."""
+
+    step: int
+    node: str
+    outcome: str
+    result_keys: List[str] = Field(default_factory=list)
+    error: Optional[str] = None
+
+    @classmethod
+    def from_dto(cls, entry: WorkflowHistoryEntry) -> "WorkflowHistoryEntryResponse":
+        return cls(
+            step=entry.step,
+            node=entry.node,
+            outcome=entry.outcome,
+            result_keys=list(entry.result_keys),
+            error=entry.error,
+        )
+
+
+class WorkflowAuditEntryResponse(BaseModel):
+    """One entry returned by ``GET /workflows/{id}/audit-log``."""
+
+    workflow_id: str
+    actor: str
+    action: str
+    timestamp: str
+    details: Optional[Dict[str, Any]] = None
+
+    @classmethod
+    def from_dto(cls, entry: WorkflowAuditEntry) -> "WorkflowAuditEntryResponse":
+        return cls(
+            workflow_id=entry.workflow_id,
+            actor=entry.actor,
+            action=entry.action,
+            timestamp=entry.timestamp,
+            details=entry.details,
+        )
 
 
 class WorkflowSummaryResponse(BaseModel):
@@ -118,6 +222,19 @@ class WorkflowRunResponse(BaseModel):
     execution_summary: Optional[Dict[str, Any]] = None
     pr_url: Optional[str] = None
     failed_node: Optional[str] = None
+
+    @classmethod
+    def from_dto(cls, result: WorkflowRunResult) -> "WorkflowRunResponse":
+        return cls(
+            workflow_id=result.workflow_id,
+            ticket_key=result.ticket_key,
+            final_status=result.final_status.value,
+            interrupted=result.interrupted,
+            error=result.error,
+            execution_summary=result.execution_summary,
+            pr_url=result.pr_url,
+            failed_node=result.failed_node,
+        )
 
 
 class HealthResponse(BaseModel):

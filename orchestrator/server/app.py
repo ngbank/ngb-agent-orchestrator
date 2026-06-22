@@ -29,7 +29,7 @@ from orchestrator.workflow_service import WorkflowService
 
 from .auth import API_TOKEN_ENV, is_auth_enabled
 from .deps import get_service
-from .routes import health_router, workflow_router
+from .routes import admin_router, health_router, workflow_router
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +66,7 @@ def create_app(service: Optional[WorkflowService] = None) -> FastAPI:
 
     app.include_router(health_router)
     app.include_router(workflow_router)
+    app.include_router(admin_router)
 
     if service is not None:
         app.dependency_overrides[get_service] = lambda: service
