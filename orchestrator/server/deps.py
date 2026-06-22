@@ -10,10 +10,14 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from fastapi import Request
+
 from orchestrator.workflow_service import (
     WorkflowService,
     build_local_workflow_service,
 )
+
+from .background import BackgroundDispatcherProtocol
 
 
 @lru_cache(maxsize=1)
@@ -29,3 +33,14 @@ def get_service() -> WorkflowService:
     in tests.
     """
     return _default_service()
+
+
+def get_background_dispatcher(request: Request) -> BackgroundDispatcherProtocol:
+    """FastAPI dependency that returns the app's background dispatcher.
+
+    The dispatcher is created by the FastAPI lifespan (see
+    :func:`create_app`) and stashed on ``app.state``.  Override with
+    ``app.dependency_overrides[get_background_dispatcher] = lambda: fake``
+    in tests that want inline (synchronous) execution.
+    """
+    return request.app.state.background_dispatcher

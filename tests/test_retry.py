@@ -123,7 +123,15 @@ def mock_repo_setup():
 
 
 def test_is_retryable_failed_and_pr_commented():
-    retryable = {WorkflowStatus.FAILED, WorkflowStatus.IN_PROGRESS, WorkflowStatus.PR_COMMENTED}
+    retryable = {
+        WorkflowStatus.FAILED,
+        WorkflowStatus.IN_PROGRESS,
+        WorkflowStatus.PR_COMMENTED,
+        # APPROVED is a transient handoff between approve_plan and
+        # execute_plan; if the server dies in that window the row stays
+        # APPROVED forever and retry is the only recovery path.
+        WorkflowStatus.APPROVED,
+    }
     for status in WorkflowStatus:
         if status in retryable:
             assert status.is_retryable() is True, f"{status} should be retryable"

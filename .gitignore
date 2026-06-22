@@ -51,3 +51,9 @@ logs/
 
 # Local server runtime state (pid + log for bin/orchestrator-server-ctl)
 .run/
+
+# Goose proxy LiteLLM config files. Current code writes these under
+# $XDG_STATE_HOME/ngb-agent-orchestrator/proxy-sessions/ (outside the
+# repo), but stale processes started before the fix may have left files
+# in the repo root; the rule below keeps them out of commits.
+goose_proxy_*.yaml

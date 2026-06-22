@@ -21,14 +21,16 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
+from contextlib import asynccontextmanager
+from typing import AsyncIterator, Optional
 
 from fastapi import FastAPI
 
 from orchestrator.workflow_service import WorkflowService
 
 from .auth import API_TOKEN_ENV, is_auth_enabled
-from .deps import get_service
+from .background import BackgroundDispatcher, BackgroundDispatcherProtocol
+from .deps import get_background_dispatcher, get_service
 from .routes import admin_router, health_router, workflow_router
 
 logger = logging.getLogger(__name__)
@@ -47,14 +49,49 @@ def _instrument_fastapi(app: FastAPI) -> None:
     FastAPIInstrumentor.instrument_app(app)
 
 
-def create_app(service: Optional[WorkflowService] = None) -> FastAPI:
+def create_app(
+    service: Optional[WorkflowService] = None,
+    *,
+    background_dispatcher: Optional[BackgroundDispatcherProtocol] = None,
+) -> FastAPI:
     """Build a FastAPI app for the orchestrator.
 
     Pass ``service`` to wire in a custom :class:`WorkflowService`
     implementation (e.g. a fake in tests).  When omitted, the default
     in-process ``LocalWorkflowService`` is used via the ``get_service``
     dependency.
+
+    Pass ``background_dispatcher`` to inject a custom dispatcher (typically
+    a :class:`SyncBackgroundDispatcher` in tests so route assertions run
+    inline).  When omitted, the lifespan creates a process-wide
+    :class:`BackgroundDispatcher` (worker pool sized via
+    ``ORCHESTRATOR_BACKGROUND_WORKERS``) and shuts it down on app teardown.
     """
+
+    @asynccontextmanager
+    async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+        if background_dispatcher is not None:
+            app.state.background_dispatcher = background_dispatcher
+            owns_dispatcher = False
+        else:
+            workers_env = os.environ.get("ORCHESTRATOR_BACKGROUND_WORKERS")
+            kwargs: dict = {}
+            if workers_env:
+                try:
+                    kwargs["max_workers"] = int(workers_env)
+                except ValueError:
+                    logger.warning(
+                        "Invalid ORCHESTRATOR_BACKGROUND_WORKERS=%r; using default",
+                        workers_env,
+                    )
+            app.state.background_dispatcher = BackgroundDispatcher(**kwargs)
+            owns_dispatcher = True
+        try:
+            yield
+        finally:
+            if owns_dispatcher:
+                app.state.background_dispatcher.shutdown(wait=False)
+
     app = FastAPI(
         title="NGB Agent Orchestrator",
         description=(
@@ -62,6 +99,7 @@ def create_app(service: Optional[WorkflowService] = None) -> FastAPI:
             "Exposes the non-streaming subset of WorkflowService."
         ),
         version="0.1.0",
+        lifespan=_lifespan,
     )
 
     app.include_router(health_router)
@@ -70,6 +108,8 @@ def create_app(service: Optional[WorkflowService] = None) -> FastAPI:
 
     if service is not None:
         app.dependency_overrides[get_service] = lambda: service
+    if background_dispatcher is not None:
+        app.dependency_overrides[get_background_dispatcher] = lambda: background_dispatcher
 
     if not is_auth_enabled():
         logger.warning(

@@ -240,10 +240,47 @@ All `/workflows*` routes require a bearer token when
 | `POST` | `/admin/clear-db` | **Admin** — wipe all workflows + checkpoints |
 | `POST` | `/admin/workflows/{id}/mark-interrupted` | **Admin** — mark in-flight workflow FAILED |
 
+Mutating routes that drive the LangGraph state machine are now
+**fire-and-forget**: they enqueue the work on the server's
+`BackgroundDispatcher` and return `202 Accepted` immediately with a
+snapshot of the workflow row. The client follows the actual lifecycle
+via `GET /workflows/{id}/events` (SSE). See
+[Fire-and-forget mutations](#fire-and-forget-mutations) below.
+
 Mutating routes return `404` when the workflow id is unknown and `409`
 when the workflow is in an incompatible state for that action (e.g.
-`retry` against a non-retryable workflow). Admin routes have a stricter
-auth posture — see [Admin endpoints](#admin-endpoints) below.
+`retry` against a non-retryable workflow), or when the background
+dispatcher already has an in-flight job for that workflow. Admin routes
+have a stricter auth posture — see [Admin endpoints](#admin-endpoints)
+below.
+
+### Fire-and-forget mutations
+
+The following routes are non-blocking: they return `202 Accepted` with a
+`WorkflowRunResponse` snapshot, queue the graph drive on the
+`BackgroundDispatcher` thread pool (size: `ORCHESTRATOR_BACKGROUND_WORKERS`,
+default `4`), and the worker thread updates the workflow row as the
+graph progresses.
+
+- `POST /workflows`
+- `POST /workflows/{id}/approve-plan`
+- `POST /workflows/{id}/reject-plan`
+- `POST /workflows/{id}/clarification`
+- `POST /workflows/{id}/retry`
+- `POST /workflows/{id}/approve-pr`
+- `POST /workflows/{id}/reject-pr`
+- `POST /workflows/{id}/comment-pr`
+
+At most one job per workflow id may be in flight; a second submission
+while one is already queued returns `409 Conflict`. If the worker
+thread raises, the dispatcher transitions the workflow to `FAILED`
+with the actor recorded as `background-dispatcher`.
+
+Clients should subscribe to `GET /workflows/{id}/events` after
+submitting to observe `node_start` / `node_end` / `interrupt` /
+`completed` / `failed` / `cancelled` events. The dispatcher CLI does
+this automatically (see `--detach` in [docs/workflows.md](workflows.md)
+to opt out).
 
 ### `POST /workflows`
 
@@ -255,9 +292,10 @@ auth posture — see [Admin endpoints](#admin-endpoints) below.
 }
 ```
 
-Returns `201 Created` with a `WorkflowRunResponse` (workflow id, final
-status, optional execution summary). When the planner pauses at
-`await_approval` the response carries `"interrupted": true`.
+Returns `202 Accepted` with a `WorkflowRunResponse` snapshot (workflow
+id, current status, empty execution summary). The graph drive runs on
+the background dispatcher; subscribe to
+`GET /workflows/{id}/events` to observe the lifecycle.
 
 ### `GET /workflows`
 
@@ -292,11 +330,12 @@ Returns:
 
 ### Approval / clarification / retry
 
-All four routes return a `WorkflowRunResponse` on `200 OK`, `404` when
-the workflow id is unknown, and `409` when the workflow is in an
-incompatible state for the action (e.g. approving a workflow that is not
-paused at `await_approval`, or retrying a workflow that is not
-retryable).
+All four routes are fire-and-forget and return a `WorkflowRunResponse`
+snapshot on `202 Accepted`, `404` when the workflow id is unknown, and
+`409` when the workflow is in an incompatible state for the action (or
+when another job is already in flight for the same workflow). The
+actual graph drive runs on the background dispatcher — watch the
+event stream to observe completion.
 
 | Route | Body |
 |---|---|

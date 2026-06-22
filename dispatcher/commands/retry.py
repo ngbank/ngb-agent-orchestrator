@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Optional
 import click
 
 import dispatcher.commands.common as common
+from dispatcher.commands.follow import submit_and_follow
 from state.workflow_status import WorkflowStatus
 
 if TYPE_CHECKING:
@@ -16,6 +17,7 @@ def _handle_retry(
     service: "WorkflowService",
     ticket_key: Optional[str],
     workflow_id: Optional[str] = None,
+    detach: bool = False,
 ) -> None:
     """Resume a failed workflow from the node that failed.
 
@@ -60,7 +62,13 @@ def _handle_retry(
         )
 
     try:
-        result = service.retry(resolved_id)
+        result = submit_and_follow(
+            service,
+            service.retry,
+            resolved_id,
+            workflow_id_hint=resolved_id,
+            detach=detach,
+        )
     except ValueError as e:
         click.echo(f"❌ {e}", err=True)
         sys.exit(1)

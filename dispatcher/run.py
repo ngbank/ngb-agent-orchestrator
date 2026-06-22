@@ -176,6 +176,16 @@ def _resolve_service(ctx: click.Context) -> "WorkflowService":
     is_flag=True,
     help="Launch the interactive Textual TUI for workflow management",
 )
+@click.option(
+    "--detach",
+    "detach",
+    is_flag=True,
+    help=(
+        "Submit the request and exit immediately without streaming lifecycle "
+        "events. Only meaningful with ORCHESTRATOR_MODE=remote; rejected in "
+        "local mode since the call is already synchronous."
+    ),
+)
 def run(
     ctx: click.Context,
     ticket: Optional[str],
@@ -196,6 +206,7 @@ def run(
     reason: Optional[str],
     workflow_id: Optional[str],
     do_tui: bool,
+    detach: bool,
 ) -> None:
     """
     Main dispatcher entry point for workflow orchestration.
@@ -262,6 +273,21 @@ def run(
 
     service = _resolve_service(ctx)
 
+    # --detach only makes sense for fire-and-forget HTTP submissions: the
+    # local service runs the graph synchronously in this process, so there
+    # is no SSE stream to skip.  Fail loud (option 1) so the operator does
+    # not silently get behaviour different from what the flag implies.
+    if detach:
+        from dispatcher.commands.follow import is_remote_service
+
+        if not is_remote_service(service):
+            click.echo(
+                "❌ --detach is only meaningful with ORCHESTRATOR_MODE=remote "
+                "(local invocations are already synchronous).",
+                err=True,
+            )
+            sys.exit(2)
+
     if do_logs:
         if not ticket and not workflow_id:
             click.echo("\u274c --logs requires --ticket or --workflow-id", err=True)
@@ -307,7 +333,7 @@ def run(
             sys.exit(1)
         from dispatcher.commands.clarify import _handle_clarify
 
-        _handle_clarify(service, ticket, workflow_id)
+        _handle_clarify(service, ticket, workflow_id, detach=detach)
         return
 
     if do_retry:
@@ -316,7 +342,7 @@ def run(
             sys.exit(1)
         from dispatcher.commands.retry import _handle_retry
 
-        _handle_retry(service, ticket, workflow_id)
+        _handle_retry(service, ticket, workflow_id, detach=detach)
         return
 
     if do_approve_plan:
@@ -325,7 +351,7 @@ def run(
             sys.exit(1)
         from dispatcher.commands.approve import _handle_approve
 
-        _handle_approve(service, ticket, workflow_id)
+        _handle_approve(service, ticket, workflow_id, detach=detach)
         return
 
     if do_reject:
@@ -334,7 +360,7 @@ def run(
             sys.exit(1)
         from dispatcher.commands.approve import _handle_reject
 
-        _handle_reject(service, ticket, reason, workflow_id)
+        _handle_reject(service, ticket, reason, workflow_id, detach=detach)
         return
 
     if do_approve_pr:
@@ -343,7 +369,7 @@ def run(
             sys.exit(1)
         from dispatcher.commands.pr import _handle_approve_pr
 
-        _handle_approve_pr(service, ticket, workflow_id)
+        _handle_approve_pr(service, ticket, workflow_id, detach=detach)
         return
 
     if do_comment_pr:
@@ -352,7 +378,7 @@ def run(
             sys.exit(1)
         from dispatcher.commands.pr import _handle_comment_pr
 
-        _handle_comment_pr(service, ticket, workflow_id)
+        _handle_comment_pr(service, ticket, workflow_id, detach=detach)
         return
 
     if do_reject_pr:
@@ -361,7 +387,7 @@ def run(
             sys.exit(1)
         from dispatcher.commands.pr import _handle_reject_pr
 
-        _handle_reject_pr(service, ticket, reason, workflow_id)
+        _handle_reject_pr(service, ticket, reason, workflow_id, detach=detach)
         return
 
     if not ticket:
@@ -376,7 +402,7 @@ def run(
 
     from dispatcher.commands.run_workflow import _handle_run
 
-    _handle_run(service, ticket, dry_run)
+    _handle_run(service, ticket, dry_run, detach=detach)
 
 
 if __name__ == "__main__":

@@ -87,6 +87,14 @@ class FakeWorkflowService:
     ) -> None:
         return None
 
+    def mark_failed(
+        self,
+        workflow_id: str,
+        reason: str,
+        actor: str = "system",
+    ) -> None:
+        return None
+
     def clear_db(self) -> tuple[int, int]:
         return (0, 0)
 

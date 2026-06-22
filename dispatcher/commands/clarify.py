@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Optional
 import click
 
 import dispatcher.commands.common as common  # noqa: F401  (kept for symmetry)
+from dispatcher.commands.follow import submit_and_follow
 from state.workflow_status import WorkflowStatus
 
 if TYPE_CHECKING:
@@ -19,6 +20,7 @@ def _handle_clarify(
     service: "WorkflowService",
     ticket_key: Optional[str],
     workflow_id: Optional[str] = None,
+    detach: bool = False,
 ) -> None:
     """Collect clarification answers via file-based editing and resume a suspended WorkPlan."""
     if workflow_id:
@@ -123,7 +125,14 @@ def _handle_clarify(
             current_concern = None
 
     try:
-        result = service.submit_clarification(resolved_id, answers)
+        result = submit_and_follow(
+            service,
+            service.submit_clarification,
+            resolved_id,
+            answers,
+            workflow_id_hint=resolved_id,
+            detach=detach,
+        )
 
         if result.error:
             click.echo(f"❌ Workflow error: {result.error}", err=True)

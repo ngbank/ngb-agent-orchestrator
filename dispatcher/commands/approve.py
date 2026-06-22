@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Optional
 import click
 
 import dispatcher.commands.common as common
+from dispatcher.commands.follow import submit_and_follow
 from state.workflow_status import WorkflowStatus
 
 if TYPE_CHECKING:
@@ -34,6 +35,7 @@ def _handle_approve(
     service: "WorkflowService",
     ticket_key: Optional[str],
     workflow_id: Optional[str] = None,
+    detach: bool = False,
 ) -> None:
     resolved_id = _resolve_pending_approval(service, ticket_key, workflow_id)
 
@@ -55,7 +57,13 @@ def _handle_approve(
         sys.exit(1)
 
     try:
-        result = service.approve_plan(resolved_id)
+        result = submit_and_follow(
+            service,
+            service.approve_plan,
+            resolved_id,
+            workflow_id_hint=resolved_id,
+            detach=detach,
+        )
 
         if result.interrupted:
             # Graph paused at await_pr_approval after execute_plan.
@@ -97,6 +105,7 @@ def _handle_reject(
     ticket_key: Optional[str],
     reason: Optional[str],
     workflow_id: Optional[str] = None,
+    detach: bool = False,
 ) -> None:
     resolved_id = _resolve_pending_approval(service, ticket_key, workflow_id)
 
@@ -114,7 +123,14 @@ def _handle_reject(
         sys.exit(1)
 
     try:
-        service.reject_plan(resolved_id, reason)
+        submit_and_follow(
+            service,
+            service.reject_plan,
+            resolved_id,
+            reason,
+            workflow_id_hint=resolved_id,
+            detach=detach,
+        )
         click.echo(f"🚫 Workflow {resolved_id} rejected" + (f": {reason}" if reason else ""))
 
     except Exception as e:

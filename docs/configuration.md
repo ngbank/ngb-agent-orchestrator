@@ -127,6 +127,7 @@ The optional FastAPI server (`orchestrator-server` console script) reads these e
 | `ORCHESTRATOR_LOG_LEVEL` | No | `info` | Uvicorn log level (`critical`/`error`/`warning`/`info`/`debug`/`trace`) |
 | `ORCHESTRATOR_RELOAD` | No | *(unset)* | When `1` / `true` / `yes`, enables uvicorn auto-reload (dev only) |
 | `ORCHESTRATOR_API_TOKEN` | No | *(unset)* | Bearer token required on every protected route. When unset or empty, **auth is disabled** and the server logs a warning at startup. `/healthz` and OpenAPI endpoints are always open. |
+| `ORCHESTRATOR_BACKGROUND_WORKERS` | No | `4` | Size of the thread pool that runs LangGraph drives for fire-and-forget mutation routes (`POST /workflows`, `approve-plan`, `retry`, `comment-pr`, …). Each workflow id is single-flighted regardless of pool size; a second submission for the same id while one is in flight returns `409`. |
 | `ORCHESTRATOR_RUN_DIR` | No | `<repo>/.run` | Directory used by `bin/orchestrator-server-ctl` for its `orchestrator-server.pid` and `orchestrator-server.log` files. |
 
 ### Dispatcher → Orchestrator Transport
