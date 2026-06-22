@@ -1,0 +1,44 @@
+# Version control
+.git
+.gitignore
+.github
+
+# Local virtualenvs
+.venv
+venv
+
+# Python caches & build artefacts
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.egg-info
+build
+dist
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Secrets and local state — must never enter the image
+.env
+.env.*
+!.env.example
+state/local.db
+state/local.db-*
+logs
+
+# Editor / OS noise
+.vscode
+.idea
+.DS_Store
+
+# Tests and docs (not needed at runtime)
+tests
+docs
+scripts
+
+# Misc
+*.log
+*.swp
+htmlcov
+.coverage

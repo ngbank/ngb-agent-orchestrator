@@ -160,6 +160,38 @@ dispatcher --tui
 dispatcher --clear-db
 ```
 
+### Running the Orchestrator HTTP Server (optional)
+
+By default, the dispatcher runs the orchestrator **in-process** — no server required. If you want to share one orchestrator across multiple dispatchers, IDEs, or the TUI, start the FastAPI server and point the dispatcher at it.
+
+```bash
+# Option 1: console script (uses .env from your shell)
+orchestrator-server
+
+# Option 2: uvicorn directly (handy for --reload during dev)
+uvicorn orchestrator.server.app:app --host 0.0.0.0 --port 8080
+
+# Option 3: container (multi-stage Dockerfile, non-root, /healthz)
+docker compose up --build
+# or:
+docker build -t ngb-orchestrator:dev .
+docker run --rm -p 8080:8080 --env-file .env \
+    -v "$PWD/state:/app/state" ngb-orchestrator:dev
+
+# Verify
+curl http://localhost:8080/healthz   # → {"status":"ok"}
+```
+
+Then route the CLI through the server by setting two env vars (typically in `.env`):
+
+```bash
+ORCHESTRATOR_MODE=remote
+ORCHESTRATOR_URL=http://localhost:8080
+# ORCHESTRATOR_TOKEN=<bearer>   # required when ORCHESTRATOR_API_TOKEN is set on the server
+```
+
+See [docs/server.md](docs/server.md) for the full run story (endpoints, auth, SSE, Docker) and [docs/configuration.md](docs/configuration.md#dispatcher--orchestrator-transport) for the env-var contract.
+
 ---
 
 ## Documentation

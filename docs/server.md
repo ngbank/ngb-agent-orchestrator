@@ -7,8 +7,39 @@ following workflow events and log output in real time. The CLI continues
 to work against the in-process `LocalWorkflowService` and is **not**
 affected by the server.
 
-The `HttpWorkflowService` client (B3) and packaging polish (B4) are
-tracked in separate tickets and are **not** part of this work.
+The `HttpWorkflowService` client (B3, AOS-143) routes the dispatcher
+through this server when `ORCHESTRATOR_MODE=remote`. See
+[docs/configuration.md](configuration.md#dispatcher--orchestrator-transport)
+for the env-var contract.
+
+---
+
+## Local vs remote topology
+
+The dispatcher always talks to a `WorkflowService` Protocol — the
+transport is selected once at startup via `ORCHESTRATOR_MODE`. There are
+no other code paths to flip.
+
+```mermaid
+flowchart LR
+    subgraph local["ORCHESTRATOR_MODE=local (default)"]
+        CLI1["dispatcher / TUI"] --> LS1["LocalWorkflowService<br/>(in-process)"]
+        LS1 --> SQL1[("SQLite<br/>state/local.db")]
+        LS1 --> LG1["LangGraph<br/>nodes"]
+    end
+
+    subgraph remote["ORCHESTRATOR_MODE=remote"]
+        CLI2["dispatcher / TUI"] --> HC["HttpWorkflowService<br/>(httpx + SSE)"]
+        HC -->|HTTPS + bearer| API["FastAPI app<br/>orchestrator/server"]
+        API --> LS2["LocalWorkflowService<br/>(in server process)"]
+        LS2 --> SQL2[("SQLite<br/>(server-owned)")]
+        LS2 --> LG2["LangGraph<br/>nodes"]
+    end
+```
+
+The HTTP layer is a thin transport: every behaviour lives in
+`LocalWorkflowService`, so the local and remote modes have identical
+semantics for the operations they both expose.
 
 ---
 
@@ -22,8 +53,8 @@ tracked in separate tickets and are **not** part of this work.
 # Boot via console-script (reads ORCHESTRATOR_HOST/PORT/LOG_LEVEL/RELOAD)
 orchestrator-server
 
-# Or directly with uvicorn
-uvicorn orchestrator.server.app:app --host 0.0.0.0 --port 8080
+# Or directly with uvicorn (useful with --reload during dev)
+uvicorn orchestrator.server.app:app --host 0.0.0.0 --port 8080 --reload
 ```
 
 Once running:
@@ -31,6 +62,71 @@ Once running:
 - Liveness: `GET http://localhost:8080/healthz`
 - OpenAPI schema: `GET http://localhost:8080/openapi.json`
 - Swagger UI: `GET http://localhost:8080/docs`
+
+---
+
+## Running with Docker
+
+The repo ships a multi-stage `Dockerfile` (Python 3.12-slim, non-root
+`orchestrator` user, default `CMD ["orchestrator-server"]`,
+`HEALTHCHECK` against `/healthz`) and a `docker-compose.yml` wiring the
+server to two named volumes for SQLite state and per-workflow logs.
+
+### Quick start with compose
+
+```bash
+docker compose up --build       # build + run in the foreground
+docker compose up -d            # detached
+docker compose logs -f orchestrator
+docker compose down             # stop (state volume persists)
+docker compose down -v          # stop + drop the SQLite volume
+```
+
+The compose file reads `.env` from the project root, so the same secret
+material that powers local CLI runs (Key Vault output, GitHub App, etc.)
+applies to the containerised server.
+
+### Bare `docker run`
+
+```bash
+docker build -t ngb-orchestrator:dev .
+docker run --rm -p 8080:8080 \
+    --env-file .env \
+    -v "$PWD/state:/app/state" \
+    -v "$PWD/logs:/app/logs" \
+    ngb-orchestrator:dev
+```
+
+### Layout inside the image
+
+| Path | Purpose |
+|---|---|
+| `/app/state/local.db` | SQLite DB — mount a volume here to persist runs |
+| `/app/logs/<workflow_id>/` | Per-workflow stage logs + `otel.jsonl` |
+| `/app/recipes/`, `/app/schemas/`, `/app/config/` | Read-only assets baked into the image |
+| `/usr/local/bin/orchestrator-server` | Console script (the default `CMD`) |
+
+### Smoke test
+
+```bash
+curl http://localhost:8080/healthz
+# → {"status":"ok"}
+```
+
+### Pointing the dispatcher at it
+
+```bash
+export ORCHESTRATOR_MODE=remote
+export ORCHESTRATOR_URL=http://localhost:8080
+# export ORCHESTRATOR_TOKEN=<bearer>   # if ORCHESTRATOR_API_TOKEN is set on the server
+
+dispatcher --list
+```
+
+The read / cancel / start / `read_logs` / `stream_events` surface works
+end-to-end. Approval, clarification, retry, and PR-comment commands are
+not yet exposed over HTTP — fall back to `ORCHESTRATOR_MODE=local` for
+those.
 
 ---
 
