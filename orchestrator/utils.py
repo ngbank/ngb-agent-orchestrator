@@ -218,12 +218,14 @@ def goose_session(
     port = _free_port()
     config_yaml = _litellm_config_yaml(model)
 
-    # Write the config into the repo root so that litellm can resolve the
-    # callback module path "graph/litellm_callbacks.py" relative to it.
+    # Write the config into the system temp dir (not the repo root) so server
+    # mode never pollutes the project working tree. The proxy subprocess
+    # resolves the OTel callback via its Python import path
+    # (``otel.litellm_proxy_setup.proxy_handler_instance``); we inject
+    # ``PYTHONPATH=<repo_root>`` below so the import works regardless of the
+    # config file's location.
     repo_root = Path(__file__).resolve().parents[1]
-    config_fd, config_path = tempfile.mkstemp(
-        suffix="_litellm.yaml", prefix="goose_proxy_", dir=str(repo_root)
-    )
+    config_fd, config_path = tempfile.mkstemp(suffix="_litellm.yaml", prefix="goose_proxy_")
     os.close(config_fd)
     proxy_log_fh: Optional[IO[str]] = None
     try:
