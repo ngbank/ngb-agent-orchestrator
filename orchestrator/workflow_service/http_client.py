@@ -60,6 +60,16 @@ LOG_SNAPSHOT_READ_TIMEOUT_S: float = 1.0
 # Default connect/write timeouts for one-shot REST calls.
 DEFAULT_TIMEOUT_S: float = 30.0
 
+# Per-request timeout used for graph-running endpoints (``start``,
+# ``approve_plan``, ``reject_plan``, ``submit_clarification``, ``retry``,
+# ``approve_pr``, ``reject_pr``, ``comment_pr``).  These calls block on the
+# server until the full graph (Goose subprocess + LLM calls) completes,
+# which routinely takes several minutes — far longer than the 30 s default.
+# Disable the read/write/pool timeouts so the dispatcher waits as long as
+# the server needs, while keeping a short connect timeout so an unreachable
+# server still fails fast. Module-level so tests can monkeypatch it.
+GRAPH_RUN_TIMEOUT: httpx.Timeout = httpx.Timeout(None, connect=10.0)
+
 # How long to wait between reconnect attempts in ``stream_events``.
 RECONNECT_BACKOFF_S: float = 0.5
 
@@ -338,7 +348,7 @@ class HttpWorkflowService:
         }
         if request.workflow_id is not None:
             body["workflow_id"] = request.workflow_id
-        response = self._request("POST", "/workflows", json=body)
+        response = self._request("POST", "/workflows", json=body, timeout=GRAPH_RUN_TIMEOUT)
         response.raise_for_status()
         return _run_result_from_json(response.json())
 
@@ -388,7 +398,7 @@ class HttpWorkflowService:
         ``ValueError(<server detail>)`` so callers see the same exceptions
         :class:`LocalWorkflowService` raises for invalid state transitions.
         """
-        response = self._request("POST", path, json=body)
+        response = self._request("POST", path, json=body, timeout=GRAPH_RUN_TIMEOUT)
         if response.status_code == 404:
             raise ValueError(f"Workflow not found: {workflow_id}")
         if response.status_code == 409:
@@ -410,14 +420,16 @@ class HttpWorkflowService:
         *,
         params: Optional[Dict[str, Any]] = None,
         json: Optional[Dict[str, Any]] = None,
+        timeout: Optional[httpx.Timeout] = None,
     ) -> httpx.Response:
-        return self._client.request(
-            method,
-            self._url(path),
-            params=params,
-            json=json,
-            headers=self._headers(),
-        )
+        kwargs: Dict[str, Any] = {
+            "params": params,
+            "json": json,
+            "headers": self._headers(),
+        }
+        if timeout is not None:
+            kwargs["timeout"] = timeout
+        return self._client.request(method, self._url(path), **kwargs)
 
     def _url(self, path: str) -> str:
         # httpx.Client base_url support is a little finicky when the client
