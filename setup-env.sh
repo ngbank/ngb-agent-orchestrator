@@ -328,9 +328,20 @@ with open(env_file, "r") as f:
 
 for placeholder, value in replacements.items():
     if placeholder in content:
-        # Quote multiline values with escaped newlines for shell parsing
+        # Quote multiline values with escaped newlines for shell parsing.
+        # The Key Vault secret for GITHUB_APP_PRIVATE_KEY may come back already
+        # escaped (literal "\n" with no real newlines).  Normalize first so the
+        # escape step below is idempotent — otherwise the existing backslashes
+        # get double-escaped and python-dotenv yields a corrupted PEM.
         if value:
-            quoted_value = value.replace("\\", "\\\\").replace('"', '\\"').replace('\n', '\\n')
+            normalized = value
+            if "\n" not in normalized and "\\n" in normalized:
+                normalized = normalized.replace("\\n", "\n")
+            quoted_value = (
+                normalized.replace("\\", "\\\\")
+                .replace('"', '\\"')
+                .replace("\n", "\\n")
+            )
             quoted_value = f'"{quoted_value}"'
         else:
             quoted_value = '""'
