@@ -19,8 +19,8 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from .http_client import build_http_workflow_service
-from .local import build_local_workflow_service
+from .http_workflow_service import build_http_workflow_service
+from .local_workflow_service import build_local_workflow_service
 from .protocols import WorkflowService
 
 MODE_ENV = "ORCHESTRATOR_MODE"

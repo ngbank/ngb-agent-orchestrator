@@ -48,7 +48,7 @@ def is_remote_service(service: "WorkflowService") -> bool:
     local implementation are treated as in-process and skip the follower.
     """
     # Imported lazily to avoid pulling httpx into ``--help`` invocations.
-    from orchestrator.workflow_service.http_client import HttpWorkflowService
+    from orchestrator.workflow_service.http_workflow_service import HttpWorkflowService
 
     return isinstance(service, HttpWorkflowService)
 
