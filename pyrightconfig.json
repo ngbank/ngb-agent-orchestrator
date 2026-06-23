@@ -17,7 +17,7 @@
     "tests"
   ],
   "pythonVersion": "3.12",
-  "typeCheckingMode": "basic",
+  "typeCheckingMode": "standard",
   "useLibraryCodeForTypes": true,
   "reportMissingImports": "warning",
   "reportMissingTypeStubs": "none"

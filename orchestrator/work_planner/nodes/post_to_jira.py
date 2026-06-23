@@ -3,9 +3,9 @@
 import click
 
 from dispatcher.jira_client import JiraClient, JiraCommentError
-from dispatcher.work_plan_formatter import format_work_plan_comment
 from orchestrator.node_result import WorkPlannerNodeResult
 from orchestrator.work_planner.state import PostToJiraInputState
+from orchestrator.work_planner.utilities import format_work_plan_comment
 
 
 def post_to_jira(state: PostToJiraInputState) -> WorkPlannerNodeResult:

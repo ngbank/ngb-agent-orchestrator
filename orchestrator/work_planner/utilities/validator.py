@@ -13,7 +13,7 @@ from typing import Any
 import jsonschema
 from jsonschema import ValidationError as JsonSchemaValidationError
 
-_SCHEMA_PATH = Path(__file__).parent.parent / "schemas" / "work_plan_v1.json"
+_SCHEMA_PATH = Path(__file__).parent.parent.parent.parent / "schemas" / "work_plan_v1.json"
 
 
 class WorkPlanValidationError(Exception):

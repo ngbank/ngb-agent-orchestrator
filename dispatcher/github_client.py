@@ -9,7 +9,7 @@ import os
 import re
 import subprocess
 import time
-from typing import Optional
+from typing import Optional, cast
 
 import jwt
 import requests
@@ -167,11 +167,14 @@ def get_installation_token(project_key: str = "") -> str:
 
     # Exchange JWT for installation access token
     url = f"https://api.github.com/app/installations/{installation_id}/access_tokens"
-    headers = {
-        "Authorization": f"Bearer {jwt_token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
+    headers = cast(
+        dict[str, str | bytes],
+        {
+            "Authorization": f"Bearer {jwt_token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
 
     try:
         response = requests.post(url, headers=headers, timeout=10)
@@ -202,11 +205,14 @@ def get_open_pr(owner: str, repo: str, branch: str, token: str) -> Optional[str]
         "head": f"{owner}:{branch}",
         "state": "open",
     }
-    headers = {
-        "Authorization": f"token {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
+    headers = cast(
+        dict[str, str | bytes],
+        {
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
 
     try:
         response = requests.get(url, params=params, headers=headers, timeout=10)
@@ -252,11 +258,14 @@ def create_pr(
         "head": head,
         "base": base,
     }
-    headers = {
-        "Authorization": f"token {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
+    headers = cast(
+        dict[str, str | bytes],
+        {
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
 
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=10)
@@ -287,11 +296,14 @@ def add_pr_comment(pr_url: str, body: str, token: str) -> None:
 
     url = f"https://api.github.com/repos/{owner}/{repo}/issues/{pr_number}/comments"
     payload = {"body": body}
-    headers = {
-        "Authorization": f"token {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
+    headers = cast(
+        dict[str, str | bytes],
+        {
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
 
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=10)

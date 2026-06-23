@@ -1,10 +1,10 @@
 """
-Tests for dispatcher.work_plan_validator
+Tests for orchestrator.work_planner.utilities.validator
 """
 
 import pytest
 
-from dispatcher.work_plan_validator import (
+from orchestrator.work_planner.utilities import (
     WorkPlan,
     WorkPlanValidationError,
     validate_work_plan,

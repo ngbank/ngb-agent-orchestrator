@@ -10,7 +10,7 @@ Tests cover:
 
 import pytest
 
-from dispatcher.work_plan_formatter import (
+from orchestrator.work_planner.utilities import (
     format_execution_summary_comment,
     format_work_plan_comment,
 )

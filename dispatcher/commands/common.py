@@ -58,7 +58,7 @@ def _post_execution_comment(
         ):
             from dispatcher.jira_client import JiraClient as _JiraClient
             from dispatcher.jira_client import JiraCommentError as _JiraCommentError
-            from dispatcher.work_plan_formatter import (
+            from orchestrator.work_planner.utilities import (
                 format_execution_summary_comment as _format_execution_summary_comment,
             )
 

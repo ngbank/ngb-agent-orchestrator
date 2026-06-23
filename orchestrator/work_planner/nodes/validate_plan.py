@@ -2,10 +2,13 @@
 
 import click
 
-from dispatcher.work_plan_validator import WorkPlanValidationError, validate_work_plan
 from orchestrator.work_planner.state import (
     ValidatePlanInputState,
     ValidatePlanOutputState,
+)
+from orchestrator.work_planner.utilities import (
+    WorkPlanValidationError,
+    validate_work_plan,
 )
 
 
