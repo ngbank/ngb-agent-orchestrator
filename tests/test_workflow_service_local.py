@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`orchestrator.workflow_service.local`.
+"""Unit tests for :mod:`orchestrator.workflow_service.local_workflow_service`.
 
 These tests cover every public method of ``LocalWorkflowService`` using:
   * The real SQLite ``WorkflowRepository`` against a per-test temp DB

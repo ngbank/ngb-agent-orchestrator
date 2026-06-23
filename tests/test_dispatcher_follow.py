@@ -30,7 +30,7 @@ from orchestrator.workflow_service.dtos import (
     WorkflowEvent,
     WorkflowRunResult,
 )
-from orchestrator.workflow_service.local import LocalWorkflowService
+from orchestrator.workflow_service.local_workflow_service import LocalWorkflowService
 from state.workflow_status import WorkflowStatus
 
 # ---------------------------------------------------------------------------

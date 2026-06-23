@@ -1,4 +1,4 @@
-"""Tests for :mod:`orchestrator.workflow_service.http_client`.
+"""Tests for :mod:`orchestrator.workflow_service.http_workflow_service`.
 
 Covers three layers:
 
@@ -33,7 +33,7 @@ from orchestrator.workflow_service import (
     WorkflowStartRequest,
     build_http_workflow_service,
 )
-from orchestrator.workflow_service import http_client as http_client_mod
+from orchestrator.workflow_service import http_workflow_service as http_client_mod
 from orchestrator.workflow_service.dtos import (
     WorkflowAuditEntry,
     WorkflowDetail,

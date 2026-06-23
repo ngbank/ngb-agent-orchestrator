@@ -26,12 +26,12 @@ from .dtos import (
     WorkflowSummary,
 )
 from .factory import build_workflow_service_from_env
-from .http_client import (
+from .http_workflow_service import (
     HttpWorkflowService,
     RemoteOperationNotSupported,
     build_http_workflow_service,
 )
-from .local import LocalWorkflowService, build_local_workflow_service
+from .local_workflow_service import LocalWorkflowService, build_local_workflow_service
 from .protocols import WorkflowService
 
 __all__ = [

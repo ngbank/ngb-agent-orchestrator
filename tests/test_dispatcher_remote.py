@@ -47,7 +47,7 @@ from orchestrator.workflow_service.factory import (
     TOKEN_ENV,
     URL_ENV,
 )
-from orchestrator.workflow_service.local import LocalWorkflowService
+from orchestrator.workflow_service.local_workflow_service import LocalWorkflowService
 from state.workflow_status import WorkflowStatus
 
 # ---------------------------------------------------------------------------
