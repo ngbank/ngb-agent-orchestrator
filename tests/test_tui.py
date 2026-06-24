@@ -508,3 +508,94 @@ class TestAsyncActions:
                 if finished.is_set():
                     break
             assert finished.is_set()
+
+
+# ---------------------------------------------------------------------------
+# Async tail polling \u2014 ``service.read_logs`` must not block the main loop
+# when the user navigates onto a running workflow.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestAsyncTailPolling:
+    async def test_schedule_tail_poll_returns_immediately_when_read_logs_blocks(self):
+        """Navigating onto an IN_PROGRESS workflow must not freeze the UI
+        while ``read_logs`` is slow (e.g. opening an SSE stream in remote
+        mode). ``_schedule_tail_poll`` parks the work on a worker thread and
+        returns to the main loop right away.
+        """
+        wf_id = "wf-slow-tail"
+        summary = _make_summary(wf_id, "AOS-145", WorkflowStatus.IN_PROGRESS)
+        detail = _make_detail(wf_id, "AOS-145", WorkflowStatus.IN_PROGRESS)
+
+        blocker = threading.Event()
+        read_started = threading.Event()
+        read_returned = threading.Event()
+
+        class BlockingService(FakeWorkflowService):
+            def read_logs(self, workflow_id, stage=None, after_offset=0):
+                # Mark that the worker thread reached the service call, then
+                # park so the test can prove the main loop never blocks here.
+                read_started.set()
+                blocker.wait(timeout=5)
+                try:
+                    return super().read_logs(workflow_id, stage=stage, after_offset=after_offset)
+                finally:
+                    read_returned.set()
+
+        service = BlockingService(
+            summaries=[summary],
+            details={wf_id: detail},
+            log_scripts={wf_id: {"plan": ["streamed-line\n"]}},
+        )
+        app = WorkflowTUI(service)
+        async with app.run_test() as pilot:
+            # Wait for the worker spawned by ``_start_tail`` to actually call
+            # ``read_logs``; if dispatch is genuinely non-blocking, the main
+            # loop reaches this point even though ``read_logs`` is parked.
+            for _ in range(50):
+                if read_started.is_set():
+                    break
+                await pilot.pause()
+            assert read_started.is_set(), "tail worker never reached read_logs"
+            assert not read_returned.is_set(), "read_logs unexpectedly returned"
+
+            # Main loop is still responsive: an unrelated synchronous TUI
+            # operation completes instantly while the worker is parked.
+            t0 = time.monotonic()
+            app.query_one(DetailPane)
+            assert time.monotonic() - t0 < 0.2
+
+            # Release the worker; the scheduled chunk eventually lands in
+            # the tail widget via ``call_from_thread`` \u2192 ``_apply_tail_chunk``.
+            blocker.set()
+            for _ in range(50):
+                await pilot.pause()
+                tail_log = app.query_one(DetailPane).query_one("#tail_log")
+                rendered = "\n".join(str(line) for line in tail_log.lines)
+                if "streamed-line" in rendered:
+                    break
+            assert "streamed-line" in rendered
+
+    async def test_overlapping_polls_are_debounced(self):
+        """If a previous tail poll hasn't returned, the next timer tick must
+        skip rather than stack workers \u2014 otherwise a slow ``read_logs`` would
+        spawn a thread per tick.
+        """
+        service, _wf = _running_setup(plan_chunks=["x\n"])
+        app = WorkflowTUI(service)
+        async with app.run_test() as pilot:
+            # Drain the initial poll worker spawned by ``_start_tail`` and its
+            # pending ``_mark_tail_idle`` callback before tampering with the
+            # in-flight flag.
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            assert app._tail_in_flight is False
+
+            # Simulate a previous poll still in flight, then trigger another
+            # scheduled tick. ``_schedule_tail_poll`` must bail out instead of
+            # spawning a second worker.
+            app._tail_in_flight = True
+            app._schedule_tail_poll()
+            await pilot.pause()
+            assert app._tail_in_flight is True

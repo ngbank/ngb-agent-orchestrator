@@ -84,6 +84,10 @@ class WorkflowTUI(App[None]):
         self._tail_workflow_id: Optional[str] = None
         self._tail_offsets: Dict[str, int] = {}
         self._tail_paused: bool = False
+        # ``_tail_in_flight`` debounces overlapping polls: if a previous
+        # ``read_logs`` is still running (slow SSE connect, blocked server)
+        # the next timer tick is skipped instead of stacking workers.
+        self._tail_in_flight: bool = False
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -369,11 +373,14 @@ class WorkflowTUI(App[None]):
             self.query_one(DetailPane).clear_log_tail()
         except Exception:
             pass
-        # Immediate first poll so the user sees backlog right away; then
-        # schedule periodic polls until the workflow stops running.
-        self._poll_tail()
+        # First poll is dispatched off the main loop so navigating onto a
+        # running workflow doesn't freeze the UI while ``read_logs`` connects
+        # (in remote mode that opens an SSE stream with a read timeout).
+        # Backlog still appears once the worker returns — typically within a
+        # few hundred ms.
+        self._schedule_tail_poll()
         if self._tail_interval > 0:
-            self._tail_timer = self.set_interval(self._tail_interval, self._poll_tail)
+            self._tail_timer = self.set_interval(self._tail_interval, self._schedule_tail_poll)
 
     def _stop_tail(self) -> None:
         if self._tail_timer is not None:
@@ -385,8 +392,101 @@ class WorkflowTUI(App[None]):
         self._tail_workflow_id = None
         self._tail_offsets = {}
         self._tail_paused = False
+        # A worker still in flight will discard its results via the
+        # workflow-id guard in ``_apply_tail_chunk``; reset the flag so the
+        # next ``_start_tail`` can dispatch immediately.
+        self._tail_in_flight = False
+
+    def _schedule_tail_poll(self) -> None:
+        """Dispatch a single tail-poll cycle to a worker thread.
+
+        Called on every timer tick (and once from ``_start_tail``). Bails out
+        if no workflow is selected or a previous poll hasn't returned yet —
+        the latter prevents back-pressure piling up when ``read_logs`` is
+        slow (e.g. a stuck remote server).
+        """
+        workflow_id = self._tail_workflow_id
+        if workflow_id is None or self._tail_in_flight:
+            return
+        self._tail_in_flight = True
+        self.run_worker(
+            lambda: self._poll_tail_worker(workflow_id),
+            thread=True,
+            group="tail",
+            exit_on_error=False,
+            description=f"tail:{workflow_id[:8]}",
+        )
+
+    def _poll_tail_worker(self, workflow_id: str) -> None:
+        """Worker-thread body for one tail poll cycle.
+
+        Reads new bytes per stage and schedules ``_apply_tail_chunk`` on the
+        main loop for each non-empty chunk. Errors are swallowed so a
+        transient ``read_logs`` failure doesn't stop the tail — the next
+        timer tick will retry.
+        """
+        try:
+            for stage in _TAIL_STAGES:
+                offset = self._tail_offsets.get(stage, 0)
+                try:
+                    chunks = self._service.read_logs(
+                        workflow_id,
+                        stage=stage,
+                        after_offset=offset,
+                    )
+                except Exception:
+                    continue
+                for chunk in chunks:
+                    if chunk.stage != stage or not chunk.content:
+                        continue
+                    self.call_from_thread(
+                        self._apply_tail_chunk,
+                        workflow_id,
+                        chunk.stage,
+                        chunk.content,
+                        chunk.offset,
+                    )
+        finally:
+            self.call_from_thread(self._mark_tail_idle)
+
+    def _apply_tail_chunk(
+        self,
+        workflow_id: str,
+        stage: str,
+        content: str,
+        chunk_offset: int,
+    ) -> None:
+        """Main-thread sink for a tail chunk produced by a worker.
+
+        Discards the chunk if the user has navigated to a different workflow
+        since the worker started (prevents one workflow's logs from leaking
+        into another's view) and ignores already-applied bytes (defence in
+        depth against overlapping polls).
+        """
+        if self._tail_workflow_id != workflow_id:
+            return
+        current = self._tail_offsets.get(stage, 0)
+        end = chunk_offset + len(content.encode("utf-8"))
+        if end <= current:
+            return
+        try:
+            detail = self.query_one(DetailPane)
+        except Exception:
+            return
+        detail.append_log_chunk(stage, content)
+        self._tail_offsets[stage] = end
+
+    def _mark_tail_idle(self) -> None:
+        self._tail_in_flight = False
 
     def _poll_tail(self) -> None:
+        """Synchronous one-shot poll — used by tests and as the engine the
+        worker-thread variant wraps.
+
+        Production code goes through ``_schedule_tail_poll`` so the UI never
+        blocks on ``read_logs``; tests call this directly to make polling
+        deterministic without coordinating with the worker thread.
+        """
         workflow_id = self._tail_workflow_id
         if workflow_id is None:
             return

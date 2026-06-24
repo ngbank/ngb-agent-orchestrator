@@ -103,6 +103,14 @@ auto-scrolls to the tail by default.
 - **Reconnect** — each poll passes the byte offset of the last received chunk
   via `WorkflowService.read_logs(after_offset=...)`, so transient transport
   errors (remote mode) recover without duplicating or losing lines.
+- **Off-thread polling** — every tail poll (the initial backlog fetch and each
+  periodic tick) is dispatched to a Textual worker thread, so navigating onto
+  a running workflow never freezes the UI while `read_logs` connects. In
+  remote mode the SSE endpoint can take a few hundred ms to open; the foreground
+  loop stays free to redraw the workflow list, move the row cursor, and accept
+  input while the poll is in flight. Overlapping polls are debounced: if a
+  previous poll hasn't returned, the next timer tick is skipped rather than
+  stacking workers.
 - **Poll interval** — controlled by `DISPATCHER_TUI_TAIL_POLL` (seconds,
   default `1`). Set to `0` to disable the periodic tail; the initial backlog
   is still rendered when the workflow is selected.
