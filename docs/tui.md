@@ -56,6 +56,17 @@ Both commands launch the same Textual application.
 
 All actions delegate to the same handler functions used by the CLI, ensuring zero duplication of orchestration logic.
 
+### Responsiveness
+
+Service calls (start, approve, reject, retry, PR actions, clear-db) are
+blocking — in local mode they drive the LangGraph workflow end to end, and in
+remote mode they fire-and-forget then follow the SSE event stream. To keep the
+UI responsive, every action that touches `WorkflowService` runs in a Textual
+worker thread; the foreground loop stays free to refresh the workflow list,
+tail logs, and accept input while the action is in flight. You'll see a
+`{action}…` info notification when the work starts and a success/failure
+notification when it finishes, after which the list refreshes automatically.
+
 ---
 
 ## Live Refresh

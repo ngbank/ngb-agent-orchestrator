@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+import time
 from dataclasses import replace
 from typing import Dict, Iterable, List, Optional
 
@@ -462,3 +464,47 @@ class TestLiveLogTailing:
             assert detail.is_tail_visible() is False
             assert app._tail_workflow_id is None
             assert app._tail_timer is None
+
+
+# ---------------------------------------------------------------------------
+# Async action plumbing — service calls must not block Textual's main loop.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestAsyncActions:
+    async def test_run_action_async_returns_immediately(self, fake_service: WorkflowService):
+        """``_run_action_async`` dispatches the callable to a worker thread
+        and must return to the main loop without waiting for the work to
+        finish, so the TUI stays responsive while ``service.start`` /
+        ``service.approve_plan`` / ... are driving a graph.
+        """
+        blocker = threading.Event()
+        finished = threading.Event()
+
+        def slow_fn() -> str:
+            # Simulate a long-running service call that would otherwise
+            # freeze the UI if it ran on the main loop.
+            blocker.wait(timeout=5)
+            finished.set()
+            return "slow done"
+
+        app = WorkflowTUI(fake_service)
+        async with app.run_test() as pilot:
+            t0 = time.monotonic()
+            app._run_action_async("slow op", slow_fn)
+            elapsed = time.monotonic() - t0
+
+            # The dispatch call returned well before ``slow_fn`` could possibly
+            # complete; the worker is still parked on ``blocker``.
+            assert elapsed < 0.5
+            assert not finished.is_set()
+
+            # Release the worker and let Textual's event loop process the
+            # ``call_from_thread`` callbacks the worker schedules.
+            blocker.set()
+            for _ in range(50):
+                await pilot.pause()
+                if finished.is_set():
+                    break
+            assert finished.is_set()

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 
 from dotenv import load_dotenv
 from textual.app import App, ComposeResult
@@ -129,6 +129,56 @@ class WorkflowTUI(App[None]):
         # boundary for caller convenience and trust the documented values.
         self.notify(message, severity=severity, timeout=4)  # pyright: ignore[reportArgumentType]
 
+    # ------------------------------------------------------------------
+    # Async action plumbing
+    # ------------------------------------------------------------------
+    #
+    # Service calls (start / approve / reject / retry / ...) are blocking:
+    # in local mode they drive the LangGraph workflow end-to-end (LLM calls
+    # included); in remote mode they fire-and-forget then follow the SSE
+    # event stream synchronously. Running them on Textual's main loop would
+    # freeze the UI for the duration of the run, so every action that hits
+    # the service goes through ``_run_action_async`` which dispatches to a
+    # worker thread and posts the result + refresh back on the main loop.
+
+    def _run_action_async(
+        self,
+        label: str,
+        fn: Callable[[], str],
+        *,
+        refresh_after: bool = True,
+    ) -> None:
+        """Run a blocking action in a Textual worker thread.
+
+        ``label`` is shown in an immediate "..." notification so the user
+        knows the action was accepted. ``fn`` runs off-thread; its return
+        value is surfaced as an info notification, ``ActionError`` as an
+        error notification. The workflow list is refreshed on completion
+        unless ``refresh_after`` is False.
+        """
+        self._notify(f"{label}\u2026", "information")
+
+        def worker() -> None:
+            try:
+                msg = fn()
+            except ActionError as exc:
+                self.call_from_thread(self._notify, str(exc), "error")
+            except Exception as exc:  # defensive: never let a worker crash the app
+                self.call_from_thread(self._notify, f"{label} failed: {exc}", "error")
+            else:
+                self.call_from_thread(self._notify, msg, "information")
+            finally:
+                if refresh_after:
+                    self.call_from_thread(self._refresh_workflows)
+
+        self.run_worker(
+            worker,
+            thread=True,
+            group="actions",
+            exit_on_error=False,
+            description=label,
+        )
+
     def action_refresh(self) -> None:
         self._refresh_workflows()
 
@@ -142,12 +192,10 @@ class WorkflowTUI(App[None]):
                 self._notify("Ticket key is required.", "warning")
                 return
 
-            try:
-                msg = run_workflow(self._service, ticket_key, dry_run=False)
-                self._notify(msg, "information")
-            except ActionError as e:
-                self._notify(str(e), "error")
-            self._refresh_workflows()
+            self._run_action_async(
+                f"Starting workflow for {ticket_key}",
+                lambda: run_workflow(self._service, ticket_key, dry_run=False),
+            )
 
         self.push_screen(
             InputModal("Enter ticket key to start workflow:", placeholder="AOS-999"),
@@ -159,12 +207,10 @@ class WorkflowTUI(App[None]):
         if wf is None:
             self._notify("No workflow selected.", "warning")
             return
-        try:
-            msg = approve_workflow(self._service, wf.ticket_key, wf.id)
-            self._notify(msg, "information")
-        except ActionError as e:
-            self._notify(str(e), "error")
-        self._refresh_workflows()
+        self._run_action_async(
+            f"Approving {wf.ticket_key}",
+            lambda: approve_workflow(self._service, wf.ticket_key, wf.id),
+        )
 
     def action_reject(self) -> None:
         wf = self._get_selected()
@@ -175,12 +221,10 @@ class WorkflowTUI(App[None]):
         def on_reason(reason: str | None) -> None:
             if reason is None:
                 return
-            try:
-                msg = reject_workflow(self._service, wf.ticket_key, wf.id, reason)
-                self._notify(msg, "information")
-            except ActionError as e:
-                self._notify(str(e), "error")
-            self._refresh_workflows()
+            self._run_action_async(
+                f"Rejecting {wf.ticket_key}",
+                lambda: reject_workflow(self._service, wf.ticket_key, wf.id, reason),
+            )
 
         self.push_screen(
             InputModal("Enter rejection reason:", placeholder="Reason..."),
@@ -192,24 +236,20 @@ class WorkflowTUI(App[None]):
         if wf is None:
             self._notify("No workflow selected.", "warning")
             return
-        try:
-            msg = clarify_workflow(self._service, wf.ticket_key, wf.id)
-            self._notify(msg, "information")
-        except ActionError as e:
-            self._notify(str(e), "error")
-        self._refresh_workflows()
+        self._run_action_async(
+            f"Clarifying {wf.ticket_key}",
+            lambda: clarify_workflow(self._service, wf.ticket_key, wf.id),
+        )
 
     def action_retry(self) -> None:
         wf = self._get_selected()
         if wf is None:
             self._notify("No workflow selected.", "warning")
             return
-        try:
-            msg = retry_workflow(self._service, wf.ticket_key, wf.id)
-            self._notify(msg, "information")
-        except ActionError as e:
-            self._notify(str(e), "error")
-        self._refresh_workflows()
+        self._run_action_async(
+            f"Retrying {wf.ticket_key}",
+            lambda: retry_workflow(self._service, wf.ticket_key, wf.id),
+        )
 
     def action_cancel(self) -> None:
         wf = self._get_selected()
@@ -220,12 +260,10 @@ class WorkflowTUI(App[None]):
         def on_reason(reason: str | None) -> None:
             if reason is None:
                 return
-            try:
-                msg = cancel_workflow(self._service, wf.ticket_key, wf.id, reason)
-                self._notify(msg, "information")
-            except ActionError as e:
-                self._notify(str(e), "error")
-            self._refresh_workflows()
+            self._run_action_async(
+                f"Cancelling {wf.ticket_key}",
+                lambda: cancel_workflow(self._service, wf.ticket_key, wf.id, reason),
+            )
 
         self.push_screen(
             InputModal("Enter cancellation reason (optional):", placeholder="Reason..."),
@@ -237,24 +275,20 @@ class WorkflowTUI(App[None]):
         if wf is None:
             self._notify("No workflow selected.", "warning")
             return
-        try:
-            msg = approve_pr(self._service, wf.ticket_key, wf.id)
-            self._notify(msg, "information")
-        except ActionError as e:
-            self._notify(str(e), "error")
-        self._refresh_workflows()
+        self._run_action_async(
+            f"Approving PR for {wf.ticket_key}",
+            lambda: approve_pr(self._service, wf.ticket_key, wf.id),
+        )
 
     def action_comment_pr(self) -> None:
         wf = self._get_selected()
         if wf is None:
             self._notify("No workflow selected.", "warning")
             return
-        try:
-            msg = comment_pr(self._service, wf.ticket_key, wf.id)
-            self._notify(msg, "information")
-        except ActionError as e:
-            self._notify(str(e), "error")
-        self._refresh_workflows()
+        self._run_action_async(
+            f"Commenting on PR for {wf.ticket_key}",
+            lambda: comment_pr(self._service, wf.ticket_key, wf.id),
+        )
 
     def action_reject_pr(self) -> None:
         wf = self._get_selected()
@@ -265,12 +299,10 @@ class WorkflowTUI(App[None]):
         def on_reason(reason: str | None) -> None:
             if reason is None:
                 return
-            try:
-                msg = reject_pr(self._service, wf.ticket_key, wf.id, reason)
-                self._notify(msg, "information")
-            except ActionError as e:
-                self._notify(str(e), "error")
-            self._refresh_workflows()
+            self._run_action_async(
+                f"Rejecting PR for {wf.ticket_key}",
+                lambda: reject_pr(self._service, wf.ticket_key, wf.id, reason),
+            )
 
         self.push_screen(
             InputModal("Enter PR rejection reason:", placeholder="Reason..."),
@@ -282,22 +314,20 @@ class WorkflowTUI(App[None]):
         if wf is None:
             self._notify("No workflow selected.", "warning")
             return
-        try:
-            msg = show_logs(self._service, wf.ticket_key, wf.id)
-            self._notify(msg, "information")
-        except ActionError as e:
-            self._notify(str(e), "error")
+        self._run_action_async(
+            f"Fetching logs for {wf.ticket_key}",
+            lambda: show_logs(self._service, wf.ticket_key, wf.id),
+            refresh_after=False,
+        )
 
     def action_clear_db(self) -> None:
         def on_confirm(confirmed: bool) -> None:
             if not confirmed:
                 return
-            try:
-                msg = clear_database(self._service)
-                self._notify(msg, "information")
-            except ActionError as e:
-                self._notify(str(e), "error")
-            self._refresh_workflows()
+            self._run_action_async(
+                "Clearing database",
+                lambda: clear_database(self._service),
+            )
 
         self.push_screen(  # pyright: ignore[reportCallIssue]
             ConfirmModal("Are you sure you want to clear ALL workflows and checkpoints?"),
