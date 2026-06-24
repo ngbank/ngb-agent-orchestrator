@@ -52,6 +52,7 @@ Both commands launch the same Textual application.
 | `p` | Comment on the pending PR for the selected workflow (opens editor) |
 | `l` | Show logs for the selected workflow |
 | `d` | Clear the entire database (confirmation dialog) |
+| `space` | Pause / resume auto-scroll on the live log tail |
 
 All actions delegate to the same handler functions used by the CLI, ensuring zero duplication of orchestration logic.
 
@@ -70,6 +71,35 @@ Set it to `0` to disable live refresh:
 ```bash
 DISPATCHER_TUI_POLL=0 dispatcher --tui
 ```
+
+---
+
+## Live Log Tailing
+
+When the selected workflow is `in_progress`, the detail pane shows a live tail
+of captured stage logs (Goose `plan` and `execute` output) instead of the
+static snapshot view. Lines are appended as they arrive and the view
+auto-scrolls to the tail by default.
+
+- **Trigger** — selecting any workflow whose status is `IN_PROGRESS`. Selecting
+  a workflow in any other status (queued, paused for approval, completed,
+  failed, cancelled) renders the regular static snapshot.
+- **Stream end** — if the workflow transitions to a terminal state while the
+  tail is open, the pane reverts to the snapshot view on the next refresh.
+- **Pause** — press `space` to freeze auto-scroll while you inspect output;
+  press `space` again to resume. New bytes still arrive in the background, so
+  no log content is lost while paused.
+- **Reconnect** — each poll passes the byte offset of the last received chunk
+  via `WorkflowService.read_logs(after_offset=...)`, so transient transport
+  errors (remote mode) recover without duplicating or losing lines.
+- **Poll interval** — controlled by `DISPATCHER_TUI_TAIL_POLL` (seconds,
+  default `1`). Set to `0` to disable the periodic tail; the initial backlog
+  is still rendered when the workflow is selected.
+
+In local dispatcher mode the tail reads bytes directly from the workflow's log
+files. In remote mode it consumes the SSE log endpoint introduced in Stage B
+(`GET /workflows/{id}/logs`) via `HttpWorkflowService.read_logs`, so the same
+UX works against an orchestrator server without TUI-side changes.
 
 ---
 

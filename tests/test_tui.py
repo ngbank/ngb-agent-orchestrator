@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Dict, Iterable, List, Optional
 
 import pytest
 
 from dispatcher.tui.app import WorkflowTUI
-from dispatcher.tui.widgets import DetailPane, WorkflowList
+from dispatcher.tui.widgets import DetailPane, LogTail, WorkflowList
 from orchestrator.workflow_service import (
     WorkflowAuditEntry,
     WorkflowDetail,
@@ -29,9 +30,19 @@ class FakeWorkflowService:
         self,
         summaries: Optional[List[WorkflowSummary]] = None,
         details: Optional[Dict[str, WorkflowDetail]] = None,
+        log_scripts: Optional[Dict[str, Dict[str, List[str]]]] = None,
     ) -> None:
         self._summaries = summaries or []
         self._details = details or {}
+        # ``log_scripts[workflow_id][stage]`` is a list of byte-string
+        # snippets the tail loop will receive across successive
+        # ``read_logs`` calls.  Each call pops one snippet per stage so
+        # tests can simulate a streamed sequence.
+        self._log_scripts: Dict[str, Dict[str, List[bytes]]] = {
+            wf_id: {st: [s.encode("utf-8") for s in chunks] for st, chunks in stages.items()}
+            for wf_id, stages in (log_scripts or {}).items()
+        }
+        self._log_cursor: Dict[str, Dict[str, int]] = {}
 
     # --- read operations -------------------------------------------------
 
@@ -63,8 +74,46 @@ class FakeWorkflowService:
     def get_audit_log(self, workflow_id: str) -> List[WorkflowAuditEntry]:
         return []
 
-    def read_logs(self, workflow_id: str, stage: Optional[str] = None) -> List[WorkflowLogChunk]:
-        return []
+    def read_logs(
+        self,
+        workflow_id: str,
+        stage: Optional[str] = None,
+        after_offset: int = 0,
+    ) -> List[WorkflowLogChunk]:
+        scripts = self._log_scripts.get(workflow_id)
+        if not scripts:
+            return []
+        stages = [stage] if stage else list(scripts.keys())
+        chunks: List[WorkflowLogChunk] = []
+        cursor_map = self._log_cursor.setdefault(workflow_id, {})
+        for st in stages:
+            queue = scripts.get(st)
+            if not queue:
+                continue
+            idx = cursor_map.get(st, 0)
+            if idx >= len(queue):
+                continue
+            payload = queue[idx]
+            cursor_map[st] = idx + 1
+            chunks.append(
+                WorkflowLogChunk(
+                    workflow_id=workflow_id,
+                    stage=st,
+                    path=f"<fake:{st}>",
+                    content=payload.decode("utf-8"),
+                    offset=after_offset,
+                )
+            )
+        return chunks
+
+    def set_status(self, workflow_id: str, status: WorkflowStatus) -> None:
+        """Test helper: update both summary and detail status in-place."""
+        self._summaries = [
+            replace(s, status=status) if s.id == workflow_id else s for s in self._summaries
+        ]
+        detail = self._details.get(workflow_id)
+        if detail is not None:
+            self._details[workflow_id] = replace(detail, status=status)
 
     def stream_events(self, workflow_id: str, after_seq: int = 0) -> Iterable[WorkflowEvent]:
         return iter(())
@@ -296,3 +345,120 @@ class TestWorkflowTUI:
             assert detail._workflow is not None
             assert detail._workflow.id == sample_summaries[0].id
             assert detail._workflow.ticket_key == sample_summaries[0].ticket_key
+
+
+# ---------------------------------------------------------------------------
+# Stage C — live log tailing for in-progress workflows
+# ---------------------------------------------------------------------------
+
+
+def _running_setup(
+    plan_chunks: Optional[List[str]] = None,
+    execute_chunks: Optional[List[str]] = None,
+) -> tuple[FakeWorkflowService, str]:
+    """Build a FakeWorkflowService with a single IN_PROGRESS workflow and a
+    scripted log stream for tailing tests."""
+    wf_id = "wf-running"
+    summary = _make_summary(wf_id, "AOS-145", WorkflowStatus.IN_PROGRESS)
+    detail = _make_detail(wf_id, "AOS-145", WorkflowStatus.IN_PROGRESS)
+    scripts: Dict[str, List[str]] = {}
+    if plan_chunks:
+        scripts["plan"] = plan_chunks
+    if execute_chunks:
+        scripts["execute"] = execute_chunks
+    service = FakeWorkflowService(
+        summaries=[summary],
+        details={wf_id: detail},
+        log_scripts={wf_id: scripts} if scripts else None,
+    )
+    return service, wf_id
+
+
+@pytest.mark.asyncio
+class TestLiveLogTailing:
+    async def test_tail_appears_for_in_progress_workflow(self):
+        service, wf_id = _running_setup(
+            plan_chunks=["plan line 1\n", "plan line 2\n"],
+            execute_chunks=["exec line 1\n"],
+        )
+        app = WorkflowTUI(service)
+        async with app.run_test():
+            detail = app.query_one(DetailPane)
+            # Tail widget is visible because the selected workflow is IN_PROGRESS.
+            assert detail.is_tail_visible() is True
+            # First poll happens synchronously inside _start_tail; trigger one
+            # more cycle so the second scripted plan chunk is consumed.
+            app._poll_tail()
+            tail_log = detail.query_one("#tail_log")
+            # ``Log.lines`` returns the rendered lines; expect both plan chunks
+            # plus the single execute chunk plus the stage header lines.
+            rendered = "\n".join(str(line) for line in tail_log.lines)
+            assert "plan line 1" in rendered
+            assert "plan line 2" in rendered
+            assert "exec line 1" in rendered
+            assert "[plan]" in rendered
+            assert "[execute]" in rendered
+
+    async def test_tail_advances_offset_so_lines_are_not_repeated(self):
+        service, wf_id = _running_setup(plan_chunks=["alpha\n", "beta\n", "gamma\n"])
+        app = WorkflowTUI(service)
+        async with app.run_test():
+            # Three poll cycles consume one scripted chunk each; fourth poll
+            # finds nothing and must not duplicate previously-streamed bytes.
+            app._poll_tail()
+            app._poll_tail()
+            app._poll_tail()
+            detail = app.query_one(DetailPane)
+            tail_log = detail.query_one("#tail_log")
+            rendered = "\n".join(str(line) for line in tail_log.lines)
+            assert rendered.count("alpha") == 1
+            assert rendered.count("beta") == 1
+            assert rendered.count("gamma") == 1
+            # Offsets advanced past every emitted byte.
+            assert app._tail_offsets["plan"] == sum(
+                len(s.encode("utf-8")) for s in ["alpha\n", "beta\n", "gamma\n"]
+            )
+
+    async def test_tail_hides_when_workflow_finishes_mid_view(self):
+        service, wf_id = _running_setup(plan_chunks=["running...\n"])
+        app = WorkflowTUI(service)
+        async with app.run_test():
+            detail = app.query_one(DetailPane)
+            assert detail.is_tail_visible() is True
+            assert app._tail_workflow_id == wf_id
+
+            # Workflow transitions to COMPLETED while the TUI is open.
+            service.set_status(wf_id, WorkflowStatus.COMPLETED)
+            app._refresh_workflows()
+
+            assert detail.is_tail_visible() is False
+            assert app._tail_workflow_id is None
+            assert app._tail_timer is None
+
+    async def test_pause_binding_toggles_auto_scroll(self):
+        service, _ = _running_setup(plan_chunks=["x\n"])
+        app = WorkflowTUI(service)
+        async with app.run_test() as pilot:
+            detail = app.query_one(DetailPane)
+            tail = detail.query_one(LogTail)
+            tail_log = tail.query_one("#tail_log")
+            assert tail_log.auto_scroll is True
+
+            await pilot.press("space")
+            assert tail.is_paused is True
+            assert tail_log.auto_scroll is False
+
+            await pilot.press("space")
+            assert tail.is_paused is False
+            assert tail_log.auto_scroll is True
+
+    async def test_tail_does_not_start_for_non_running_workflow(
+        self, fake_service: WorkflowService
+    ):
+        # ``fake_service`` only has PENDING and COMPLETED workflows.
+        app = WorkflowTUI(fake_service)
+        async with app.run_test():
+            detail = app.query_one(DetailPane)
+            assert detail.is_tail_visible() is False
+            assert app._tail_workflow_id is None
+            assert app._tail_timer is None

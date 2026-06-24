@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Optional
+from typing import Dict, Optional
 
 from dotenv import load_dotenv
 from textual.app import App, ComposeResult
@@ -34,6 +34,11 @@ from orchestrator.workflow_service import (
     WorkflowSummary,
     build_workflow_service_from_env,
 )
+from state.workflow_status import WorkflowStatus
+
+# Stage names tailed in the live log view.  Matches the stages
+# ``WorkflowService.read_logs`` knows about (plan + execute).
+_TAIL_STAGES = ("plan", "execute")
 
 
 class WorkflowTUI(App[None]):
@@ -62,6 +67,7 @@ class WorkflowTUI(App[None]):
         ("o", "approve_pr", "Approve PR"),
         ("l", "logs", "Logs"),
         ("d", "clear_db", "Clear DB"),
+        ("space", "toggle_tail_pause", "Pause Tail"),
     ]
 
     def __init__(self, service: WorkflowService) -> None:
@@ -69,6 +75,15 @@ class WorkflowTUI(App[None]):
         self._service = service
         self._refresh_timer: Optional[Timer] = None
         self._poll_interval = float(os.environ.get("DISPATCHER_TUI_POLL", "2"))
+        # Live log tailing state (Stage C).  ``_tail_workflow_id`` is the
+        # workflow currently being tailed; ``_tail_offsets`` tracks the
+        # next byte to fetch per stage so reconnect-after-poll only
+        # delivers new bytes.
+        self._tail_timer: Optional[Timer] = None
+        self._tail_interval = float(os.environ.get("DISPATCHER_TUI_TAIL_POLL", "1"))
+        self._tail_workflow_id: Optional[str] = None
+        self._tail_offsets: Dict[str, int] = {}
+        self._tail_paused: bool = False
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -94,7 +109,9 @@ class WorkflowTUI(App[None]):
         workflow_list.update_workflows(workflows)
         detail = self.query_one(DetailPane)
         selected = workflow_list.get_selected_workflow()
-        detail.update_workflow(self._fetch_detail(selected))
+        detail_dto = self._fetch_detail(selected)
+        detail.update_workflow(detail_dto)
+        self._sync_tail(detail_dto)
 
     def _fetch_detail(self, summary: Optional[WorkflowSummary]) -> Optional[WorkflowDetail]:
         if summary is None:
@@ -291,7 +308,91 @@ class WorkflowTUI(App[None]):
         workflow_list = self.query_one(WorkflowList)
         selected = workflow_list.get_selected_workflow()
         detail = self.query_one(DetailPane)
-        detail.update_workflow(self._fetch_detail(selected))
+        detail_dto = self._fetch_detail(selected)
+        detail.update_workflow(detail_dto)
+        self._sync_tail(detail_dto)
+
+    # ------------------------------------------------------------------
+    # Live log tailing (Stage C)
+    # ------------------------------------------------------------------
+
+    def _sync_tail(self, detail: Optional[WorkflowDetail]) -> None:
+        """Start, stop, or keep tailing based on the currently-shown workflow.
+
+        Called after every refresh and after every row-highlight change.
+        Selecting a different running workflow restarts the tail from offset
+        zero; transitioning to a non-running status stops the tail and the
+        DetailPane reverts to the snapshot view automatically.
+        """
+        if detail is None or detail.status != WorkflowStatus.IN_PROGRESS:
+            self._stop_tail()
+            return
+        if self._tail_workflow_id != detail.id:
+            self._start_tail(detail.id)
+
+    def _start_tail(self, workflow_id: str) -> None:
+        self._stop_tail()
+        self._tail_workflow_id = workflow_id
+        self._tail_offsets = {stage: 0 for stage in _TAIL_STAGES}
+        self._tail_paused = False
+        try:
+            self.query_one(DetailPane).clear_log_tail()
+        except Exception:
+            pass
+        # Immediate first poll so the user sees backlog right away; then
+        # schedule periodic polls until the workflow stops running.
+        self._poll_tail()
+        if self._tail_interval > 0:
+            self._tail_timer = self.set_interval(self._tail_interval, self._poll_tail)
+
+    def _stop_tail(self) -> None:
+        if self._tail_timer is not None:
+            try:
+                self._tail_timer.stop()
+            except Exception:
+                pass
+            self._tail_timer = None
+        self._tail_workflow_id = None
+        self._tail_offsets = {}
+        self._tail_paused = False
+
+    def _poll_tail(self) -> None:
+        workflow_id = self._tail_workflow_id
+        if workflow_id is None:
+            return
+        try:
+            detail = self.query_one(DetailPane)
+        except Exception:
+            return
+        for stage in _TAIL_STAGES:
+            offset = self._tail_offsets.get(stage, 0)
+            try:
+                chunks = self._service.read_logs(
+                    workflow_id,
+                    stage=stage,
+                    after_offset=offset,
+                )
+            except Exception:
+                continue
+            for chunk in chunks:
+                if chunk.stage != stage or not chunk.content:
+                    continue
+                detail.append_log_chunk(chunk.stage, chunk.content)
+                self._tail_offsets[stage] = chunk.offset + len(chunk.content.encode("utf-8"))
+
+    def action_toggle_tail_pause(self) -> None:
+        try:
+            detail = self.query_one(DetailPane)
+        except Exception:
+            return
+        if not detail.is_tail_visible():
+            return
+        self._tail_paused = not self._tail_paused
+        detail.set_tail_paused(self._tail_paused)
+        self._notify(
+            "Tail auto-scroll paused." if self._tail_paused else "Tail auto-scroll resumed.",
+            "information",
+        )
 
 
 def run_tui() -> None:

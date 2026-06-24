@@ -68,6 +68,13 @@ without affecting the server-side workflow. `--detach` is rejected (exit
 code `2`) when used against a `local` service since local invocations are
 already synchronous and have no SSE stream to skip.
 
+The TUI consumes the same surface: selecting an `in_progress` workflow
+shows a live log tail in the detail pane, backed by
+`WorkflowService.read_logs(after_offset=...)` — which maps to the
+`GET /workflows/{id}/logs` SSE endpoint in remote mode and to direct log
+file reads in local mode. See [TUI Live Log Tailing](tui.md#live-log-tailing)
+for the keybindings and tuning knobs.
+
 ---
 
 ## Approving or Rejecting
