@@ -59,10 +59,13 @@ See [docs/architecture.md](docs/architecture.md) for a full sequence diagram and
 
 ### Prerequisites
 
-- Python 3.12+
+- Python 3.13+ (installed automatically by `setup-env.sh` via `pyenv`)
+- [`pyenv`](https://github.com/pyenv/pyenv#installation) — used to install and pin the Python version
+- [`direnv`](https://direnv.net/docs/installation.html) — auto-loads `.env` when entering the repo
+- Azure CLI ([`az`](https://learn.microsoft.com/cli/azure/install-azure-cli)) authenticated with `az login` (or equivalent workload identity on server)
+- `docker` or `podman` (optional — only needed to build the orchestrator-server container image)
 - [Goose CLI](https://github.com/block/goose) (`~/.local/bin/goose`)
-- `acli` (Atlassian CLI) configured with JIRA credentials
-- Azure CLI (`az`) authenticated with `az login` (or equivalent workload identity on server)
+- [`acli`](https://developer.atlassian.com/cloud/acli/guides/install/) (Atlassian CLI) configured with JIRA credentials
 - A JIRA account on `mirandags.atlassian.net`
 - Azure Key Vault containing runtime secrets for JIRA, GitHub App, and provider API keys
 
@@ -73,36 +76,22 @@ See [docs/architecture.md](docs/architecture.md) for a full sequence diagram and
 git clone <repository-url>
 cd ngb-agent-orchestrator
 
-# 2. Create and activate virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# 3. Install dependencies and register the CLI
-pip install -r requirements.txt
-pip install -e .                      # registers the `dispatcher` CLI command
-pip install -r requirements-dev.txt   # for development (pre-commit, pytest, etc.)
-
-# 4. Authenticate Azure CLI (required before setup-env --env)
+# 2. Authenticate Azure CLI (required by setup-env.sh --env)
 az login
 
-# 5. Set up environment variables
-cp .env.example .env
-# Edit .env minimally (for example AZURE_KEYVAULT_NAME if needed)
+# 3. Run the setup script (installs Python via pyenv, creates .venv,
+#    installs deps + pre-commit hooks, generates .env from Key Vault,
+#    and builds the container image)
+./setup-env.sh
 
-# 5.1 Fetch secrets from Azure Key Vault and write them into .env
-./setup-env.sh --env
-
-# 6. (Recommended) Auto-load .env with direnv
-brew install direnv
-echo 'eval "$(direnv hook zsh)"' >> ~/.zshrc  # or ~/.bashrc
+# 4. Allow direnv to auto-load .env in this directory
 direnv allow .
 
-# 7. Install pre-commit hooks
-pre-commit install
-
-# 8. Verify setup
+# 5. Verify setup
 dispatcher --help
 ```
+
+`setup-env.sh` accepts stage flags (`--python`, `--deps`, `--env`, `--docker`, `--clean`) so you can re-run individual stages — for example `./setup-env.sh --deps` to reinstall dependencies, or `./setup-env.sh --clean` to wipe `.venv/` and `.env` and start over. Run `./setup-env.sh --help` for the full list.
 
 ### Registering the MCP Server (Agent Harness)
 
