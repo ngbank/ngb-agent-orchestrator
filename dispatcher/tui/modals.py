@@ -52,15 +52,17 @@ class InputModal(ModalScreen[str | None]):
                 yield Button("Cancel", variant="default", id="cancel")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        # The buttons \u2014 not the contents of the text field \u2014 decide
+        # whether the action runs. ``Submit`` always returns the raw value
+        # (caller validates if it needs to); ``Cancel`` aborts with ``None``.
         if event.button.id == "submit":
-            value = self.query_one("#input_field", Input).value
-            self.dismiss(value if value.strip() else None)
+            self.dismiss(self.query_one("#input_field", Input).value)
         else:
             self.dismiss(None)
 
     def on_input_submitted(self) -> None:
-        value = self.query_one("#input_field", Input).value
-        self.dismiss(value if value.strip() else None)
+        # Pressing Enter inside the input is equivalent to clicking Submit.
+        self.dismiss(self.query_one("#input_field", Input).value)
 
 
 class ConfirmModal(ModalScreen[bool]):

@@ -599,3 +599,84 @@ class TestAsyncTailPolling:
             app._schedule_tail_poll()
             await pilot.pause()
             assert app._tail_in_flight is True
+
+
+# ---------------------------------------------------------------------------
+# Modal semantics \u2014 the buttons (Submit / Cancel) decide whether the action
+# runs, not the contents of the text field. A previous bug coerced an empty
+# input to ``None`` on Submit, which made ``action_cancel`` / ``action_reject``
+# silently drop the request when the user pressed Submit/Enter without typing.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestInputModal:
+    async def _push_and_dismiss(
+        self,
+        *,
+        action: str,
+        typed: str,
+    ) -> object:
+        """Push an ``InputModal`` and trigger either Submit or Cancel.
+
+        ``action`` is ``"submit"``, ``"enter"`` (pressing Enter inside the
+        input), or ``"cancel"``. Returns whatever the modal dismissed with.
+        """
+        from textual.app import App
+        from textual.widgets import Input
+
+        from dispatcher.tui.modals import InputModal
+
+        captured: Dict[str, object] = {}
+
+        class _Host(App):
+            def on_mount(self) -> None:
+                def _done(value: object) -> None:
+                    captured["value"] = value
+
+                self.push_screen(InputModal("title", placeholder="..."), _done)
+
+        host = _Host()
+        async with host.run_test() as pilot:
+            await pilot.pause()
+            # ``host.screen`` is the modal that ``push_screen`` activated;
+            # query through it so we don't accidentally hit the default
+            # screen before the modal has mounted.
+            input_widget = host.screen.query_one("#input_field", Input)
+            if typed:
+                input_widget.value = typed
+            await pilot.pause()
+            if action == "submit":
+                await pilot.click("#submit")
+            elif action == "enter":
+                input_widget.focus()
+                await pilot.press("enter")
+            elif action == "cancel":
+                await pilot.click("#cancel")
+            else:  # pragma: no cover - defensive
+                raise ValueError(action)
+            # Give the dismiss callback a chance to run.
+            for _ in range(20):
+                await pilot.pause()
+                if "value" in captured:
+                    break
+        return captured.get("value", "<never-dismissed>")
+
+    async def test_submit_with_empty_input_returns_empty_string(self):
+        """Submit must dispatch \u2014 the field's emptiness is irrelevant. This
+        is the bug the user hit: pressing Submit on the cancel-reason modal
+        without typing a reason previously dropped the cancel silently."""
+        value = await self._push_and_dismiss(action="submit", typed="")
+        assert value == ""
+
+    async def test_enter_with_empty_input_returns_empty_string(self):
+        value = await self._push_and_dismiss(action="enter", typed="")
+        assert value == ""
+
+    async def test_submit_with_text_returns_text(self):
+        value = await self._push_and_dismiss(action="submit", typed="because reasons")
+        assert value == "because reasons"
+
+    async def test_cancel_button_returns_none(self):
+        value = await self._push_and_dismiss(action="cancel", typed="ignored")
+        assert value is None
