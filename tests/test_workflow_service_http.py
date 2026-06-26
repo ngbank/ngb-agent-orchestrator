@@ -1109,10 +1109,7 @@ def test_stream_events_gives_up_after_max_reconnect_attempts(monkeypatch) -> Non
 def temp_db(monkeypatch) -> Iterator[str]:
     with tempfile.TemporaryDirectory() as tmp:
         db_path = os.path.join(tmp, "test.db")
-        logs_dir = os.path.join(tmp, "logs")
-        os.makedirs(logs_dir, exist_ok=True)
         monkeypatch.setenv("DB_PATH", db_path)
-        monkeypatch.setenv("ORCHESTRATOR_LOGS_DIR", logs_dir)
         state_store.run_migrations()
         yield db_path
 
