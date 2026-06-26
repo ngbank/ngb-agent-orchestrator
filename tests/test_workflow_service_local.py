@@ -38,15 +38,16 @@ from state.workflow_status import WorkflowStatus
 
 @pytest.fixture
 def temp_db(monkeypatch):
-    """Create a fresh SQLite DB per test, plus a temp logs dir."""
+    """Create a fresh SQLite DB per test.
+
+    The conftest autouse fixtures (``_isolate_xdg_state_home`` +
+    ``_isolate_db_path``) already redirect XDG state, ``LOGS_DIR``, and
+    ``DB_PATH`` to a pytest tmp tree; this fixture overrides ``DB_PATH``
+    once more to satisfy tests that share a DB across a class scope.
+    """
     with tempfile.TemporaryDirectory() as tmp:
         db_path = os.path.join(tmp, "test.db")
-        logs_dir = os.path.join(tmp, "logs")
-        os.makedirs(logs_dir, exist_ok=True)
-
         monkeypatch.setenv("DB_PATH", db_path)
-        monkeypatch.setenv("ORCHESTRATOR_LOGS_DIR", logs_dir)
-
         state_store.run_migrations()
         yield db_path
 
