@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Dict, Iterable, List, Optional
+from unittest.mock import patch
 
 import pytest
 
@@ -469,3 +470,82 @@ class TestInputModalSubmissionContract:
             await pilot.pause()
 
         assert pending_approval_service.reject_plan_calls == [("wf-pa", "nope")]
+
+
+class TestTuiActionsAreNonBlocking:
+    """TUI action wrappers must pass ``detach=True`` to the underlying CLI
+    handlers so that in remote mode the SSE follower is skipped and the
+    Textual event loop is never blocked waiting for a graph run to finish
+    (which can take minutes for plan / execute stages).
+    """
+
+    @staticmethod
+    def _service():
+        # Any service that satisfies the WorkflowService Protocol works for
+        # these tests because we mock the handler before it touches the
+        # service.
+        return FakeWorkflowService()
+
+    def test_run_workflow_passes_detach_true(self):
+        from dispatcher.tui import actions as tui_actions
+
+        with patch.object(tui_actions, "_handle_run") as handle:
+            tui_actions.run_workflow(self._service(), "AOS-1")
+        handle.assert_called_once()
+        assert handle.call_args.kwargs.get("detach") is True
+
+    def test_approve_workflow_passes_detach_true(self):
+        from dispatcher.tui import actions as tui_actions
+
+        with patch.object(tui_actions, "_handle_approve") as handle:
+            tui_actions.approve_workflow(self._service(), "AOS-1", "wf-1")
+        handle.assert_called_once()
+        assert handle.call_args.kwargs.get("detach") is True
+
+    def test_reject_workflow_passes_detach_true(self):
+        from dispatcher.tui import actions as tui_actions
+
+        with patch.object(tui_actions, "_handle_reject") as handle:
+            tui_actions.reject_workflow(self._service(), "AOS-1", "wf-1", "nope")
+        handle.assert_called_once()
+        assert handle.call_args.kwargs.get("detach") is True
+
+    def test_clarify_workflow_passes_detach_true(self):
+        from dispatcher.tui import actions as tui_actions
+
+        with patch.object(tui_actions, "_handle_clarify") as handle:
+            tui_actions.clarify_workflow(self._service(), "AOS-1", "wf-1")
+        handle.assert_called_once()
+        assert handle.call_args.kwargs.get("detach") is True
+
+    def test_retry_workflow_passes_detach_true(self):
+        from dispatcher.tui import actions as tui_actions
+
+        with patch.object(tui_actions, "_handle_retry") as handle:
+            tui_actions.retry_workflow(self._service(), "AOS-1", "wf-1")
+        handle.assert_called_once()
+        assert handle.call_args.kwargs.get("detach") is True
+
+    def test_approve_pr_passes_detach_true(self):
+        from dispatcher.tui import actions as tui_actions
+
+        with patch.object(tui_actions, "_handle_approve_pr") as handle:
+            tui_actions.approve_pr(self._service(), "AOS-1", "wf-1")
+        handle.assert_called_once()
+        assert handle.call_args.kwargs.get("detach") is True
+
+    def test_comment_pr_passes_detach_true(self):
+        from dispatcher.tui import actions as tui_actions
+
+        with patch.object(tui_actions, "_handle_comment_pr") as handle:
+            tui_actions.comment_pr(self._service(), "AOS-1", "wf-1")
+        handle.assert_called_once()
+        assert handle.call_args.kwargs.get("detach") is True
+
+    def test_reject_pr_passes_detach_true(self):
+        from dispatcher.tui import actions as tui_actions
+
+        with patch.object(tui_actions, "_handle_reject_pr") as handle:
+            tui_actions.reject_pr(self._service(), "AOS-1", "wf-1", "nope")
+        handle.assert_called_once()
+        assert handle.call_args.kwargs.get("detach") is True

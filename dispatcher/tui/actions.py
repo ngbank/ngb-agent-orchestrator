@@ -30,7 +30,11 @@ def approve_workflow(
 ) -> str:
     """Approve a pending WorkPlan."""
     try:
-        _handle_approve(service, ticket_key or "", workflow_id)
+        # ``detach=True`` keeps the Textual event loop responsive: the HTTP
+        # call still happens, but we do not block waiting for the SSE
+        # follower to drain. The TUI's periodic refresh picks up the new
+        # status.
+        _handle_approve(service, ticket_key or "", workflow_id, detach=True)
         return "Workflow approved."
     except SystemExit as e:
         if e.code != 0:
@@ -48,7 +52,7 @@ def reject_workflow(
 ) -> str:
     """Reject a pending WorkPlan."""
     try:
-        _handle_reject(service, ticket_key or "", reason, workflow_id)
+        _handle_reject(service, ticket_key or "", reason, workflow_id, detach=True)
         return f"Workflow rejected: {reason}"
     except SystemExit as e:
         if e.code != 0:
@@ -63,7 +67,7 @@ def clarify_workflow(
 ) -> str:
     """Answer WorkPlan clarification questions via editor."""
     try:
-        _handle_clarify(service, ticket_key or "", workflow_id)
+        _handle_clarify(service, ticket_key or "", workflow_id, detach=True)
         return "Clarification submitted."
     except SystemExit as e:
         if e.code != 0:
@@ -78,7 +82,7 @@ def retry_workflow(
 ) -> str:
     """Resume a failed workflow."""
     try:
-        _handle_retry(service, ticket_key or "", workflow_id)
+        _handle_retry(service, ticket_key or "", workflow_id, detach=True)
         return "Retry initiated."
     except SystemExit as e:
         if e.code != 0:
@@ -111,7 +115,7 @@ def approve_pr(
 ) -> str:
     """Approve a pending PR."""
     try:
-        _handle_approve_pr(service, ticket_key or "", workflow_id)
+        _handle_approve_pr(service, ticket_key or "", workflow_id, detach=True)
         return "PR approved."
     except SystemExit as e:
         if e.code != 0:
@@ -126,7 +130,7 @@ def comment_pr(
 ) -> str:
     """Comment on a pending PR to trigger re-execution."""
     try:
-        _handle_comment_pr(service, ticket_key or "", workflow_id)
+        _handle_comment_pr(service, ticket_key or "", workflow_id, detach=True)
         return "PR comment submitted."
     except SystemExit as e:
         if e.code != 0:
@@ -144,7 +148,7 @@ def reject_pr(
 ) -> str:
     """Reject a pending PR."""
     try:
-        _handle_reject_pr(service, ticket_key or "", reason, workflow_id)
+        _handle_reject_pr(service, ticket_key or "", reason, workflow_id, detach=True)
         return f"PR rejected: {reason}"
     except SystemExit as e:
         if e.code != 0:
@@ -185,7 +189,7 @@ def clear_database(service: WorkflowService) -> str:
 def run_workflow(service: WorkflowService, ticket_key: str, dry_run: bool = False) -> str:
     """Start a new workflow for a ticket."""
     try:
-        _handle_run(service, ticket_key, dry_run)
+        _handle_run(service, ticket_key, dry_run, detach=True)
         return f"Workflow started for {ticket_key}."
     except SystemExit as e:
         if e.code != 0:
