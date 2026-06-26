@@ -50,6 +50,12 @@ class WorkflowList(Static):
         for wf in workflows:
             status_val = wf.status.value
             emoji, label = STATUS_DISPLAY.get(status_val, ("  ", status_val))
+            # ``STATUS_DISPLAY`` adds a trailing space to some emojis to
+            # compensate for narrow rendering in CLI text output. ``DataTable``
+            # does its own column padding, so that trailing space just
+            # stretches the affected cell by one char and pushes every column
+            # to its right out of alignment for that row only.
+            emoji = emoji.rstrip()
             updated = (wf.updated_at or "")[:19].replace("T", " ")
             table.add_row(
                 wf.ticket_key,
@@ -207,6 +213,9 @@ class DetailPane(Static):
 
         status_val = workflow.status.value
         emoji, label = STATUS_DISPLAY.get(status_val, ("  ", status_val))
+        # See ``WorkflowList.update_workflows`` — strip the CLI-only trailing
+        # space so the title aligns consistently across statuses.
+        emoji = emoji.rstrip()
         title.update(f"{emoji} {workflow.ticket_key} — {label}")
 
         lines: List[str] = [
