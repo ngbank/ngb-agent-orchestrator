@@ -216,98 +216,224 @@ def call_foundry_chat(
 # ------------------------------------------------
 # 5) ReAct loop: think -> maybe tool -> continue
 # ------------------------------------------------
-def run_agent(user_prompt: str, max_steps: int = 6) -> str:
+
+# Runtime policy: the set of tool names the agent is allowed to execute.
+# Anything outside this set is rejected, even if the model asks for it.
+ALLOWED_TOOL_NAMES: set[str] = {"show_alert"}
+
+
+def run_agent(user_prompt: str, max_steps: int = 6, *, verbose: bool = False) -> str:
     """
     Run a ReAct loop with runtime-enforced tool boundaries.
 
-    The system prompt stays intentionally open. The actual constraint is that
-    the runtime only exposes one executable tool and blocks everything else.
-    """
-    api_key = required_env("AZURE_API_KEY")
-    api_base = required_env("AZURE_FOUNDRY_API_BASE")
-    model = resolve_model_name()
+    The loop body intentionally stays short so the control flow is obvious:
+    think -> (optional) run tools -> repeat, or return the final answer.
 
+    When ``verbose`` is True, the full message history sent to the model and
+    the raw assistant message returned are printed each turn.
+    """
+    foundry = resolve_foundry_config()
+    messages = build_initial_messages(user_prompt)
+    print_demo_banner(foundry.model)
+    dump_messages("Initial conversation", messages, verbose=verbose)
+
+    for step in range(1, max_steps + 1):
+        print(f"\n[Step {step}] Calling model...")
+        dump_messages(f"Step {step} request messages", messages, verbose=verbose)
+
+        message = request_next_message(foundry, messages)
+        dump_message(f"Step {step} assistant response", message, verbose=verbose)
+
+        tool_calls = tool_calls_from(message)
+        if tool_calls:
+            record_assistant_turn(messages, message)
+            for tool_call in tool_calls:
+                result = handle_tool_call(tool_call, step=step, verbose=verbose)
+                record_tool_observation(messages, tool_call, result)
+            continue  # let the model react to the tool observations
+
+        return finalize_response(message, step=step)
+
+    return "Stopped after max steps without a final response."
+
+
+# --- setup helpers ---------------------------------------------------------
+
+
+class FoundryConfig:
+    """Bundle of values needed to call the Foundry chat endpoint."""
+
+    __slots__ = ("api_base", "api_key", "model")
+
+    def __init__(self, *, api_base: str, api_key: str, model: str) -> None:
+        self.api_base = api_base
+        self.api_key = api_key
+        self.model = model
+
+
+def resolve_foundry_config() -> FoundryConfig:
+    return FoundryConfig(
+        api_base=required_env("AZURE_FOUNDRY_API_BASE"),
+        api_key=required_env("AZURE_API_KEY"),
+        model=resolve_model_name(),
+    )
+
+
+def build_initial_messages(user_prompt: str) -> list[dict[str, Any]]:
     # Keep the prompt broad on purpose: the demo should show that runtime tool
     # exposure, not prompt wording, determines what actions are possible.
-    system_prompt = "You are a helpful assistant."
-
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": system_prompt},
+    return [
+        {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": user_prompt},
     ]
 
+
+def print_demo_banner(model: str) -> None:
     print("=" * 72)
     print("Constrained ReAct Agent Demo")
     print("Model:", model)
     print("Only tool available: show_alert(message)")
     print("=" * 72)
 
-    for step in range(1, max_steps + 1):
-        print(f"\n[Step {step}] Calling model...")
-        response = call_foundry_chat(
-            api_base=api_base,
-            api_key=api_key,
-            model=model,
-            messages=messages,
-        )
 
-        choice = response["choices"][0]
-        message = choice["message"]
+# --- model I/O -------------------------------------------------------------
 
-        assistant_entry: dict[str, Any] = {"role": "assistant"}
 
-        if "content" in message and message["content"] is not None:
-            assistant_entry["content"] = message["content"]
+def request_next_message(foundry: FoundryConfig, messages: list[dict[str, Any]]) -> dict[str, Any]:
+    """Call the model once and return the assistant message dict."""
+    response = call_foundry_chat(
+        api_base=foundry.api_base,
+        api_key=foundry.api_key,
+        model=foundry.model,
+        messages=messages,
+    )
+    return response["choices"][0]["message"]
 
-        if "tool_calls" in message and message["tool_calls"]:
-            assistant_entry["tool_calls"] = message["tool_calls"]
-            messages.append(assistant_entry)
 
-            for tool_call in message["tool_calls"]:
-                tool_name = tool_call["function"]["name"]
-                tool_args_raw = tool_call["function"].get("arguments", "{}")
+def tool_calls_from(message: dict[str, Any]) -> list[dict[str, Any]]:
+    return message.get("tool_calls") or []
 
-                print(f"[Step {step}] Model requested tool: {tool_name}")
-                print(f"[Step {step}] Tool args: {tool_args_raw}")
 
-                # Runtime enforcement: block anything that is not show_alert.
-                if tool_name != "show_alert":
-                    tool_result = "Tool blocked by runtime policy: only show_alert is available."
-                else:
-                    try:
-                        tool_args = json.loads(tool_args_raw)
-                        alert_message = str(tool_args.get("message", "")).strip()
-                        if not alert_message:
-                            tool_result = "show_alert not executed: missing non-empty 'message'."
-                        else:
-                            tool_result = show_alert(alert_message)
-                    except json.JSONDecodeError:
-                        tool_result = "show_alert not executed: invalid JSON in tool arguments."
+def record_assistant_turn(messages: list[dict[str, Any]], message: dict[str, Any]) -> None:
+    """Append the assistant message (content and/or tool_calls) to history."""
+    entry: dict[str, Any] = {"role": "assistant"}
+    if message.get("content") is not None:
+        entry["content"] = message["content"]
+    if message.get("tool_calls"):
+        entry["tool_calls"] = message["tool_calls"]
+    messages.append(entry)
 
-                print(f"[Step {step}] Tool result: {tool_result}")
 
-                # Feed the observation back to the model.
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_call["id"],
-                        "name": tool_name,
-                        "content": tool_result,
-                    }
-                )
+def record_tool_observation(
+    messages: list[dict[str, Any]], tool_call: dict[str, Any], result: str
+) -> None:
+    messages.append(
+        {
+            "role": "tool",
+            "tool_call_id": tool_call["id"],
+            "name": tool_call["function"]["name"],
+            "content": result,
+        }
+    )
 
-            # Continue loop so the model can produce final user-facing text.
-            continue
 
-        # No tool call: this is the final answer.
-        text = str(message.get("content", "")).strip()
-        if not text:
-            text = "Model returned no text."
+def finalize_response(message: dict[str, Any], *, step: int) -> str:
+    text = str(message.get("content", "")).strip() or "Model returned no text."
+    print(f"[Step {step}] Final response: {text}")
+    return text
 
-        print(f"[Step {step}] Final response: {text}")
-        return text
 
-    return "Stopped after max steps without a final response."
+# --- verbose tracing helpers ----------------------------------------------
+
+
+def dump_messages(label: str, messages: list[dict[str, Any]], *, verbose: bool) -> None:
+    """Pretty-print the full message history sent to the model."""
+    if not verbose:
+        return
+    print(f"\n--- {label} ({len(messages)} message(s)) ---")
+    for index, message in enumerate(messages):
+        print(f"  [{index}] {json.dumps(message, indent=2, default=str)}")
+    print("--- end ---")
+
+
+def dump_message(label: str, message: dict[str, Any], *, verbose: bool) -> None:
+    """Pretty-print a single assistant message returned by the model."""
+    if not verbose:
+        return
+    print(f"\n--- {label} ---")
+    print(json.dumps(message, indent=2, default=str))
+    print("--- end ---")
+
+
+# --- tool dispatch (policy + validation + execution) -----------------------
+
+
+def handle_tool_call(tool_call: dict[str, Any], *, step: int, verbose: bool = False) -> str:
+    """
+    Single place where the runtime decides what to do with a model-requested
+    tool call. The order makes the control points explicit:
+
+      1. Tool allow-list check     (policy)
+      2. Argument parsing/validation (input contract)
+      3. Tool execution              (side effect)
+    """
+    name, raw_args = unpack_tool_call(tool_call)
+    log_tool_request(step, name, raw_args)
+    dump_message(f"Step {step} tool_call", tool_call, verbose=verbose)
+
+    if not is_tool_allowed(name):
+        result = reject_disallowed_tool(name)
+    else:
+        args, validation_error = validate_tool_arguments(name, raw_args)
+        result = validation_error if validation_error else dispatch_tool(name, args)
+
+    print(f"[Step {step}] Tool result: {result}")
+    return result
+
+
+def unpack_tool_call(tool_call: dict[str, Any]) -> tuple[str, str]:
+    name = tool_call["function"]["name"]
+    raw_args = tool_call["function"].get("arguments", "{}")
+    return name, raw_args
+
+
+def log_tool_request(step: int, name: str, raw_args: str) -> None:
+    print(f"[Step {step}] Model requested tool: {name}")
+    print(f"[Step {step}] Tool args: {raw_args}")
+
+
+def is_tool_allowed(name: str) -> bool:
+    return name in ALLOWED_TOOL_NAMES
+
+
+def reject_disallowed_tool(name: str) -> str:
+    return (
+        f"Tool {name!r} blocked by runtime policy: "
+        f"only {sorted(ALLOWED_TOOL_NAMES)} are available."
+    )
+
+
+def validate_tool_arguments(name: str, raw_args: str) -> tuple[dict[str, Any], str | None]:
+    """Return (parsed_args, error_message). On failure parsed_args is empty."""
+    try:
+        parsed = json.loads(raw_args or "{}")
+    except json.JSONDecodeError:
+        return {}, f"{name} not executed: invalid JSON in tool arguments."
+
+    if name == "show_alert":
+        message = str(parsed.get("message", "")).strip()
+        if not message:
+            return {}, "show_alert not executed: missing non-empty 'message'."
+        return {"message": message}, None
+
+    # Unknown tool slipped past the allow-list — defensive fallback.
+    return parsed, None
+
+
+def dispatch_tool(name: str, args: dict[str, Any]) -> str:
+    if name == "show_alert":
+        return show_alert(args["message"])
+    return f"No handler registered for tool {name!r}."
 
 
 # -----------------
@@ -346,6 +472,12 @@ def parse_args() -> argparse.Namespace:
         default=6,
         help="Maximum ReAct loop steps before stopping.",
     )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Print the full message history sent to the model and the raw responses each turn.",
+    )
     return parser.parse_args()
 
 
@@ -356,7 +488,7 @@ def main() -> int:
     args = parse_args()
 
     try:
-        final_text = run_agent(args.prompt, max_steps=args.max_steps)
+        final_text = run_agent(args.prompt, max_steps=args.max_steps, verbose=args.verbose)
         print("\n" + "-" * 72)
         print("Returned to user:")
         print(final_text)
