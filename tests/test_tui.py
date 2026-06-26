@@ -329,6 +329,59 @@ class TestWorkflowTUI:
             await pilot.press("q")
             assert not app.is_running
 
+    async def test_quit_closes_service_with_close_method(
+        self, sample_summaries: List[WorkflowSummary], sample_details: Dict[str, WorkflowDetail]
+    ):
+        """``action_quit`` must close the underlying service so workers
+        blocked in an HTTP stream get unblocked and the process can exit.
+        See ``WorkflowTUI.action_quit`` docstring for context.
+        """
+
+        class ClosableService(FakeWorkflowService):
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                super().__init__(*args, **kwargs)  # type: ignore[arg-type]
+                self.close_calls = 0
+
+            def close(self) -> None:
+                self.close_calls += 1
+
+        service = ClosableService(summaries=sample_summaries, details=sample_details)
+        app = WorkflowTUI(service)
+        async with app.run_test() as pilot:
+            await pilot.press("q")
+            assert not app.is_running
+        assert service.close_calls == 1
+
+    async def test_quit_tolerates_service_close_errors(
+        self, sample_summaries: List[WorkflowSummary], sample_details: Dict[str, WorkflowDetail]
+    ):
+        """A failure inside ``service.close`` must not block quit."""
+
+        class ExplodingService(FakeWorkflowService):
+            def close(self) -> None:
+                raise RuntimeError("boom")
+
+        service = ExplodingService(summaries=sample_summaries, details=sample_details)
+        app = WorkflowTUI(service)
+        async with app.run_test() as pilot:
+            await pilot.press("q")
+            assert not app.is_running
+
+    async def test_quit_stops_refresh_and_tail_timers(
+        self, sample_summaries: List[WorkflowSummary], sample_details: Dict[str, WorkflowDetail]
+    ):
+        """Quitting cancels the periodic timers so no fresh workers spawn
+        during shutdown."""
+        service = FakeWorkflowService(summaries=sample_summaries, details=sample_details)
+        app = WorkflowTUI(service)
+        async with app.run_test() as pilot:
+            # Sanity: at least one timer is active.
+            assert app._refresh_timer is not None
+            await pilot.press("q")
+            assert not app.is_running
+        assert app._refresh_timer is None
+        assert app._tail_timer is None
+
     async def test_renders_list_and_detail_from_service(
         self,
         fake_service: WorkflowService,

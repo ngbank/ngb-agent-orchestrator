@@ -524,6 +524,40 @@ class WorkflowTUI(App[None]):
             "information",
         )
 
+    async def action_quit(self) -> None:
+        """Quit cleanly even when blocking workers are in flight.
+
+        Textual's thread workers run on asyncio's default ThreadPoolExecutor,
+        whose threads are non-daemon. A worker stuck in a blocking HTTP read
+        (``submit_and_follow``'s SSE iterator, a slow ``read_logs`` poll)
+        therefore keeps the whole process alive after ``app.run()`` returns,
+        producing the "TUI hangs and doesn't return to the shell" symptom.
+
+        We mitigate this in two steps:
+
+        * Stop the periodic refresh / tail timers so no fresh workers spawn.
+        * Close the HTTP client (when the service exposes ``close``); this
+          tears down the connection pool and causes any in-flight streamed
+          read to raise, letting the worker's exception handler return.
+
+        The hard ``os._exit`` fallback that guarantees the shell prompt
+        comes back lives in ``run_tui`` — see the comment there.
+        """
+        if self._refresh_timer is not None:
+            self._refresh_timer.stop()
+            self._refresh_timer = None
+        if self._tail_timer is not None:
+            self._tail_timer.stop()
+            self._tail_timer = None
+        close = getattr(self._service, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception:
+                # Best-effort: closing the client must never block quit.
+                pass
+        self.exit()
+
 
 def run_tui() -> None:
     """Entry point for the TUI application."""
@@ -531,4 +565,21 @@ def run_tui() -> None:
     load_runtime_secrets_from_keyvault()
     service = build_workflow_service_from_env()
     app = WorkflowTUI(service)
-    app.run()
+    try:
+        app.run()
+    finally:
+        # Textual's worker threads run on asyncio's default
+        # ThreadPoolExecutor (non-daemon). If a worker is blocked in a
+        # network read at quit time it will keep the Python process alive
+        # past ``app.run()`` and the user gets stuck staring at a frozen
+        # cleared terminal. ``action_quit`` already closes the HTTP client
+        # to unblock such reads cleanly; this is the defence-in-depth
+        # fallback for the case where a worker is blocked in something
+        # else (subprocess, local LangGraph drive, etc.).
+        close = getattr(service, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception:
+                pass
+        os._exit(0)
