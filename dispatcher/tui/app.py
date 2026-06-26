@@ -158,6 +158,10 @@ class WorkflowTUI(App[None]):
         def on_reason(reason: str | None) -> None:
             if reason is None:
                 return
+            reason = reason.strip()
+            if not reason:
+                self._notify("Rejection reason is required.", "warning")
+                return
             try:
                 msg = reject_workflow(self._service, wf.ticket_key, wf.id, reason)
                 self._notify(msg, "information")
@@ -203,8 +207,9 @@ class WorkflowTUI(App[None]):
         def on_reason(reason: str | None) -> None:
             if reason is None:
                 return
+            normalized = reason.strip() or None
             try:
-                msg = cancel_workflow(self._service, wf.ticket_key, wf.id, reason)
+                msg = cancel_workflow(self._service, wf.ticket_key, wf.id, normalized)
                 self._notify(msg, "information")
             except ActionError as e:
                 self._notify(str(e), "error")
@@ -247,6 +252,10 @@ class WorkflowTUI(App[None]):
 
         def on_reason(reason: str | None) -> None:
             if reason is None:
+                return
+            reason = reason.strip()
+            if not reason:
+                self._notify("PR rejection reason is required.", "warning")
                 return
             try:
                 msg = reject_pr(self._service, wf.ticket_key, wf.id, reason)

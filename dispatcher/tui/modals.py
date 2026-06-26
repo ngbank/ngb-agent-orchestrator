@@ -52,15 +52,17 @@ class InputModal(ModalScreen[str | None]):
                 yield Button("Cancel", variant="default", id="cancel")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        # Mirror ConfirmModal: the button identity decides submit vs cancel.
+        # Returning None means "user cancelled"; returning a string (even empty)
+        # means "user submitted" and lets callers validate / treat as optional.
         if event.button.id == "submit":
-            value = self.query_one("#input_field", Input).value
-            self.dismiss(value if value.strip() else None)
+            self.dismiss(self.query_one("#input_field", Input).value)
         else:
             self.dismiss(None)
 
     def on_input_submitted(self) -> None:
-        value = self.query_one("#input_field", Input).value
-        self.dismiss(value if value.strip() else None)
+        # Pressing Enter in the input field behaves like clicking Submit.
+        self.dismiss(self.query_one("#input_field", Input).value)
 
 
 class ConfirmModal(ModalScreen[bool]):
