@@ -50,12 +50,17 @@ class WorkflowList(Static):
         for wf in workflows:
             status_val = wf.status.value
             emoji, label = STATUS_DISPLAY.get(status_val, ("  ", status_val))
-            # ``STATUS_DISPLAY`` adds a trailing space to some emojis to
-            # compensate for narrow rendering in CLI text output. ``DataTable``
-            # does its own column padding, so that trailing space just
-            # stretches the affected cell by one char and pushes every column
-            # to its right out of alignment for that row only.
-            emoji = emoji.rstrip()
+            # ``STATUS_DISPLAY`` adds a trailing space and U+FE0F variation
+            # selector to some emojis so they render as wide / full-color in
+            # CLI text output. ``DataTable`` measures cell width via Rich's
+            # ``cell_len`` which counts those emojis as 2 cells, but several
+            # terminals (notably VS Code's integrated terminal) ignore VS-16
+            # and render them as 1 cell. The mismatch shifts every column to
+            # the right of those rows by one cell. Strip both so Rich's
+            # measurement matches the actual paint width — the affected
+            # icons render in text style here, which is the price of
+            # consistent column alignment.
+            emoji = emoji.rstrip().replace("\ufe0f", "")
             updated = (wf.updated_at or "")[:19].replace("T", " ")
             table.add_row(
                 wf.ticket_key,
@@ -214,8 +219,9 @@ class DetailPane(Static):
         status_val = workflow.status.value
         emoji, label = STATUS_DISPLAY.get(status_val, ("  ", status_val))
         # See ``WorkflowList.update_workflows`` — strip the CLI-only trailing
-        # space so the title aligns consistently across statuses.
-        emoji = emoji.rstrip()
+        # space and U+FE0F variation selector so the title aligns consistently
+        # across statuses on terminals that ignore VS-16.
+        emoji = emoji.rstrip().replace("\ufe0f", "")
         title.update(f"{emoji} {workflow.ticket_key} — {label}")
 
         lines: List[str] = [
