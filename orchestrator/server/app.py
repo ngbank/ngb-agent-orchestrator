@@ -39,7 +39,9 @@ logger = logging.getLogger(__name__)
 def _instrument_fastapi(app: FastAPI) -> None:
     """Attach OTel request instrumentation if the optional dep is present."""
     try:
-        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+        from opentelemetry.instrumentation.fastapi import (  # pyright: ignore[reportMissingImports]
+            FastAPIInstrumentor,
+        )
     except ImportError:
         logger.info(
             "opentelemetry-instrumentation-fastapi not installed; "
