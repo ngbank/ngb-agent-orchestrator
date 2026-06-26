@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Optional
+from typing import Callable, Dict, Optional
 
 from dotenv import load_dotenv
 from textual.app import App, ComposeResult
@@ -34,6 +34,11 @@ from orchestrator.workflow_service import (
     WorkflowSummary,
     build_workflow_service_from_env,
 )
+from state.workflow_status import WorkflowStatus
+
+# Stage names tailed in the live log view.  Matches the stages
+# ``WorkflowService.read_logs`` knows about (plan + execute).
+_TAIL_STAGES = ("plan", "execute")
 
 
 class WorkflowTUI(App[None]):
@@ -62,6 +67,7 @@ class WorkflowTUI(App[None]):
         ("o", "approve_pr", "Approve PR"),
         ("l", "logs", "Logs"),
         ("d", "clear_db", "Clear DB"),
+        ("space", "toggle_tail_pause", "Pause Tail"),
     ]
 
     def __init__(self, service: WorkflowService) -> None:
@@ -69,6 +75,19 @@ class WorkflowTUI(App[None]):
         self._service = service
         self._refresh_timer: Optional[Timer] = None
         self._poll_interval = float(os.environ.get("DISPATCHER_TUI_POLL", "2"))
+        # Live log tailing state (Stage C).  ``_tail_workflow_id`` is the
+        # workflow currently being tailed; ``_tail_offsets`` tracks the
+        # next byte to fetch per stage so reconnect-after-poll only
+        # delivers new bytes.
+        self._tail_timer: Optional[Timer] = None
+        self._tail_interval = float(os.environ.get("DISPATCHER_TUI_TAIL_POLL", "1"))
+        self._tail_workflow_id: Optional[str] = None
+        self._tail_offsets: Dict[str, int] = {}
+        self._tail_paused: bool = False
+        # ``_tail_in_flight`` debounces overlapping polls: if a previous
+        # ``read_logs`` is still running (slow SSE connect, blocked server)
+        # the next timer tick is skipped instead of stacking workers.
+        self._tail_in_flight: bool = False
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -94,7 +113,9 @@ class WorkflowTUI(App[None]):
         workflow_list.update_workflows(workflows)
         detail = self.query_one(DetailPane)
         selected = workflow_list.get_selected_workflow()
-        detail.update_workflow(self._fetch_detail(selected))
+        detail_dto = self._fetch_detail(selected)
+        detail.update_workflow(detail_dto)
+        self._sync_tail(detail_dto)
 
     def _fetch_detail(self, summary: Optional[WorkflowSummary]) -> Optional[WorkflowDetail]:
         if summary is None:
@@ -112,6 +133,56 @@ class WorkflowTUI(App[None]):
         # boundary for caller convenience and trust the documented values.
         self.notify(message, severity=severity, timeout=4)  # pyright: ignore[reportArgumentType]
 
+    # ------------------------------------------------------------------
+    # Async action plumbing
+    # ------------------------------------------------------------------
+    #
+    # Service calls (start / approve / reject / retry / ...) are blocking:
+    # in local mode they drive the LangGraph workflow end-to-end (LLM calls
+    # included); in remote mode they fire-and-forget then follow the SSE
+    # event stream synchronously. Running them on Textual's main loop would
+    # freeze the UI for the duration of the run, so every action that hits
+    # the service goes through ``_run_action_async`` which dispatches to a
+    # worker thread and posts the result + refresh back on the main loop.
+
+    def _run_action_async(
+        self,
+        label: str,
+        fn: Callable[[], str],
+        *,
+        refresh_after: bool = True,
+    ) -> None:
+        """Run a blocking action in a Textual worker thread.
+
+        ``label`` is shown in an immediate "..." notification so the user
+        knows the action was accepted. ``fn`` runs off-thread; its return
+        value is surfaced as an info notification, ``ActionError`` as an
+        error notification. The workflow list is refreshed on completion
+        unless ``refresh_after`` is False.
+        """
+        self._notify(f"{label}\u2026", "information")
+
+        def worker() -> None:
+            try:
+                msg = fn()
+            except ActionError as exc:
+                self.call_from_thread(self._notify, str(exc), "error")
+            except Exception as exc:  # defensive: never let a worker crash the app
+                self.call_from_thread(self._notify, f"{label} failed: {exc}", "error")
+            else:
+                self.call_from_thread(self._notify, msg, "information")
+            finally:
+                if refresh_after:
+                    self.call_from_thread(self._refresh_workflows)
+
+        self.run_worker(
+            worker,
+            thread=True,
+            group="actions",
+            exit_on_error=False,
+            description=label,
+        )
+
     def action_refresh(self) -> None:
         self._refresh_workflows()
 
@@ -125,12 +196,10 @@ class WorkflowTUI(App[None]):
                 self._notify("Ticket key is required.", "warning")
                 return
 
-            try:
-                msg = run_workflow(self._service, ticket_key, dry_run=False)
-                self._notify(msg, "information")
-            except ActionError as e:
-                self._notify(str(e), "error")
-            self._refresh_workflows()
+            self._run_action_async(
+                f"Starting workflow for {ticket_key}",
+                lambda: run_workflow(self._service, ticket_key, dry_run=False),
+            )
 
         self.push_screen(
             InputModal("Enter ticket key to start workflow:", placeholder="AOS-999"),
@@ -142,12 +211,10 @@ class WorkflowTUI(App[None]):
         if wf is None:
             self._notify("No workflow selected.", "warning")
             return
-        try:
-            msg = approve_workflow(self._service, wf.ticket_key, wf.id)
-            self._notify(msg, "information")
-        except ActionError as e:
-            self._notify(str(e), "error")
-        self._refresh_workflows()
+        self._run_action_async(
+            f"Approving {wf.ticket_key}",
+            lambda: approve_workflow(self._service, wf.ticket_key, wf.id),
+        )
 
     def action_reject(self) -> None:
         wf = self._get_selected()
@@ -158,12 +225,10 @@ class WorkflowTUI(App[None]):
         def on_reason(reason: str | None) -> None:
             if reason is None:
                 return
-            try:
-                msg = reject_workflow(self._service, wf.ticket_key, wf.id, reason)
-                self._notify(msg, "information")
-            except ActionError as e:
-                self._notify(str(e), "error")
-            self._refresh_workflows()
+            self._run_action_async(
+                f"Rejecting {wf.ticket_key}",
+                lambda: reject_workflow(self._service, wf.ticket_key, wf.id, reason),
+            )
 
         self.push_screen(
             InputModal("Enter rejection reason:", placeholder="Reason..."),
@@ -175,24 +240,20 @@ class WorkflowTUI(App[None]):
         if wf is None:
             self._notify("No workflow selected.", "warning")
             return
-        try:
-            msg = clarify_workflow(self._service, wf.ticket_key, wf.id)
-            self._notify(msg, "information")
-        except ActionError as e:
-            self._notify(str(e), "error")
-        self._refresh_workflows()
+        self._run_action_async(
+            f"Clarifying {wf.ticket_key}",
+            lambda: clarify_workflow(self._service, wf.ticket_key, wf.id),
+        )
 
     def action_retry(self) -> None:
         wf = self._get_selected()
         if wf is None:
             self._notify("No workflow selected.", "warning")
             return
-        try:
-            msg = retry_workflow(self._service, wf.ticket_key, wf.id)
-            self._notify(msg, "information")
-        except ActionError as e:
-            self._notify(str(e), "error")
-        self._refresh_workflows()
+        self._run_action_async(
+            f"Retrying {wf.ticket_key}",
+            lambda: retry_workflow(self._service, wf.ticket_key, wf.id),
+        )
 
     def action_cancel(self) -> None:
         wf = self._get_selected()
@@ -203,12 +264,10 @@ class WorkflowTUI(App[None]):
         def on_reason(reason: str | None) -> None:
             if reason is None:
                 return
-            try:
-                msg = cancel_workflow(self._service, wf.ticket_key, wf.id, reason)
-                self._notify(msg, "information")
-            except ActionError as e:
-                self._notify(str(e), "error")
-            self._refresh_workflows()
+            self._run_action_async(
+                f"Cancelling {wf.ticket_key}",
+                lambda: cancel_workflow(self._service, wf.ticket_key, wf.id, reason),
+            )
 
         self.push_screen(
             InputModal("Enter cancellation reason (optional):", placeholder="Reason..."),
@@ -220,24 +279,20 @@ class WorkflowTUI(App[None]):
         if wf is None:
             self._notify("No workflow selected.", "warning")
             return
-        try:
-            msg = approve_pr(self._service, wf.ticket_key, wf.id)
-            self._notify(msg, "information")
-        except ActionError as e:
-            self._notify(str(e), "error")
-        self._refresh_workflows()
+        self._run_action_async(
+            f"Approving PR for {wf.ticket_key}",
+            lambda: approve_pr(self._service, wf.ticket_key, wf.id),
+        )
 
     def action_comment_pr(self) -> None:
         wf = self._get_selected()
         if wf is None:
             self._notify("No workflow selected.", "warning")
             return
-        try:
-            msg = comment_pr(self._service, wf.ticket_key, wf.id)
-            self._notify(msg, "information")
-        except ActionError as e:
-            self._notify(str(e), "error")
-        self._refresh_workflows()
+        self._run_action_async(
+            f"Commenting on PR for {wf.ticket_key}",
+            lambda: comment_pr(self._service, wf.ticket_key, wf.id),
+        )
 
     def action_reject_pr(self) -> None:
         wf = self._get_selected()
@@ -248,12 +303,10 @@ class WorkflowTUI(App[None]):
         def on_reason(reason: str | None) -> None:
             if reason is None:
                 return
-            try:
-                msg = reject_pr(self._service, wf.ticket_key, wf.id, reason)
-                self._notify(msg, "information")
-            except ActionError as e:
-                self._notify(str(e), "error")
-            self._refresh_workflows()
+            self._run_action_async(
+                f"Rejecting PR for {wf.ticket_key}",
+                lambda: reject_pr(self._service, wf.ticket_key, wf.id, reason),
+            )
 
         self.push_screen(
             InputModal("Enter PR rejection reason:", placeholder="Reason..."),
@@ -265,22 +318,20 @@ class WorkflowTUI(App[None]):
         if wf is None:
             self._notify("No workflow selected.", "warning")
             return
-        try:
-            msg = show_logs(self._service, wf.ticket_key, wf.id)
-            self._notify(msg, "information")
-        except ActionError as e:
-            self._notify(str(e), "error")
+        self._run_action_async(
+            f"Fetching logs for {wf.ticket_key}",
+            lambda: show_logs(self._service, wf.ticket_key, wf.id),
+            refresh_after=False,
+        )
 
     def action_clear_db(self) -> None:
         def on_confirm(confirmed: bool) -> None:
             if not confirmed:
                 return
-            try:
-                msg = clear_database(self._service)
-                self._notify(msg, "information")
-            except ActionError as e:
-                self._notify(str(e), "error")
-            self._refresh_workflows()
+            self._run_action_async(
+                "Clearing database",
+                lambda: clear_database(self._service),
+            )
 
         self.push_screen(  # pyright: ignore[reportCallIssue]
             ConfirmModal("Are you sure you want to clear ALL workflows and checkpoints?"),
@@ -291,7 +342,221 @@ class WorkflowTUI(App[None]):
         workflow_list = self.query_one(WorkflowList)
         selected = workflow_list.get_selected_workflow()
         detail = self.query_one(DetailPane)
-        detail.update_workflow(self._fetch_detail(selected))
+        detail_dto = self._fetch_detail(selected)
+        detail.update_workflow(detail_dto)
+        self._sync_tail(detail_dto)
+
+    # ------------------------------------------------------------------
+    # Live log tailing (Stage C)
+    # ------------------------------------------------------------------
+
+    def _sync_tail(self, detail: Optional[WorkflowDetail]) -> None:
+        """Start, stop, or keep tailing based on the currently-shown workflow.
+
+        Called after every refresh and after every row-highlight change.
+        Selecting a different running workflow restarts the tail from offset
+        zero; transitioning to a non-running status stops the tail and the
+        DetailPane reverts to the snapshot view automatically.
+        """
+        if detail is None or detail.status != WorkflowStatus.IN_PROGRESS:
+            self._stop_tail()
+            return
+        if self._tail_workflow_id != detail.id:
+            self._start_tail(detail.id)
+
+    def _start_tail(self, workflow_id: str) -> None:
+        self._stop_tail()
+        self._tail_workflow_id = workflow_id
+        self._tail_offsets = {stage: 0 for stage in _TAIL_STAGES}
+        self._tail_paused = False
+        try:
+            self.query_one(DetailPane).clear_log_tail()
+        except Exception:
+            pass
+        # First poll is dispatched off the main loop so navigating onto a
+        # running workflow doesn't freeze the UI while ``read_logs`` connects
+        # (in remote mode that opens an SSE stream with a read timeout).
+        # Backlog still appears once the worker returns — typically within a
+        # few hundred ms.
+        self._schedule_tail_poll()
+        if self._tail_interval > 0:
+            self._tail_timer = self.set_interval(self._tail_interval, self._schedule_tail_poll)
+
+    def _stop_tail(self) -> None:
+        if self._tail_timer is not None:
+            try:
+                self._tail_timer.stop()
+            except Exception:
+                pass
+            self._tail_timer = None
+        self._tail_workflow_id = None
+        self._tail_offsets = {}
+        self._tail_paused = False
+        # A worker still in flight will discard its results via the
+        # workflow-id guard in ``_apply_tail_chunk``; reset the flag so the
+        # next ``_start_tail`` can dispatch immediately.
+        self._tail_in_flight = False
+
+    def _schedule_tail_poll(self) -> None:
+        """Dispatch a single tail-poll cycle to a worker thread.
+
+        Called on every timer tick (and once from ``_start_tail``). Bails out
+        if no workflow is selected or a previous poll hasn't returned yet —
+        the latter prevents back-pressure piling up when ``read_logs`` is
+        slow (e.g. a stuck remote server).
+        """
+        workflow_id = self._tail_workflow_id
+        if workflow_id is None or self._tail_in_flight:
+            return
+        self._tail_in_flight = True
+        self.run_worker(
+            lambda: self._poll_tail_worker(workflow_id),
+            thread=True,
+            group="tail",
+            exit_on_error=False,
+            description=f"tail:{workflow_id[:8]}",
+        )
+
+    def _poll_tail_worker(self, workflow_id: str) -> None:
+        """Worker-thread body for one tail poll cycle.
+
+        Reads new bytes per stage and schedules ``_apply_tail_chunk`` on the
+        main loop for each non-empty chunk. Errors are swallowed so a
+        transient ``read_logs`` failure doesn't stop the tail — the next
+        timer tick will retry.
+        """
+        try:
+            for stage in _TAIL_STAGES:
+                offset = self._tail_offsets.get(stage, 0)
+                try:
+                    chunks = self._service.read_logs(
+                        workflow_id,
+                        stage=stage,
+                        after_offset=offset,
+                    )
+                except Exception:
+                    continue
+                for chunk in chunks:
+                    if chunk.stage != stage or not chunk.content:
+                        continue
+                    self.call_from_thread(
+                        self._apply_tail_chunk,
+                        workflow_id,
+                        chunk.stage,
+                        chunk.content,
+                        chunk.offset,
+                    )
+        finally:
+            self.call_from_thread(self._mark_tail_idle)
+
+    def _apply_tail_chunk(
+        self,
+        workflow_id: str,
+        stage: str,
+        content: str,
+        chunk_offset: int,
+    ) -> None:
+        """Main-thread sink for a tail chunk produced by a worker.
+
+        Discards the chunk if the user has navigated to a different workflow
+        since the worker started (prevents one workflow's logs from leaking
+        into another's view) and ignores already-applied bytes (defence in
+        depth against overlapping polls).
+        """
+        if self._tail_workflow_id != workflow_id:
+            return
+        current = self._tail_offsets.get(stage, 0)
+        end = chunk_offset + len(content.encode("utf-8"))
+        if end <= current:
+            return
+        try:
+            detail = self.query_one(DetailPane)
+        except Exception:
+            return
+        detail.append_log_chunk(stage, content)
+        self._tail_offsets[stage] = end
+
+    def _mark_tail_idle(self) -> None:
+        self._tail_in_flight = False
+
+    def _poll_tail(self) -> None:
+        """Synchronous one-shot poll — used by tests and as the engine the
+        worker-thread variant wraps.
+
+        Production code goes through ``_schedule_tail_poll`` so the UI never
+        blocks on ``read_logs``; tests call this directly to make polling
+        deterministic without coordinating with the worker thread.
+        """
+        workflow_id = self._tail_workflow_id
+        if workflow_id is None:
+            return
+        try:
+            detail = self.query_one(DetailPane)
+        except Exception:
+            return
+        for stage in _TAIL_STAGES:
+            offset = self._tail_offsets.get(stage, 0)
+            try:
+                chunks = self._service.read_logs(
+                    workflow_id,
+                    stage=stage,
+                    after_offset=offset,
+                )
+            except Exception:
+                continue
+            for chunk in chunks:
+                if chunk.stage != stage or not chunk.content:
+                    continue
+                detail.append_log_chunk(chunk.stage, chunk.content)
+                self._tail_offsets[stage] = chunk.offset + len(chunk.content.encode("utf-8"))
+
+    def action_toggle_tail_pause(self) -> None:
+        try:
+            detail = self.query_one(DetailPane)
+        except Exception:
+            return
+        if not detail.is_tail_visible():
+            return
+        self._tail_paused = not self._tail_paused
+        detail.set_tail_paused(self._tail_paused)
+        self._notify(
+            "Tail auto-scroll paused." if self._tail_paused else "Tail auto-scroll resumed.",
+            "information",
+        )
+
+    async def action_quit(self) -> None:
+        """Quit cleanly even when blocking workers are in flight.
+
+        Textual's thread workers run on asyncio's default ThreadPoolExecutor,
+        whose threads are non-daemon. A worker stuck in a blocking HTTP read
+        (``submit_and_follow``'s SSE iterator, a slow ``read_logs`` poll)
+        therefore keeps the whole process alive after ``app.run()`` returns,
+        producing the "TUI hangs and doesn't return to the shell" symptom.
+
+        We mitigate this in two steps:
+
+        * Stop the periodic refresh / tail timers so no fresh workers spawn.
+        * Close the HTTP client (when the service exposes ``close``); this
+          tears down the connection pool and causes any in-flight streamed
+          read to raise, letting the worker's exception handler return.
+
+        The hard ``os._exit`` fallback that guarantees the shell prompt
+        comes back lives in ``run_tui`` — see the comment there.
+        """
+        if self._refresh_timer is not None:
+            self._refresh_timer.stop()
+            self._refresh_timer = None
+        if self._tail_timer is not None:
+            self._tail_timer.stop()
+            self._tail_timer = None
+        close = getattr(self._service, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception:
+                # Best-effort: closing the client must never block quit.
+                pass
+        self.exit()
 
 
 def run_tui() -> None:
@@ -300,4 +565,21 @@ def run_tui() -> None:
     load_runtime_secrets_from_keyvault()
     service = build_workflow_service_from_env()
     app = WorkflowTUI(service)
-    app.run()
+    try:
+        app.run()
+    finally:
+        # Textual's worker threads run on asyncio's default
+        # ThreadPoolExecutor (non-daemon). If a worker is blocked in a
+        # network read at quit time it will keep the Python process alive
+        # past ``app.run()`` and the user gets stuck staring at a frozen
+        # cleared terminal. ``action_quit`` already closes the HTTP client
+        # to unblock such reads cleanly; this is the defence-in-depth
+        # fallback for the case where a worker is blocked in something
+        # else (subprocess, local LangGraph drive, etc.).
+        close = getattr(service, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception:
+                pass
+        os._exit(0)

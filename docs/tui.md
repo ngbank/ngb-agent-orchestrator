@@ -52,8 +52,20 @@ Both commands launch the same Textual application.
 | `p` | Comment on the pending PR for the selected workflow (opens editor) |
 | `l` | Show logs for the selected workflow |
 | `d` | Clear the entire database (confirmation dialog) |
+| `space` | Pause / resume auto-scroll on the live log tail |
 
 All actions delegate to the same handler functions used by the CLI, ensuring zero duplication of orchestration logic.
+
+### Responsiveness
+
+Service calls (start, approve, reject, retry, PR actions, clear-db) are
+blocking — in local mode they drive the LangGraph workflow end to end, and in
+remote mode they fire-and-forget then follow the SSE event stream. To keep the
+UI responsive, every action that touches `WorkflowService` runs in a Textual
+worker thread; the foreground loop stays free to refresh the workflow list,
+tail logs, and accept input while the action is in flight. You'll see a
+`{action}…` info notification when the work starts and a success/failure
+notification when it finishes, after which the list refreshes automatically.
 
 ---
 
@@ -70,6 +82,43 @@ Set it to `0` to disable live refresh:
 ```bash
 DISPATCHER_TUI_POLL=0 dispatcher --tui
 ```
+
+---
+
+## Live Log Tailing
+
+When the selected workflow is `in_progress`, the detail pane shows a live tail
+of captured stage logs (Goose `plan` and `execute` output) instead of the
+static snapshot view. Lines are appended as they arrive and the view
+auto-scrolls to the tail by default.
+
+- **Trigger** — selecting any workflow whose status is `IN_PROGRESS`. Selecting
+  a workflow in any other status (queued, paused for approval, completed,
+  failed, cancelled) renders the regular static snapshot.
+- **Stream end** — if the workflow transitions to a terminal state while the
+  tail is open, the pane reverts to the snapshot view on the next refresh.
+- **Pause** — press `space` to freeze auto-scroll while you inspect output;
+  press `space` again to resume. New bytes still arrive in the background, so
+  no log content is lost while paused.
+- **Reconnect** — each poll passes the byte offset of the last received chunk
+  via `WorkflowService.read_logs(after_offset=...)`, so transient transport
+  errors (remote mode) recover without duplicating or losing lines.
+- **Off-thread polling** — every tail poll (the initial backlog fetch and each
+  periodic tick) is dispatched to a Textual worker thread, so navigating onto
+  a running workflow never freezes the UI while `read_logs` connects. In
+  remote mode the SSE endpoint can take a few hundred ms to open; the foreground
+  loop stays free to redraw the workflow list, move the row cursor, and accept
+  input while the poll is in flight. Overlapping polls are debounced: if a
+  previous poll hasn't returned, the next timer tick is skipped rather than
+  stacking workers.
+- **Poll interval** — controlled by `DISPATCHER_TUI_TAIL_POLL` (seconds,
+  default `1`). Set to `0` to disable the periodic tail; the initial backlog
+  is still rendered when the workflow is selected.
+
+In local dispatcher mode the tail reads bytes directly from the workflow's log
+files. In remote mode it consumes the SSE log endpoint introduced in Stage B
+(`GET /workflows/{id}/logs`) via `HttpWorkflowService.read_logs`, so the same
+UX works against an orchestrator server without TUI-side changes.
 
 ---
 
