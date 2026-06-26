@@ -8,7 +8,7 @@ the TUI's notification layer.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Callable, List, Optional
 
 from dispatcher.commands.admin import _handle_cancel, _handle_clear_db, _handle_logs
 from dispatcher.commands.approve import _handle_approve, _handle_reject
@@ -59,11 +59,15 @@ def reject_workflow(
 
 
 def clarify_workflow(
-    service: WorkflowService, ticket_key: Optional[str], workflow_id: Optional[str]
+    service: WorkflowService,
+    ticket_key: Optional[str],
+    workflow_id: Optional[str],
+    *,
+    editor_runner: Optional[Callable[[List[str]], None]] = None,
 ) -> str:
     """Answer WorkPlan clarification questions via editor."""
     try:
-        _handle_clarify(service, ticket_key or "", workflow_id)
+        _handle_clarify(service, ticket_key or "", workflow_id, editor_runner=editor_runner)
         return "Clarification submitted."
     except SystemExit as e:
         if e.code != 0:
@@ -122,11 +126,15 @@ def approve_pr(
 
 
 def comment_pr(
-    service: WorkflowService, ticket_key: Optional[str], workflow_id: Optional[str]
+    service: WorkflowService,
+    ticket_key: Optional[str],
+    workflow_id: Optional[str],
+    *,
+    editor_runner: Optional[Callable[[List[str]], None]] = None,
 ) -> str:
     """Comment on a pending PR to trigger re-execution."""
     try:
-        _handle_comment_pr(service, ticket_key or "", workflow_id)
+        _handle_comment_pr(service, ticket_key or "", workflow_id, editor_runner=editor_runner)
         return "PR comment submitted."
     except SystemExit as e:
         if e.code != 0:
