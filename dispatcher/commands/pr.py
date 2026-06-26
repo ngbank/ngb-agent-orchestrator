@@ -4,7 +4,7 @@ import os
 import subprocess
 import sys
 import tempfile
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Callable, List, Optional
 
 import click
 
@@ -14,6 +14,16 @@ from state.workflow_status import WorkflowStatus
 
 if TYPE_CHECKING:
     from orchestrator.workflow_service import WorkflowService
+
+
+def _default_editor_runner(cmd: List[str]) -> None:
+    """Run an editor subprocess foregrounded on the calling TTY.
+
+    The TUI overrides this with a runner that wraps the call in
+    ``App.suspend()`` so Textual releases the terminal first; the CLI uses
+    the default and runs the editor directly.
+    """
+    subprocess.run(cmd, check=True)
 
 
 def _resolve_pending_pr(
@@ -78,6 +88,8 @@ def _handle_comment_pr(
     ticket_key: Optional[str],
     workflow_id: Optional[str] = None,
     detach: bool = False,
+    *,
+    editor_runner: Optional[Callable[[List[str]], None]] = None,
 ) -> None:
     """Collect PR review comments via file-based editing and resume for incremental fixes."""
     if workflow_id:
@@ -134,9 +146,10 @@ def _handle_comment_pr(
         tmp.write("\n".join(lines))
         tmp_path = tmp.name
 
+    runner = editor_runner if editor_runner is not None else _default_editor_runner
     try:
         click.echo(f"📝 Launching editor ({editor}) to collect comments...")
-        subprocess.run([editor, tmp_path], check=True)
+        runner([editor, tmp_path])
     except FileNotFoundError:
         click.echo(
             f"❌ Editor '{editor}' not found. Set the EDITOR environment variable.", err=True

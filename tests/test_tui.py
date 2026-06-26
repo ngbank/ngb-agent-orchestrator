@@ -733,3 +733,131 @@ class TestInputModal:
     async def test_cancel_button_returns_none(self):
         value = await self._push_and_dismiss(action="cancel", typed="ignored")
         assert value is None
+
+
+# ---------------------------------------------------------------------------
+# Editor handoff — clarify and comment-PR both shell out to ``$EDITOR``. With
+# the TUI active, Textual must release the terminal (``App.suspend``) for the
+# editor subprocess; otherwise the editor's output is overdrawn and keys are
+# captured by Textual bindings. The TUI provides this via a worker-friendly
+# editor runner that bounces the suspended call onto the main thread.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestEditorHandoff:
+    async def test_run_editor_suspended_wraps_subprocess_in_app_suspend(
+        self, fake_service: WorkflowService
+    ):
+        """``_run_editor_suspended`` must enter ``app.suspend()`` *before* it
+        spawns the editor and exit it *after* the subprocess returns —
+        otherwise Textual will still own the TTY when the editor draws."""
+        from contextlib import contextmanager
+        from unittest.mock import patch
+
+        events: List[str] = []
+
+        @contextmanager
+        def fake_suspend(_self):
+            events.append("suspend_enter")
+            try:
+                yield
+            finally:
+                events.append("suspend_exit")
+
+        def fake_run(cmd, **kwargs):
+            events.append(f"run:{cmd[0]}")
+
+            class _CP:
+                returncode = 0
+
+            return _CP()
+
+        app = WorkflowTUI(fake_service)
+        async with app.run_test():
+            with (
+                patch.object(WorkflowTUI, "suspend", fake_suspend),
+                patch("dispatcher.tui.app.subprocess.run", side_effect=fake_run),
+            ):
+                app._run_editor_suspended(["nano", "/tmp/x"])
+
+        assert events == ["suspend_enter", "run:nano", "suspend_exit"]
+
+    async def test_make_editor_runner_bridges_through_call_from_thread(
+        self, fake_service: WorkflowService
+    ):
+        """The runner handed to the worker must dispatch the suspended call
+        onto the Textual main thread via ``call_from_thread`` — never run
+        the editor directly from the worker (which would race the driver).
+        """
+        from unittest.mock import patch
+
+        app = WorkflowTUI(fake_service)
+        async with app.run_test():
+            with patch.object(app, "call_from_thread") as mock_call:
+                runner = app._make_editor_runner()
+                runner(["nano", "/tmp/x"])
+
+            mock_call.assert_called_once_with(app._run_editor_suspended, ["nano", "/tmp/x"])
+
+    async def test_action_clarify_forwards_editor_runner_to_wrapper(
+        self, fake_service: WorkflowService
+    ):
+        """``action_clarify`` must build an editor runner and pass it to the
+        ``clarify_workflow`` wrapper so it can reach the underlying handler.
+        """
+        from unittest.mock import patch
+
+        captured: Dict[str, object] = {}
+
+        def fake_clarify_workflow(service, ticket_key, workflow_id, *, editor_runner):
+            captured["editor_runner"] = editor_runner
+            return "Clarification submitted."
+
+        summary = _make_summary("wf-c", "AOS-9", WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION)
+        detail = _make_detail("wf-c", "AOS-9", WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION)
+        service = FakeWorkflowService(summaries=[summary], details={"wf-c": detail})
+
+        app = WorkflowTUI(service)
+        async with app.run_test() as pilot:
+            with patch("dispatcher.tui.app.clarify_workflow", side_effect=fake_clarify_workflow):
+                await pilot.pause()
+                # Select the workflow row before triggering the action.
+                wf_list = app.query_one(WorkflowList)
+                table = wf_list.query_one("DataTable")
+                table.focus()
+                table.move_cursor(row=0)
+                await pilot.pause()
+                app.action_clarify()
+                await app.workers.wait_for_complete()
+
+        assert callable(captured.get("editor_runner"))
+
+    async def test_action_comment_pr_forwards_editor_runner_to_wrapper(
+        self, fake_service: WorkflowService
+    ):
+        from unittest.mock import patch
+
+        captured: Dict[str, object] = {}
+
+        def fake_comment_pr(service, ticket_key, workflow_id, *, editor_runner):
+            captured["editor_runner"] = editor_runner
+            return "PR comment submitted."
+
+        summary = _make_summary("wf-p", "AOS-10", WorkflowStatus.PENDING_PR_APPROVAL)
+        detail = _make_detail("wf-p", "AOS-10", WorkflowStatus.PENDING_PR_APPROVAL)
+        service = FakeWorkflowService(summaries=[summary], details={"wf-p": detail})
+
+        app = WorkflowTUI(service)
+        async with app.run_test() as pilot:
+            with patch("dispatcher.tui.app.comment_pr", side_effect=fake_comment_pr):
+                await pilot.pause()
+                wf_list = app.query_one(WorkflowList)
+                table = wf_list.query_one("DataTable")
+                table.focus()
+                table.move_cursor(row=0)
+                await pilot.pause()
+                app.action_comment_pr()
+                await app.workers.wait_for_complete()
+
+        assert callable(captured.get("editor_runner"))

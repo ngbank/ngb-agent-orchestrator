@@ -1215,3 +1215,149 @@ class TestHandleRejectPr:
         workflow = state_store.get_workflow(workflow_id)
         assert workflow["status"] == WorkflowStatus.REJECTED
         assert "PR rejected" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Editor injection — handlers that shell out to ``$EDITOR`` must honour an
+# externally provided ``editor_runner`` (used by the TUI to wrap the
+# subprocess in ``App.suspend()``). The CLI keeps its current behaviour by
+# leaving ``editor_runner`` unset (the default falls back to
+# ``subprocess.run``).
+# ---------------------------------------------------------------------------
+
+
+class TestHandlerEditorRunnerInjection:
+    """``_handle_clarify`` and ``_handle_comment_pr`` must call the injected
+    runner instead of ``subprocess.run`` directly when one is provided."""
+
+    def _make_pending_clarification_workflow(self, ticket_key: str) -> str:
+        workflow_id = state_store.create_workflow(
+            ticket_key, status=WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION
+        )
+        state_store.update_work_plan(
+            workflow_id,
+            {
+                "schema_version": "1.0",
+                "ticket_key": ticket_key,
+                "summary": "Test",
+                "approach": "test",
+                "tasks": [{"id": 1, "description": "Do it", "files_likely_affected": []}],
+                "concerns": ["Risk A"],
+                "status": "concerns",
+            },
+        )
+        return workflow_id
+
+    def _make_pending_pr_approval_workflow(self, ticket_key: str) -> str:
+        return state_store.create_workflow(ticket_key, status=WorkflowStatus.PENDING_PR_APPROVAL)
+
+    def test_clarify_uses_injected_editor_runner(self, test_db):
+        from dispatcher.commands.clarify import _handle_clarify
+
+        workflow_id = self._make_pending_clarification_workflow("TEST-EDITOR-1")
+
+        runner_calls = []
+
+        def runner(cmd):
+            runner_calls.append(cmd)
+            # Simulate user editing the concerns file with an answer.
+            with open(cmd[1], "w", encoding="utf-8") as f:
+                f.write("- Risk A\nA: ok\n")
+
+        mock_graph = Mock()
+        mock_graph.stream.return_value = iter([])
+        mock_graph.get_state.return_value = Mock(
+            values={"workflow_id": workflow_id, "ticket_key": "TEST-EDITOR-1"}
+        )
+        service = _make_test_service(graph=mock_graph)
+
+        with patch("subprocess.run") as direct_subprocess:
+            _handle_clarify(service, "TEST-EDITOR-1", workflow_id, editor_runner=runner)
+
+        # The injected runner was used; ``subprocess.run`` was never touched.
+        assert len(runner_calls) == 1
+        direct_subprocess.assert_not_called()
+        # And the answer the runner wrote actually reached the graph.
+        mock_graph.stream.assert_called_once()
+
+    def test_comment_pr_uses_injected_editor_runner(self, test_db):
+        from dispatcher.commands.pr import _handle_comment_pr
+
+        workflow_id = self._make_pending_pr_approval_workflow("TEST-EDITOR-2")
+
+        runner_calls = []
+
+        def runner(cmd):
+            runner_calls.append(cmd)
+            with open(cmd[1], "w", encoding="utf-8") as f:
+                f.write("Fix the typo\n")
+
+        mock_graph = Mock()
+        mock_graph.stream.return_value = iter([])
+        mock_graph.get_state.return_value = Mock(
+            values={"workflow_id": workflow_id, "ticket_key": "TEST-EDITOR-2"}
+        )
+        service = _make_test_service(graph=mock_graph)
+
+        with patch("subprocess.run") as direct_subprocess:
+            _handle_comment_pr(service, "TEST-EDITOR-2", workflow_id, editor_runner=runner)
+
+        assert len(runner_calls) == 1
+        direct_subprocess.assert_not_called()
+        mock_graph.stream.assert_called_once()
+
+    def test_clarify_default_runner_calls_subprocess(self, test_db):
+        """No ``editor_runner`` argument → handler uses ``subprocess.run`` directly.
+        This is the CLI path and must keep working unchanged."""
+        from dispatcher.commands.clarify import _handle_clarify
+
+        workflow_id = self._make_pending_clarification_workflow("TEST-EDITOR-3")
+
+        def fake_subprocess_run(cmd, **kwargs):
+            with open(cmd[1], "w", encoding="utf-8") as f:
+                f.write("- Risk A\nA: yes\n")
+
+            class _CP:
+                returncode = 0
+
+            return _CP()
+
+        mock_graph = Mock()
+        mock_graph.stream.return_value = iter([])
+        mock_graph.get_state.return_value = Mock(
+            values={"workflow_id": workflow_id, "ticket_key": "TEST-EDITOR-3"}
+        )
+        service = _make_test_service(graph=mock_graph)
+
+        with patch("subprocess.run", side_effect=fake_subprocess_run) as direct_subprocess:
+            _handle_clarify(service, "TEST-EDITOR-3", workflow_id)
+
+        direct_subprocess.assert_called_once()
+        mock_graph.stream.assert_called_once()
+
+    def test_comment_pr_default_runner_calls_subprocess(self, test_db):
+        from dispatcher.commands.pr import _handle_comment_pr
+
+        workflow_id = self._make_pending_pr_approval_workflow("TEST-EDITOR-4")
+
+        def fake_subprocess_run(cmd, **kwargs):
+            with open(cmd[1], "w", encoding="utf-8") as f:
+                f.write("Fix it\n")
+
+            class _CP:
+                returncode = 0
+
+            return _CP()
+
+        mock_graph = Mock()
+        mock_graph.stream.return_value = iter([])
+        mock_graph.get_state.return_value = Mock(
+            values={"workflow_id": workflow_id, "ticket_key": "TEST-EDITOR-4"}
+        )
+        service = _make_test_service(graph=mock_graph)
+
+        with patch("subprocess.run", side_effect=fake_subprocess_run) as direct_subprocess:
+            _handle_comment_pr(service, "TEST-EDITOR-4", workflow_id)
+
+        direct_subprocess.assert_called_once()
+        mock_graph.stream.assert_called_once()

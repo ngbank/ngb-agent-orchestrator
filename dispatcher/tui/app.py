@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import os
-from typing import Callable, Dict, Optional
+import subprocess
+from typing import Callable, Dict, List, Optional
 
 from dotenv import load_dotenv
 from textual.app import App, ComposeResult
@@ -183,6 +184,38 @@ class WorkflowTUI(App[None]):
             description=label,
         )
 
+    # ------------------------------------------------------------------
+    # Editor handoff (suspend Textual so an external $EDITOR can use the TTY)
+    # ------------------------------------------------------------------
+    #
+    # The clarify and comment-PR flows shell out to ``$EDITOR``. With the
+    # TUI active, Textual keeps owning the alt-screen / mouse capture /
+    # render loop, so the editor's output is overdrawn and key input is
+    # captured by Textual bindings. ``App.suspend()`` releases the terminal
+    # for the duration of the subprocess, then restores application mode
+    # when the editor exits.
+    #
+    # Because actions run in worker threads (see ``_run_action_async``)
+    # and ``App.suspend()`` mutates the driver state, the suspended call
+    # is bounced to the main thread via ``call_from_thread`` — the worker
+    # blocks until the editor exits, then resumes its own work.
+
+    def _run_editor_suspended(self, cmd: List[str]) -> None:
+        """Release the terminal to an external editor and restore on exit.
+
+        Must run on the Textual main thread.
+        """
+        with self.suspend():
+            subprocess.run(cmd, check=True)
+
+    def _make_editor_runner(self) -> Callable[[List[str]], None]:
+        """Return an editor runner that the worker thread can call safely."""
+
+        def runner(cmd: List[str]) -> None:
+            self.call_from_thread(self._run_editor_suspended, cmd)
+
+        return runner
+
     def action_refresh(self) -> None:
         self._refresh_workflows()
 
@@ -240,9 +273,12 @@ class WorkflowTUI(App[None]):
         if wf is None:
             self._notify("No workflow selected.", "warning")
             return
+        editor_runner = self._make_editor_runner()
         self._run_action_async(
             f"Clarifying {wf.ticket_key}",
-            lambda: clarify_workflow(self._service, wf.ticket_key, wf.id),
+            lambda: clarify_workflow(
+                self._service, wf.ticket_key, wf.id, editor_runner=editor_runner
+            ),
         )
 
     def action_retry(self) -> None:
@@ -289,9 +325,10 @@ class WorkflowTUI(App[None]):
         if wf is None:
             self._notify("No workflow selected.", "warning")
             return
+        editor_runner = self._make_editor_runner()
         self._run_action_async(
             f"Commenting on PR for {wf.ticket_key}",
-            lambda: comment_pr(self._service, wf.ticket_key, wf.id),
+            lambda: comment_pr(self._service, wf.ticket_key, wf.id, editor_runner=editor_runner),
         )
 
     def action_reject_pr(self) -> None:
