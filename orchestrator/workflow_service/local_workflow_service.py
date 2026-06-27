@@ -615,7 +615,7 @@ class LocalWorkflowService:
             )
         else:
             # No success/partial → either an explicit failure summary, or no
-            # summary at all (execute_plan never wrote one).  Both must mark
+            # summary at all (generate_code never wrote one).  Both must mark
             # the workflow FAILED so the dispatcher doesn't leave it stuck in
             # PENDING_APPROVAL after a degenerate run.
             self._repo.update_status(

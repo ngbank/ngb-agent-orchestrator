@@ -20,6 +20,6 @@ NODE_EMOJI = {
     "__start__": "▶ ",
     "work_planner": "📋",
     "await_approval": "⏸️ ",
-    "execute_plan": "⚙️ ",
+    "generate_code": "⚙️ ",
     "__end__": "🏁",
 }

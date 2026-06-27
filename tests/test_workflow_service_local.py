@@ -248,7 +248,7 @@ class TestHistoryAndEvents:
         return [
             _FakeStateSnapshot(
                 metadata={"step": 2},
-                tasks=[_FakeTask("execute_plan", result={"summary": "ok"})],
+                tasks=[_FakeTask("generate_code", result={"summary": "ok"})],
             ),
             _FakeStateSnapshot(
                 metadata={"step": 1},
@@ -266,7 +266,7 @@ class TestHistoryAndEvents:
         history = svc.get_history("wf-x")
         assert [(h.step, h.node) for h in history] == [
             (1, "work_planner"),
-            (2, "execute_plan"),
+            (2, "generate_code"),
         ]
         assert history[0].outcome == "ok"
         assert history[0].result_keys == ["work_plan"]
@@ -298,7 +298,7 @@ class TestHistoryAndEvents:
         # results.
         assert [e.seq for e in events] == [1, 2, 3]
         assert [e.kind for e in events] == ["node_start", "node_end", "node_end"]
-        assert [e.node for e in events] == ["__start__", "work_planner", "execute_plan"]
+        assert [e.node for e in events] == ["__start__", "work_planner", "generate_code"]
         assert all(isinstance(e, WorkflowEvent) for e in events)
 
     def test_stream_events_respects_after_seq(self, temp_db, repo):
@@ -324,7 +324,7 @@ class TestAdminMutations:
         wf_id = repo.create_workflow(ticket_key="AOS-9")
         repo.update_status(wf_id, WorkflowStatus.COMPLETED)
         svc = _make_service(repo, FakeGraph())
-        svc.mark_interrupted(wf_id, failed_node="execute_plan")
+        svc.mark_interrupted(wf_id, failed_node="generate_code")
         # Status stays COMPLETED (terminal); no-op.
         assert repo.get_workflow(wf_id)["status"] == WorkflowStatus.COMPLETED
 
@@ -332,7 +332,7 @@ class TestAdminMutations:
         wf_id = repo.create_workflow(ticket_key="AOS-10")
         repo.update_status(wf_id, WorkflowStatus.IN_PROGRESS)
         svc = _make_service(repo, FakeGraph())
-        svc.mark_interrupted(wf_id, failed_node="execute_plan")
+        svc.mark_interrupted(wf_id, failed_node="generate_code")
         assert repo.get_workflow(wf_id)["status"] == WorkflowStatus.FAILED
 
     def test_clear_db_returns_counts(self, temp_db, repo):
@@ -528,14 +528,14 @@ class TestRetry:
         wf_id = repo.create_workflow(ticket_key="AOS-41", status=WorkflowStatus.FAILED)
         # initial state advertises the failed_node so retry can resolve it.
         initial = _FakeStateSnapshot(
-            values={"failed_node": "execute_plan"},
-            next_nodes=("execute_plan",),
+            values={"failed_node": "generate_code"},
+            next_nodes=("generate_code",),
         )
-        # state_history needs a snapshot where "execute_plan" is next
+        # state_history needs a snapshot where "generate_code" is next
         history = [
             _FakeStateSnapshot(
                 values={},
-                next_nodes=("execute_plan",),
+                next_nodes=("generate_code",),
                 config={"configurable": {"thread_id": wf_id, "checkpoint_id": "ck-1"}},
             )
         ]

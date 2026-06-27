@@ -1,7 +1,7 @@
 """
 Code generator subgraph builder.
 
-Compiles the executor as a LangGraph StateGraph that decomposes execute_plan
+Compiles the executor as a LangGraph StateGraph that decomposes generate_code
 into focused, single-responsibility nodes.
 
 Graph topology:
@@ -34,7 +34,7 @@ from orchestrator.code_generator.edges import (
 )
 from orchestrator.code_generator.nodes.cleanup import cleanup
 from orchestrator.code_generator.nodes.infer_branch_prefix import infer_branch_prefix
-from orchestrator.code_generator.nodes.mark_executing import mark_executing
+from orchestrator.code_generator.nodes.mark_generating_code import mark_generating_code
 from orchestrator.code_generator.nodes.persist_results import persist_results
 from orchestrator.code_generator.nodes.prepare_workspace import prepare_workspace
 from orchestrator.code_generator.nodes.process_results import process_results
@@ -54,7 +54,7 @@ def build_code_generator():
     builder = StateGraph(CodeGeneratorState)
     repo_setup_subgraph = build_repo_setup_subgraph("code_generator")
 
-    builder.add_node("mark_executing", mark_executing)
+    builder.add_node("mark_generating_code", mark_generating_code)
     builder.add_node("repo_setup", repo_setup_subgraph)
     builder.add_node("prepare_workspace", prepare_workspace)
     builder.add_node("infer_branch_prefix", infer_branch_prefix)
@@ -64,8 +64,8 @@ def build_code_generator():
     builder.add_node("persist_results", persist_results)
     builder.add_node("cleanup", cleanup)
 
-    builder.set_entry_point("mark_executing")
-    builder.add_edge("mark_executing", "repo_setup")
+    builder.set_entry_point("mark_generating_code")
+    builder.add_edge("mark_generating_code", "repo_setup")
 
     builder.add_conditional_edges(
         "repo_setup",

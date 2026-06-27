@@ -66,7 +66,7 @@ def _handle_approve(
         )
 
         if result.interrupted:
-            # Graph paused at await_pr_approval after execute_plan.
+            # Graph paused at await_pr_approval after generate_code.
             click.echo("⏸️  Graph paused at PR approval gate.")
             return
 

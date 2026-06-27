@@ -352,4 +352,4 @@ def test_persist_results_transitions_to_failed_on_exec_error():
         result = persist_results(state)
 
         assert mock_update_status.call_args[0][1] == WorkflowStatus.FAILED
-        assert result["failed_node"] == "execute_plan"
+        assert result["failed_node"] == "generate_code"

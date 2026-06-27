@@ -7,8 +7,8 @@ before that node was due to run, then re-invoking the graph.
 The work_planner subgraph is compiled without its own checkpointer, so any
 failure inside it (validate_input, check_duplicate, fetch_ticket, generate_plan,
 validate_plan, store_plan, post_to_jira) is rewound to the top-level
-``work_planner`` node.  An ``execute_plan`` failure is rewound to the
-``execute_plan`` node directly.
+``work_planner`` node.  A ``generate_code`` failure is rewound to the
+``generate_code`` node directly.
 """
 
 from typing import Optional

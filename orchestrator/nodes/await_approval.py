@@ -21,7 +21,7 @@ def await_approval(state: ApprovalInputState) -> ApprovalOutputState:
       - Reads the decision dict injected by Command(resume=...)
       - Updates workflow status and writes to audit_log
       - Returns approval_decision (and rejection_reason) into state so the
-        routing edge can direct the graph to execute_plan or END
+        routing edge can direct the graph to generate_code or END
     """
     workflow_id = state.get("workflow_id")
 

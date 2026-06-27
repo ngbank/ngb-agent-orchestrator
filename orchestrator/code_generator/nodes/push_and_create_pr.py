@@ -171,7 +171,7 @@ def push_and_create_pr(
                 )
                 return {
                     "execution_summary": execution_summary,
-                    "failed_node": "execute_plan",
+                    "failed_node": "generate_code",
                 }
         except Exception:
             pass  # if git isn't callable, fall through and attempt the push normally

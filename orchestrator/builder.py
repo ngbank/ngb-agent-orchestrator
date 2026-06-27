@@ -3,14 +3,14 @@ Top-level orchestrator graph builder.
 
 Creates a pipeline with a human-in-the-loop approval gate:
 
-    START → work_planner (subgraph) → await_approval → execute_plan → await_pr_approval → END
+    START → work_planner (subgraph) → await_approval → generate_code → await_pr_approval → END
                                             ↓ rejected                        ↓ comment
-                                           END                          execute_plan (loop)
+                                           END                          generate_code (loop)
 
 The ``work_planner`` subgraph handles all planning stages (fetch, generate,
 validate, store, post to Jira).  ``await_approval`` calls interrupt() so the
 graph suspends until the developer explicitly approves or rejects via CLI.
-The ``execute_plan`` node invokes the Goose execute recipe to implement the
+The ``generate_code`` node invokes the Goose generate recipe to implement the
 approved WorkPlan.  ``await_pr_approval`` calls interrupt() so the
 graph suspends until the PR is approved, commented on, or rejected via CLI.
 """
@@ -40,13 +40,13 @@ def _route_after_work_planner(
 
 def _route_after_approval(
     state: OrchestratorState,
-) -> Literal["execute_plan", "__end__"]:
+) -> Literal["generate_code", "__end__"]:
     if state.get("approval_decision") == "approved":
-        return "execute_plan"
+        return "generate_code"
     return "__end__"
 
 
-def _route_after_execute_plan(
+def _route_after_generate_code(
     state: OrchestratorState,
 ) -> Literal["await_pr_approval", "__end__"]:
     """Skip PR approval gate when code generation failed (no PR was created)."""
@@ -57,9 +57,9 @@ def _route_after_execute_plan(
 
 def _route_after_pr_approval(
     state: OrchestratorState,
-) -> Literal["execute_plan", "__end__"]:
+) -> Literal["generate_code", "__end__"]:
     if state.get("pr_approval_decision") == "commented":
-        return "execute_plan"
+        return "generate_code"
     return "__end__"
 
 
@@ -84,7 +84,7 @@ def build_orchestrator(checkpointer=None):
     builder = StateGraph(OrchestratorState)
     builder.add_node("work_planner", work_planner)
     builder.add_node("await_approval", await_approval)
-    builder.add_node("execute_plan", code_generator)
+    builder.add_node("generate_code", code_generator)
     builder.add_node("await_pr_approval", await_pr_approval)
 
     builder.set_entry_point("work_planner")
@@ -96,17 +96,17 @@ def build_orchestrator(checkpointer=None):
     builder.add_conditional_edges(
         "await_approval",
         _route_after_approval,
-        {"execute_plan": "execute_plan", "__end__": END},
+        {"generate_code": "generate_code", "__end__": END},
     )
     builder.add_conditional_edges(
-        "execute_plan",
-        _route_after_execute_plan,
+        "generate_code",
+        _route_after_generate_code,
         {"await_pr_approval": "await_pr_approval", "__end__": END},
     )
     builder.add_conditional_edges(
         "await_pr_approval",
         _route_after_pr_approval,
-        {"execute_plan": "execute_plan", "__end__": END},
+        {"generate_code": "generate_code", "__end__": END},
     )
 
     return builder.compile(checkpointer=checkpointer)

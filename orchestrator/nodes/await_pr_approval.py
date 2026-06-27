@@ -21,7 +21,7 @@ def await_pr_approval(state: PRApprovalInputState) -> PRApprovalOutputState:
       - Reads the decision dict injected by Command(resume=...)
       - Updates workflow status and writes to audit_log
       - Returns pr_approval_decision (and pr_comments) into state so the
-        routing edge can direct the graph to END or back to execute_plan
+        routing edge can direct the graph to END or back to generate_code
     """
     workflow_id = state.get("workflow_id")
     pr_url = state.get("pr_url")

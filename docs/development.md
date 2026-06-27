@@ -138,7 +138,7 @@ ngb-agent-orchestrator/
 │   ├── state.py                  # OrchestratorState TypedDict
 │   ├── nodes/
 │   │   ├── await_approval.py     # Approval gate (LangGraph interrupt)
-│   │   └── execute_plan.py       # Execute recipe node
+│   │   └── generate_code.py      # Generate code recipe node
 │   └── work_planner/
 │       ├── builder.py            # Work planner subgraph
 │       ├── edges.py              # Routing functions

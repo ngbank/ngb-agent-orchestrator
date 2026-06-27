@@ -41,7 +41,7 @@ def persist_results(state: PersistResultsInputState) -> PersistResultsOutputStat
             if not exec_error and exec_status in ("success", "partial") and pr_url_for_status
             else WorkflowStatus.FAILED
         )
-        update_status(workflow_id, new_status, actor="execute_plan")
+        update_status(workflow_id, new_status, actor="generate_code")
         click.echo(
             f"{chr(0x2705) if new_status == WorkflowStatus.PENDING_PR_APPROVAL else chr(0x274c)} "
             f"Execution {execution_summary.get('status')} — "
@@ -58,5 +58,5 @@ def persist_results(state: PersistResultsInputState) -> PersistResultsOutputStat
     )
     return {
         "pr_url": pr_url,
-        "failed_node": "execute_plan" if is_failure else None,
+        "failed_node": "generate_code" if is_failure else None,
     }

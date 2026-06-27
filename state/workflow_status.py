@@ -51,9 +51,9 @@ class WorkflowStatus(Enum):
 
         APPROVED is retryable for the same SIGKILL-recovery reason as
         IN_PROGRESS, but more sharply: APPROVED is a transient handoff state
-        between ``approve_plan`` and ``execute_plan``. If the server dies in
+        between ``approve_plan`` and ``generate_code``. If the server dies in
         that window the row stays APPROVED forever, and the only recovery
-        path is to resume from the execute node — which is exactly what
+        path is to resume from the generate node — which is exactly what
         retry does.
         """
         return self in (
