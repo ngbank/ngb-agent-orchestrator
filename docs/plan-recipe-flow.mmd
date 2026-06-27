@@ -25,7 +25,7 @@ sequenceDiagram
         Note over Recipe,FileSystem: Step 2: Analyze Repository
         Recipe->>FileSystem: Read README.md
         FileSystem-->>Recipe: Project structure
-        Recipe->>FileSystem: List directories<br/>(dispatcher/, schemas/, state/)
+        Recipe->>FileSystem: List directories<br/>(dispatcher/, orchestrator/, state/)
         FileSystem-->>Recipe: File tree
         Recipe->>FileSystem: Read relevant files<br/>(patterns, conventions)
         FileSystem-->>Recipe: Code context
@@ -120,7 +120,7 @@ sequenceDiagram
             rect rgb(235, 255, 235)
                 Note over Dispatcher,ExecRecipe: Step 9: Execute WorkPlan (AOS-41)
                 Dispatcher->>FileSystem: Write WorkPlan JSON<br/>to /tmp/{workflow_id}_workplan.json
-                Dispatcher->>Goose: goose run --recipe recipes/generate_code.yaml<br/>--params ticket_key={ticket_key}<br/>--params work_plan_path=...<br/>--params output_path=...
+                Dispatcher->>Goose: goose run --recipe orchestrator/code_generator/recipes/generate_code.yaml<br/>--params ticket_key={ticket_key}<br/>--params work_plan_path=...<br/>--params output_path=...
                 Goose->>ExecRecipe: Initialize recipe
                 ExecRecipe->>FileSystem: Read WorkPlan JSON
                 FileSystem-->>ExecRecipe: tasks, summary, approach

@@ -55,7 +55,7 @@ For a successful plan-stage run (e.g. `dispatcher --ticket AOS-94`):
 | `graph.node.<inner>` × 8 | 8 | `graph.node.work_planner` | `validate_input`, `check_duplicate`, `fetch_ticket`, `create_workflow_record`, `generate_plan`, `validate_plan`, `store_plan`, `post_to_jira` |
 | `graph.node.await_approval` | 1 | `workflow.run` | The interrupt node |
 | `graph.checkpoint` | ~13 | `workflow.run` | One per `ObservableSqliteSaver.put` |
-| `goose.run` | 1 | `workflow.run` | `goose run --recipe recipes/plan.yaml` |
+| `goose.run` | 1 | `workflow.run` | `goose run --recipe orchestrator/work_planner/recipes/plan.yaml` |
 | `llm.call` | N (~10–60) | `workflow.run` | Emitted from the proxy subprocess, parented via traceparent |
 
 All spans share a single `trace_id`. An execute-stage run roughly doubles

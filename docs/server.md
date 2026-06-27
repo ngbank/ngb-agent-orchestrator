@@ -187,7 +187,7 @@ docker run --rm -p 8080:8080 \
 |---|---|
 | `/home/orchestrator/.local/state/ngb-agent-orchestrator/db/local.db` | SQLite DB — bind-mount the host XDG state dir here to persist runs and share state with the host CLI |
 | `/home/orchestrator/.local/state/ngb-agent-orchestrator/logs/<workflow_id>/` | Per-workflow stage logs + `otel.jsonl` |
-| `/app/recipes/`, `/app/schemas/`, `/app/config/` | Read-only assets baked into the image |
+| `/app/config/` | Read-only config baked into the image (recipes and the WorkPlan schema ship inside the installed `orchestrator` package) |
 | `/usr/local/bin/orchestrator-server` | Console script (the default `CMD`) |
 
 ### Smoke test

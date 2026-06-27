@@ -46,10 +46,10 @@ See [docs/architecture.md](docs/architecture.md) for a full sequence diagram and
 | `orchestrator/server/` | Optional FastAPI HTTP surface for `WorkflowService` (see [docs/server.md](docs/server.md)) |
 | `graph/` | LangGraph state machine — nodes, edges, approval interrupt |
 | `otel/` | OpenTelemetry instrumentation — tracing, exporters, LiteLLM callback |
-| `recipes/plan.yaml` | Goose recipe: JIRA ticket → WorkPlan JSON |
-| `recipes/generate_code.yaml` | Goose recipe: WorkPlan → feature branch + commit |
+| `orchestrator/work_planner/recipes/plan.yaml` | Goose recipe: JIRA ticket → WorkPlan JSON |
+| `orchestrator/code_generator/recipes/generate_code.yaml` | Goose recipe: WorkPlan → feature branch + commit |
 | `state/` | SQLite persistence — workflows, audit log, migrations |
-| `schemas/work_plan_v1.json` | JSON schema contract for WorkPlan documents |
+| `orchestrator/work_planner/schemas/work_plan_v1.json` | JSON schema contract for WorkPlan documents |
 | `mcp_server/server.py` | MCP server: resolves JIRA project key → Git repo URL |
 | `config/project-repo-mapping.md` | Maps JIRA project keys to target Git repository URLs |
 

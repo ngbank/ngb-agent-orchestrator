@@ -754,7 +754,7 @@ class TestGooseRunEnrichment:
         log_file = tmp_path / "test.log"
         with log_file.open("w") as lf:
             run_and_tee(
-                ["goose", "run", "--recipe", "recipes/plan.yaml"],
+                ["goose", "run", "--recipe", "orchestrator/work_planner/recipes/plan.yaml"],
                 lf,
                 stdout=__import__("subprocess").DEVNULL,
                 stderr=__import__("subprocess").DEVNULL,
@@ -770,7 +770,14 @@ class TestGooseRunEnrichment:
         log_file = tmp_path / "test.log"
         with log_file.open("w") as lf:
             run_and_tee(
-                ["goose", "run", "--recipe", "recipes/execute.yaml", "--params", "k=v"],
+                [
+                    "goose",
+                    "run",
+                    "--recipe",
+                    "orchestrator/code_generator/recipes/execute.yaml",
+                    "--params",
+                    "k=v",
+                ],
                 lf,
                 stdout=__import__("subprocess").DEVNULL,
                 stderr=__import__("subprocess").DEVNULL,
@@ -778,7 +785,7 @@ class TestGooseRunEnrichment:
 
         span = next(s for s in exporter.get_finished_spans() if s.name == "goose.run")
         assert span.attributes.get("process.command_line") == (
-            "goose run --recipe recipes/execute.yaml --params k=v"
+            "goose run --recipe orchestrator/code_generator/recipes/execute.yaml --params k=v"
         )
 
     def test_goose_stdout_lines_counted(self, monkeypatch, tmp_path):
@@ -804,7 +811,7 @@ class TestGooseRunEnrichment:
         with _patch("subprocess.Popen", return_value=fake):
             with log_file.open("w") as lf:
                 run_and_tee(
-                    ["goose", "run", "--recipe", "recipes/plan.yaml"],
+                    ["goose", "run", "--recipe", "orchestrator/work_planner/recipes/plan.yaml"],
                     lf,
                     stdout=_subprocess.PIPE,
                     stderr=_subprocess.STDOUT,

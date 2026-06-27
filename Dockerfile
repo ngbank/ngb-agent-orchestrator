@@ -50,8 +50,6 @@ COPY orchestrator ./orchestrator
 COPY otel ./otel
 COPY state ./state
 COPY mcp_server ./mcp_server
-COPY schemas ./schemas
-COPY recipes ./recipes
 COPY config ./config
 
 RUN pip install --prefix=/install --no-deps .
@@ -76,9 +74,8 @@ COPY --from=builder /install /usr/local
 WORKDIR /app
 
 # Bring in the package source so the working directory mirrors the repo
-# layout (recipes/, schemas/, config/ are read at runtime by some nodes).
-COPY --from=builder /build/recipes ./recipes
-COPY --from=builder /build/schemas ./schemas
+# layout (config/ is read at runtime by some nodes; recipes and the WorkPlan
+# schema now live inside the orchestrator package).
 COPY --from=builder /build/config ./config
 
 # Pre-create the XDG state dir under the orchestrator user's $HOME so a host

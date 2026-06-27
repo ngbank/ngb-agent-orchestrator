@@ -177,11 +177,11 @@ State is defined in `graph/state.py` (`OrchestratorState`) and `graph/work_plann
 
 Cross-cutting OpenTelemetry instrumentation. Provides ContextVar-based correlation (`otel/context.py`), span exporters (`otel/exporters.py`), the stream-based LangGraph interceptor (`otel/instrumentation.py`), the LiteLLM callback emitting `llm.call` child spans (`otel/litellm_callback.py`), and payload redaction (`otel/redaction.py`). Imported by `dispatcher/`, `graph/`, and `state/`. Configuration via `OTEL_*` env vars — see [docs/configuration.md](configuration.md). For reading and reconstructing the per-workflow `otel.jsonl`, see [docs/trace-reconstruction.md](trace-reconstruction.md).
 
-### `recipes/plan.yaml`
+### `orchestrator/work_planner/recipes/plan.yaml`
 
 Goose recipe that produces a `WorkPlan` JSON document from a JIRA ticket. Parameters: `ticket_key`, `output_path`. See [docs/recipes.md](recipes.md) for full documentation.
 
-### `recipes/generate_code.yaml`
+### `orchestrator/code_generator/recipes/generate_code.yaml`
 
 Goose recipe that implements an approved WorkPlan. Parameters: `ticket_key`, `work_plan_path`, `output_path`. Creates a feature branch, implements tasks, runs checks, commits, and writes an execution summary JSON. Push and PR creation happen afterward in graph nodes using GitHub App auth. See [docs/recipes.md](recipes.md).
 
@@ -189,7 +189,7 @@ Goose recipe that implements an approved WorkPlan. Parameters: `ticket_key`, `wo
 
 SQLite persistence layer. See [docs/state-store.md](state-store.md) for schema and API reference.
 
-### `schemas/work_plan_v1.json`
+### `orchestrator/work_planner/schemas/work_plan_v1.json`
 
 JSON Schema contract for WorkPlan documents. Validated by `dispatcher/work_plan_validator.py` before any WorkPlan is stored or executed. Fields:
 

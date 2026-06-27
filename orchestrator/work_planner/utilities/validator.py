@@ -2,7 +2,8 @@
 WorkPlan Validator
 
 Validates planner output against the WorkPlan JSON Schema contract
-(schemas/work_plan_v1.json) before the dispatcher proceeds with execution.
+(orchestrator/work_planner/schemas/work_plan_v1.json) before the dispatcher
+proceeds with execution.
 """
 
 import json
@@ -13,7 +14,7 @@ from typing import Any
 import jsonschema
 from jsonschema import ValidationError as JsonSchemaValidationError
 
-_SCHEMA_PATH = Path(__file__).parent.parent.parent.parent / "schemas" / "work_plan_v1.json"
+_SCHEMA_PATH = Path(__file__).resolve().parent.parent / "schemas" / "work_plan_v1.json"
 
 
 class WorkPlanValidationError(Exception):
