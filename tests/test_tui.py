@@ -437,19 +437,30 @@ class TestWorkflowTUI:
             # PR actions stay hidden until PENDING_PR_APPROVAL.
             assert app.check_action("approve_pr", ()) is False
 
-    async def test_check_action_pr_requires_pr_url(
+    async def test_check_action_pr_visible_on_status_alone(
         self,
         sample_summaries: List[WorkflowSummary],
     ):
-        """PENDING_PR_APPROVAL without ``pr_url`` should not advertise PR actions."""
+        """AOS-184: PR actions must surface as soon as the row is in
+        ``PENDING_PR_APPROVAL`` regardless of whether the ``pr_url`` column
+        is populated.
+
+        ``code_generator/persist_results`` writes the status without writing
+        the dedicated ``pr_url`` column (the URL lives in
+        ``execution_summary.pr_url``), so requiring ``d.pr_url`` here would
+        hide the actions for every PR-awaiting workflow in practice. The
+        CLI handlers (``_handle_*_pr``) gate on status only, so the TUI
+        must match.
+        """
         wf_id = "wf-pr"
         summary = _make_summary(wf_id, "AOS-9", WorkflowStatus.PENDING_PR_APPROVAL)
         detail_no_url = _make_detail(wf_id, "AOS-9", WorkflowStatus.PENDING_PR_APPROVAL)
         service = FakeWorkflowService(summaries=[summary], details={wf_id: detail_no_url})
         app = WorkflowTUI(service)
         async with app.run_test():
-            assert app.check_action("approve_pr", ()) is False
-            assert app.check_action("comment_pr", ()) is False
+            assert app.check_action("approve_pr", ()) is True
+            assert app.check_action("comment_pr", ()) is True
+            assert app.check_action("reject_pr", ()) is True
 
         detail_with_url = _make_detail(
             wf_id,
@@ -462,6 +473,7 @@ class TestWorkflowTUI:
         async with app2.run_test():
             assert app2.check_action("approve_pr", ()) is True
             assert app2.check_action("comment_pr", ()) is True
+            assert app2.check_action("reject_pr", ()) is True
 
 
 # ---------------------------------------------------------------------------
