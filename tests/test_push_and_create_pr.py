@@ -109,7 +109,7 @@ def test_push_and_create_pr_fails_when_reexecution_produces_no_new_commits():
 
     assert result["execution_summary"]["status"] == "failed"
     assert "no new commits" in result["execution_summary"]["error"]
-    assert result["failed_node"] == "execute_plan"
+    assert result["failed_node"] == "generate_code"
     mock_push.assert_not_called()
     mock_sub.assert_called_once()
 

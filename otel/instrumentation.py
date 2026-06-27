@@ -12,7 +12,7 @@ Span structure emitted per workflow run:
   workflow.run (root)
   └── graph.node.work_planner
   └── graph.node.await_approval
-  └── graph.node.execute_plan        (may appear multiple times on retry)
+  └── graph.node.generate_code       (may appear multiple times on retry)
   └── graph.node.await_pr_approval
 
 Each span carries:

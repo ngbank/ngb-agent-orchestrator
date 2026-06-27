@@ -260,7 +260,7 @@ def goose_session(
 
         # Inject the active W3C traceparent so the proxy can parent every
         # ``llm.call`` span under the current dispatcher span (typically
-        # ``graph.node.work_planner`` / ``graph.node.execute_plan``). Without
+        # ``graph.node.work_planner`` / ``graph.node.generate_code``). Without
         # this, each LiteLLM request lands in its own orphan trace because the
         # proxy subprocess has no shared OTel context with the dispatcher.
         try:

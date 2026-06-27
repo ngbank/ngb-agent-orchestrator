@@ -100,8 +100,8 @@ python -m dispatcher.run --reject  --workflow-id b04fd4e0-... --reason "needs mo
 
 1. Workflow status → `APPROVED`
 2. The LangGraph graph resumes from the checkpoint
-3. The `execute_plan` node is invoked:
-   - Runs `goose run --recipe recipes/execute.yaml`
+3. The `generate_code` node is invoked:
+   - Runs `goose run --recipe recipes/generate.yaml`
   - The code-generator subgraph fetches a GitHub App token before cloning
   - Goose creates a feature branch (`feature/{TICKET}+{slug}`), implements tasks, runs tests, commits
   - A follow-up graph node pushes the branch and opens or updates the PR using GitHub App auth
@@ -191,7 +191,7 @@ Resume granularity:
   `post_to_jira`) rewinds to before the entire `work_planner` subgraph — the subgraph
   re-runs from `validate_input`. This is intentional: the subgraph runs without its
   own checkpointer, so it is atomic from the parent graph's perspective.
-- A failure in `execute_plan` rewinds to before `execute_plan` only — the plan and
+- A failure in `generate_code` rewinds to before `generate_code` only — the plan and
   approval are preserved.
 
 Only `failed` workflows are retryable. Attempting `--retry` on any other status returns
@@ -238,7 +238,7 @@ pending_approval  ──── rejected ─────────────�
 approved
   │
   ▼
-completed  (or failed if execute_plan errors)
+completed  (or failed if generate_code errors)
 ```
 
 | Status | Description |
@@ -247,7 +247,7 @@ completed  (or failed if execute_plan errors)
 | `in_progress` | Planning phase executing (resumable via `--retry` if interrupted) |
 | `pending_workplan_clarification` | WorkPlan has questions/concerns; waiting for reviewer answers |
 | `pending_approval` | WorkPlan posted; waiting for developer decision |
-| `approved` | Developer approved; execute phase starting |
+| `approved` | Developer approved; generate phase starting |
 | `rejected` | Developer rejected; no code changes made |
 | `completed` | All stages finished successfully |
 | `failed` | Unrecoverable error occurred (resumable via `--retry`) |

@@ -2,7 +2,7 @@
 
 This document synthesises research findings from academic and industry sources on how to structure
 prompts, tools, and task decomposition for autonomous coding agents. It directly informs the design
-of `recipes/execute.yaml` and any future Goose recipes in this project.
+of `recipes/generate.yaml` and any future Goose recipes in this project.
 
 ---
 
@@ -151,7 +151,7 @@ writing).
 
 **Adopted mitigation (AOS-87): do not use `response:` for autonomous coding recipes.**
 
-Both `recipes/execute.yaml` and `recipes/plan.yaml` were originally written with `response:`
+Both `recipes/generate.yaml` and `recipes/plan.yaml` were originally written with `response:`
 schemas, but the dispatcher reads structured results from a file (`output_path`), never from
 Goose's `final_output` payload. The `response:` block was therefore redundant — its only runtime
 effect was enabling the injection mechanism that killed every long execute run.

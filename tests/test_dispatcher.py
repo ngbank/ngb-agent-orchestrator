@@ -766,7 +766,7 @@ class TestHandleApproveFailedExecution:
     """Regression tests for approve path when execution fails.
 
     Prior to the fix, _handle_approve unconditionally set the workflow status
-    to COMPLETED after graph.invoke() returned, even when execute_plan had
+    to COMPLETED after graph.invoke() returned, even when generate_code had
     already written a 'failed' execution summary. This caused failed runs to
     appear as completed in the database.
     """
@@ -775,7 +775,7 @@ class TestHandleApproveFailedExecution:
         return state_store.create_workflow(ticket_key, status=WorkflowStatus.PENDING_APPROVAL)
 
     def test_approve_marks_failed_when_execution_fails(self, test_db, cli_runner):
-        """When execute_plan returns a failed summary, status must stay FAILED."""
+        """When generate_code returns a failed summary, status must stay FAILED."""
         workflow_id = self._make_pending_workflow("TEST-123")
 
         failed_summary = {
@@ -815,7 +815,7 @@ class TestHandleApproveFailedExecution:
         assert "❌ Workflow failed" in result.output
 
     def test_approve_marks_pending_pr_approval_when_execution_succeeds(self, test_db, cli_runner):
-        """When execute_plan returns a success summary, status must be PENDING_PR_APPROVAL."""
+        """When generate_code returns a success summary, status must be PENDING_PR_APPROVAL."""
         workflow_id = self._make_pending_workflow("TEST-123")
 
         success_summary = {

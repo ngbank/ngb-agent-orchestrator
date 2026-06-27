@@ -271,9 +271,9 @@ def test_route_repo_setup_error():
 
 
 def test_route_after_pr_approval_commented():
-    """PR_COMMENTED decision must route back to execute_plan for incremental fixes."""
+    """PR_COMMENTED decision must route back to generate_code for incremental fixes."""
     state = {"ticket_key": "AOS-50", "pr_approval_decision": "commented"}
-    assert _route_after_pr_approval(state) == "execute_plan"
+    assert _route_after_pr_approval(state) == "generate_code"
 
 
 def test_route_after_pr_approval_approved():

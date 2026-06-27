@@ -128,7 +128,7 @@ def test_is_retryable_failed_and_pr_commented():
         WorkflowStatus.IN_PROGRESS,
         WorkflowStatus.PR_COMMENTED,
         # APPROVED is a transient handoff between approve_plan and
-        # execute_plan; if the server dies in that window the row stays
+        # generate_code; if the server dies in that window the row stays
         # APPROVED forever and retry is the only recovery path.
         WorkflowStatus.APPROVED,
     }
@@ -224,7 +224,7 @@ def test_get_latest_retryable_returns_most_recent_failed(test_db):
         ("validate_plan", "work_planner"),
         ("store_plan", "work_planner"),
         ("post_to_jira", "work_planner"),
-        ("execute_plan", "execute_plan"),
+        ("generate_code", "generate_code"),
         ("await_approval", "await_approval"),
     ],
 )
@@ -240,13 +240,13 @@ def test_find_rewind_config_picks_first_matching_snapshot():
     cfg_c = {"configurable": {"thread_id": "t", "checkpoint_id": "c"}}
 
     snap_a = Mock(config=cfg_a, next=("error_handler",))
-    snap_b = Mock(config=cfg_b, next=("execute_plan",))
+    snap_b = Mock(config=cfg_b, next=("generate_code",))
     snap_c = Mock(config=cfg_c, next=("await_approval",))
 
     # get_state_history yields newest first
     mock_graph.get_state_history.return_value = iter([snap_a, snap_b, snap_c])
 
-    result = find_rewind_config(mock_graph, {"configurable": {"thread_id": "t"}}, "execute_plan")
+    result = find_rewind_config(mock_graph, {"configurable": {"thread_id": "t"}}, "generate_code")
     assert result == cfg_b
 
 
@@ -255,7 +255,7 @@ def test_find_rewind_config_returns_none_when_no_match():
     snap = Mock(config={"x": 1}, next=("error_handler",))
     mock_graph.get_state_history.return_value = iter([snap])
 
-    result = find_rewind_config(mock_graph, {}, "execute_plan")
+    result = find_rewind_config(mock_graph, {}, "generate_code")
     assert result is None
 
 
@@ -309,7 +309,7 @@ def test_retry_rejects_non_failed_workflow(test_db, cli_runner):
 
 
 def test_retry_resolves_by_ticket(test_db, cli_runner):
-    wf_id = _failed_workflow("TEST-1", "execute_plan")
+    wf_id = _failed_workflow("TEST-1", "generate_code")
     success_summary = {
         "status": "success",
         "branch": "feature/TEST-1+x",
@@ -320,7 +320,7 @@ def test_retry_resolves_by_ticket(test_db, cli_runner):
 
     service = _make_test_service(
         graph=_mock_graph_with_failed_node(
-            "execute_plan",
+            "generate_code",
             {"workflow_id": wf_id, "ticket_key": "TEST-1", "execution_summary": success_summary},
         )
     )
@@ -334,7 +334,7 @@ def test_retry_resolves_by_ticket(test_db, cli_runner):
 
 
 def test_retry_resolves_by_workflow_id(test_db, cli_runner):
-    wf_id = _failed_workflow("TEST-1", "execute_plan")
+    wf_id = _failed_workflow("TEST-1", "generate_code")
     success_summary = {
         "status": "success",
         "branch": "feature/TEST-1+x",
@@ -345,7 +345,7 @@ def test_retry_resolves_by_workflow_id(test_db, cli_runner):
 
     service = _make_test_service(
         graph=_mock_graph_with_failed_node(
-            "execute_plan",
+            "generate_code",
             {"workflow_id": wf_id, "ticket_key": "TEST-1", "execution_summary": success_summary},
         )
     )
@@ -357,7 +357,7 @@ def test_retry_resolves_by_workflow_id(test_db, cli_runner):
 
 
 def test_retry_without_failed_node_errors(test_db, cli_runner):
-    wf_id = _failed_workflow("TEST-1", "execute_plan")
+    wf_id = _failed_workflow("TEST-1", "generate_code")
 
     mock_graph = Mock()
     # No failed_node recorded AND no pending next node → cannot resume.
@@ -370,7 +370,7 @@ def test_retry_without_failed_node_errors(test_db, cli_runner):
 
 
 def test_retry_transitions_to_in_progress_then_completed(test_db, cli_runner):
-    wf_id = _failed_workflow("TEST-1", "execute_plan")
+    wf_id = _failed_workflow("TEST-1", "generate_code")
     success_summary = {
         "status": "success",
         "branch": "feature/TEST-1+x",
@@ -386,7 +386,7 @@ def test_retry_transitions_to_in_progress_then_completed(test_db, cli_runner):
         return iter([])
 
     mock_graph = _mock_graph_with_failed_node(
-        "execute_plan",
+        "generate_code",
         {
             "workflow_id": wf_id,
             "ticket_key": "TEST-1",
@@ -404,7 +404,7 @@ def test_retry_transitions_to_in_progress_then_completed(test_db, cli_runner):
 
 
 def test_retry_marks_failed_when_second_attempt_also_fails(test_db, cli_runner):
-    wf_id = _failed_workflow("TEST-1", "execute_plan")
+    wf_id = _failed_workflow("TEST-1", "generate_code")
     failure_summary = {
         "status": "failed",
         "build": "fail",
@@ -414,12 +414,12 @@ def test_retry_marks_failed_when_second_attempt_also_fails(test_db, cli_runner):
 
     service = _make_test_service(
         graph=_mock_graph_with_failed_node(
-            "execute_plan",
+            "generate_code",
             {
                 "workflow_id": wf_id,
                 "ticket_key": "TEST-1",
                 "execution_summary": failure_summary,
-                "failed_node": "execute_plan",
+                "failed_node": "generate_code",
             },
         )
     )
@@ -529,7 +529,7 @@ def test_retry_accepts_in_progress_workflow(test_db, cli_runner):
 
     service = _make_test_service(
         graph=_mock_graph_with_failed_node(
-            "execute_plan",
+            "generate_code",
             {"workflow_id": wf_id, "ticket_key": "TEST-1", "execution_summary": success_summary},
         )
     )
@@ -563,10 +563,10 @@ def test_retry_derives_failed_node_from_next_when_missing(test_db, cli_runner):
             "ticket_key": "TEST-1",
             "execution_summary": success_summary,
         },
-        next=("execute_plan",),
+        next=("generate_code",),
     )
     snap = Mock(config={"configurable": {"thread_id": "t", "checkpoint_id": "cp"}})
-    snap.next = ("execute_plan",)
+    snap.next = ("generate_code",)
     mock_graph.get_state_history.return_value = iter([snap])
     mock_graph.stream.return_value = iter([])
     service = _make_test_service(graph=mock_graph)

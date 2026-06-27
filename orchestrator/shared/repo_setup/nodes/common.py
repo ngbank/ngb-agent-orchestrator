@@ -24,7 +24,7 @@ def failure_update(state: RepoSetupState, message: str, mode: str) -> dict:
         return {
             "execution_summary": execution_failure_summary(state.get("ticket_key", ""), message),
             "exec_error": message,
-            "failed_node": "execute_plan",
+            "failed_node": "generate_code",
         }
 
     return {

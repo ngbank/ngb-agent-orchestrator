@@ -1,4 +1,4 @@
-"""Node: run_goose — invoke the Goose execute recipe against the cloned workspace."""
+"""Node: run_goose — invoke the Goose generate recipe against the cloned workspace."""
 
 import json
 import os
@@ -12,7 +12,7 @@ from orchestrator.utils import goose_session, run_and_tee
 
 
 def run_goose(state: RunGooseInputState) -> dict:
-    """Shell out to `goose run --recipe recipes/execute.yaml`.
+    """Shell out to `goose run --recipe recipes/generate.yaml`.
 
     goose_session is opened and closed entirely within this node — it is the
     only node that requires a live Goose session.
@@ -50,15 +50,15 @@ def run_goose(state: RunGooseInputState) -> dict:
 
     mcp_python = os.environ.get("GOOSE_MCP_PYTHON", "python")
     max_turns = os.environ.get("GOOSE_MAX_TURNS", "200")
-    recipe_path = Path(__file__).resolve().parents[3] / "recipes" / "execute.yaml"
+    recipe_path = Path(__file__).resolve().parents[3] / "recipes" / "generate.yaml"
 
-    click.echo(f"🪵 Running execute recipe for {ticket_key}...")
+    click.echo(f"🪵 Running generate recipe for {ticket_key}...")
 
     with (
         open(exec_log_path, "a") as log_file,
         goose_session(workflow_id=workflow_id, stage="execute", ticket_key=ticket_key) as goose_env,
     ):
-        log_file.write("\n=== goose run execute recipe ===\n")
+        log_file.write("\n=== goose run generate recipe ===\n")
         result = run_and_tee(
             [
                 "goose",

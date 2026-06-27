@@ -47,7 +47,7 @@ See [docs/architecture.md](docs/architecture.md) for a full sequence diagram and
 | `graph/` | LangGraph state machine — nodes, edges, approval interrupt |
 | `otel/` | OpenTelemetry instrumentation — tracing, exporters, LiteLLM callback |
 | `recipes/plan.yaml` | Goose recipe: JIRA ticket → WorkPlan JSON |
-| `recipes/execute.yaml` | Goose recipe: WorkPlan → feature branch + commit |
+| `recipes/generate.yaml` | Goose recipe: WorkPlan → feature branch + commit |
 | `state/` | SQLite persistence — workflows, audit log, migrations |
 | `schemas/work_plan_v1.json` | JSON schema contract for WorkPlan documents |
 | `mcp_server/server.py` | MCP server: resolves JIRA project key → Git repo URL |

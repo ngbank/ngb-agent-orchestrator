@@ -73,11 +73,11 @@ class TestOtelContext:
 
     def test_otel_context_capture(self):
         set_workflow_context(workflow_id="wf-2", ticket_key="AOS-2")
-        set_node_context("execute_plan")
+        set_node_context("generate_code")
         ctx = OtelContext.capture()
         assert ctx.workflow_id == "wf-2"
         assert ctx.ticket_key == "AOS-2"
-        assert ctx.node_name == "execute_plan"
+        assert ctx.node_name == "generate_code"
 
     def test_as_attributes_excludes_none(self):
         set_workflow_context(workflow_id="wf-3")
@@ -190,7 +190,7 @@ class TestRecordNodeOutput:
 
         provider, exporter = _make_in_memory_provider()
         span = self._make_span(provider)
-        _record_node_output(span, "execute_plan", {"error": "something went wrong"})
+        _record_node_output(span, "generate_code", {"error": "something went wrong"})
         span.end()
         finished = exporter.get_finished_spans()
         assert finished[0].status.status_code == StatusCode.ERROR
@@ -199,10 +199,12 @@ class TestRecordNodeOutput:
     def test_failed_node_attribute(self):
         provider, exporter = _make_in_memory_provider()
         span = self._make_span(provider)
-        _record_node_output(span, "execute_plan", {"error": "fail", "failed_node": "execute_plan"})
+        _record_node_output(
+            span, "generate_code", {"error": "fail", "failed_node": "generate_code"}
+        )
         span.end()
         finished = exporter.get_finished_spans()
-        assert finished[0].attributes.get("graph.node.failed_node") == "execute_plan"
+        assert finished[0].attributes.get("graph.node.failed_node") == "generate_code"
 
     def test_non_dict_output_is_ignored(self):
         provider, _ = _make_in_memory_provider()
@@ -259,7 +261,7 @@ class TestInstrumentGraphStream:
 
         events = [
             {"work_planner": {"workflow_id": "wf-1"}},
-            {"execute_plan": {}},
+            {"generate_code": {}},
         ]
         graph = self._make_mock_graph(events)
 
@@ -268,7 +270,7 @@ class TestInstrumentGraphStream:
         span_names = [s.name for s in exporter.get_finished_spans()]
         assert "workflow.run" in span_names
         assert "graph.node.work_planner" in span_names
-        assert "graph.node.execute_plan" in span_names
+        assert "graph.node.generate_code" in span_names
 
     def test_root_span_has_correlation_attributes(self, monkeypatch):
         import otel.instrumentation as instr
@@ -685,7 +687,7 @@ class TestInstrumentGraphStreamRollup:
         provider, exporter = _make_in_memory_provider()
         monkeypatch.setattr(instr, "_tracer", provider.get_tracer("test"))
 
-        events = [{"work_planner": {"draft": "x"}}, {"execute_plan": {"result": "ok"}}]
+        events = [{"work_planner": {"draft": "x"}}, {"generate_code": {"result": "ok"}}]
         graph = self._make_mock_graph(events)
         list(instr.instrument_graph_stream(graph, {}, {"configurable": {"thread_id": "t1"}}))
 
@@ -693,7 +695,7 @@ class TestInstrumentGraphStreamRollup:
         assert root.status.status_code == StatusCode.OK
         assert root.attributes.get("workflow.exit_reason") == "completed"
         assert root.attributes.get("workflow.node_count") == 2
-        assert root.attributes.get("workflow.last_node") == "execute_plan"
+        assert root.attributes.get("workflow.last_node") == "generate_code"
 
     def test_interrupted_run_marks_exit_reason_interrupted(self, monkeypatch):
         import otel.instrumentation as instr
@@ -875,13 +877,13 @@ class TestObservableSqliteSaverCheckpointSpan:
         self._put(
             saver,
             source="loop",
-            writes={"work_planner": [], "execute_plan": []},
+            writes={"work_planner": [], "generate_code": []},
             new_versions={"chA": 2},
         )
 
         span = next(s for s in exporter.get_finished_spans() if s.name == "graph.checkpoint")
         assert tuple(span.attributes.get("checkpoint.writes_nodes")) == (
-            "execute_plan",
+            "generate_code",
             "work_planner",
         )
 

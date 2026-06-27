@@ -39,14 +39,14 @@ LangGraph Graph (graph/)
  │    Marks workflow PENDING_APPROVAL in SQLite
  │    Prints instructions for approve/reject CLI
  │
- └── execute_plan
+ └── generate_code
             Runs code_generator subgraph:
                 - Resolves repo URL
                 - Fetches GitHub App installation token
                 - Clones the repo over HTTPS
-                - Invokes Goose execute recipe
+                - Invokes Goose generate recipe
                 - Pushes the branch and opens or updates the PR
-            Goose execute recipe:
+            Goose generate recipe:
         - Creates feature branch
         - Implements WorkPlan tasks
         - Runs build + test checks
@@ -167,7 +167,7 @@ is exposed at `/openapi.json` and Swagger UI at `/docs`. See
 
 LangGraph state machine. Two levels:
 
-- **Top-level graph** (`graph/builder.py`): `work_planner → await_approval → execute_plan`
+- **Top-level graph** (`graph/builder.py`): `work_planner → await_approval → generate_code`
 - **`work_planner` subgraph** (`graph/work_planner/`): planning + repo setup + cleanup nodes
 - **Shared repo setup module** (`orchestrator/shared/repo_setup/`): reusable repo setup primitives (`resolve_repository_url`, `fetch_token_for_repo`, `clone_repository`, `cleanup_working_dir`) and a nested shared repo setup subgraph (`build_repo_setup_subgraph`) used by both `work_planner` and `code_generator`.
 
@@ -181,7 +181,7 @@ Cross-cutting OpenTelemetry instrumentation. Provides ContextVar-based correlati
 
 Goose recipe that produces a `WorkPlan` JSON document from a JIRA ticket. Parameters: `ticket_key`, `output_path`. See [docs/recipes.md](recipes.md) for full documentation.
 
-### `recipes/execute.yaml`
+### `recipes/generate.yaml`
 
 Goose recipe that implements an approved WorkPlan. Parameters: `ticket_key`, `work_plan_path`, `output_path`. Creates a feature branch, implements tasks, runs checks, commits, and writes an execution summary JSON. Push and PR creation happen afterward in graph nodes using GitHub App auth. See [docs/recipes.md](recipes.md).
 

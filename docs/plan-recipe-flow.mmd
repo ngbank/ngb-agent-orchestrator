@@ -115,12 +115,12 @@ sequenceDiagram
         alt Approved
             Dispatcher->>SQLite: update_status(APPROVED)<br/>audit_log: actor=local_user, action=workflow_approved
             SQLite-->>Dispatcher: ✅ Status updated
-            Dispatcher->>Dispatcher: Resume graph → execute_plan
+            Dispatcher->>Dispatcher: Resume graph → generate_code
 
             rect rgb(235, 255, 235)
                 Note over Dispatcher,ExecRecipe: Step 9: Execute WorkPlan (AOS-41)
                 Dispatcher->>FileSystem: Write WorkPlan JSON<br/>to /tmp/{workflow_id}_workplan.json
-                Dispatcher->>Goose: goose run --recipe recipes/execute.yaml<br/>--params ticket_key={ticket_key}<br/>--params work_plan_path=...<br/>--params output_path=...
+                Dispatcher->>Goose: goose run --recipe recipes/generate.yaml<br/>--params ticket_key={ticket_key}<br/>--params work_plan_path=...<br/>--params output_path=...
                 Goose->>ExecRecipe: Initialize recipe
                 ExecRecipe->>FileSystem: Read WorkPlan JSON
                 FileSystem-->>ExecRecipe: tasks, summary, approach

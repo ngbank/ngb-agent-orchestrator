@@ -94,7 +94,7 @@ The `_MAPPING_FILE` path is resolved relative to the server file itself (not the
 
 ## `get_developer_rules` — Developer Rules Tool
 
-Returns a structured list of mandatory developer rules that the execute-plan agent must honour during every execution session.
+Returns a structured list of mandatory developer rules that the generate-code agent must honour during every generation session.
 
 ### Rules returned
 
@@ -122,6 +122,6 @@ for r in rules:
     print(r["id"], ":", r["rule"])
 ```
 
-### How the execute recipe uses it
+### How the generate recipe uses it
 
-The execute recipe (`recipes/execute.yaml`) calls `get_developer_rules()` as **Step 1** — before any other action — and injects the returned rules into the agent's working context. The agent is required to comply with all rules throughout the session; project-specific commands (how to install hooks, how to run the test suite) are injected separately via `get_project_setup`.
+The generate recipe (`recipes/generate.yaml`) calls `get_developer_rules()` as **Step 1** — before any other action — and injects the returned rules into the agent's working context. The agent is required to comply with all rules throughout the session; project-specific commands (how to install hooks, how to run the test suite) are injected separately via `get_project_setup`.
