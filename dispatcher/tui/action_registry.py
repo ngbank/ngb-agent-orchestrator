@@ -118,13 +118,26 @@ REGISTRY: tuple[WorkflowAction, ...] = (
         "o",
         "approve_pr",
         "Approve PR",
-        _on_detail(lambda d: d.status == WorkflowStatus.PENDING_PR_APPROVAL and bool(d.pr_url)),
+        # Status alone is authoritative: matches the CLI guard in
+        # dispatcher/commands/pr.py::_handle_approve_pr. The dedicated
+        # ``pr_url`` column is not populated when persist_results writes
+        # PENDING_PR_APPROVAL — the URL lives in execution_summary.pr_url —
+        # so requiring ``d.pr_url`` here would falsely hide the action.
+        _on_detail(lambda d: d.status == WorkflowStatus.PENDING_PR_APPROVAL),
     ),
     WorkflowAction(
         "p",
         "comment_pr",
         "Comment PR",
-        _on_detail(lambda d: d.status == WorkflowStatus.PENDING_PR_APPROVAL and bool(d.pr_url)),
+        _on_detail(lambda d: d.status == WorkflowStatus.PENDING_PR_APPROVAL),
+    ),
+    WorkflowAction(
+        "k",
+        "reject_pr",
+        "Reject PR",
+        # ``k`` chosen to avoid collisions with ``j`` (reject), ``l`` (logs),
+        # and the global keys. Mirrors _handle_reject_pr's status guard.
+        _on_detail(lambda d: d.status == WorkflowStatus.PENDING_PR_APPROVAL),
     ),
     WorkflowAction(
         "l",

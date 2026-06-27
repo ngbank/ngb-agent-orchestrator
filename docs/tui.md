@@ -39,9 +39,9 @@ Both commands launch the same Textual application.
 
 The footer reshapes per row: each binding is hidden when the selected
 workflow can't accept that action. For example, `a` (Approve) only appears
-when the row is in `pending_approval`, and PR actions only appear when both
-the status is `pending_pr_approval` and a `pr_url` is present. The full set
-of bindings and their preconditions is declared in
+when the row is in `pending_approval`, and PR actions only appear when the
+status is `pending_pr_approval`. The full set of bindings and their
+preconditions is declared in
 [`dispatcher/tui/action_registry.py`](../dispatcher/tui/action_registry.py)
 — add a new action there and the footer picks it up automatically.
 
@@ -56,8 +56,9 @@ of bindings and their preconditions is declared in
 | `c` | Clarify the selected workflow (opens editor) | row status is `pending_workplan_clarification` and the WorkPlan has unanswered concerns |
 | `y` | Retry the selected failed workflow | row status satisfies `WorkflowStatus.is_retryable()` |
 | `x` | Cancel the selected active workflow (prompts for reason) | row status satisfies `WorkflowStatus.is_active()` |
-| `o` | Approve the pending PR for the selected workflow | row status is `pending_pr_approval` and `pr_url` is set |
-| `p` | Comment on the pending PR for the selected workflow (opens editor) | row status is `pending_pr_approval` and `pr_url` is set |
+| `o` | Approve the pending PR for the selected workflow | row status is `pending_pr_approval` |
+| `p` | Comment on the pending PR for the selected workflow (opens editor) | row status is `pending_pr_approval` |
+| `k` | Reject the pending PR for the selected workflow (prompts for reason) | row status is `pending_pr_approval` |
 | `l` | Show logs for the selected workflow | a row is selected |
 | `d` | Clear the entire database (confirmation dialog) | always |
 | `space` | Pause / resume auto-scroll on the live log tail | always |

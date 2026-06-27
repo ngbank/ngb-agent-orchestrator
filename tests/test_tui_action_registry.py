@@ -49,7 +49,17 @@ class TestNoSelection:
 
     @pytest.mark.parametrize(
         "action",
-        ["approve", "reject", "clarify", "retry", "cancel", "approve_pr", "comment_pr", "logs"],
+        [
+            "approve",
+            "reject",
+            "clarify",
+            "retry",
+            "cancel",
+            "approve_pr",
+            "comment_pr",
+            "reject_pr",
+            "logs",
+        ],
     )
     def test_workflow_scoped_actions_hidden(self, action: str) -> None:
         assert _entry(action).applies(None) is False
@@ -104,12 +114,21 @@ class TestCancelPredicate:
 
 
 class TestPRPredicates:
-    @pytest.mark.parametrize("action", ["approve_pr", "comment_pr"])
-    def test_hidden_without_pr_url(self, action: str) -> None:
-        detail = _detail(WorkflowStatus.PENDING_PR_APPROVAL, pr_url=None)
-        assert _entry(action).applies(detail) is False
+    """PR action predicates are status-only.
 
-    @pytest.mark.parametrize("action", ["approve_pr", "comment_pr"])
+    The dedicated ``pr_url`` column on the workflow row is not populated when
+    ``code_generator/persist_results`` writes ``PENDING_PR_APPROVAL`` — the URL
+    lives in ``execution_summary.pr_url``. The CLI handlers (``_handle_*_pr``)
+    only check status, so the TUI must match.
+    """
+
+    @pytest.mark.parametrize("action", ["approve_pr", "comment_pr", "reject_pr"])
+    def test_visible_without_pr_url(self, action: str) -> None:
+        # Reproduces the AOS-184 scenario: status set, column empty.
+        detail = _detail(WorkflowStatus.PENDING_PR_APPROVAL, pr_url=None)
+        assert _entry(action).applies(detail) is True
+
+    @pytest.mark.parametrize("action", ["approve_pr", "comment_pr", "reject_pr"])
     def test_visible_when_pending_pr_with_url(self, action: str) -> None:
         detail = _detail(
             WorkflowStatus.PENDING_PR_APPROVAL,
@@ -117,8 +136,8 @@ class TestPRPredicates:
         )
         assert _entry(action).applies(detail) is True
 
-    @pytest.mark.parametrize("action", ["approve_pr", "comment_pr"])
-    def test_hidden_for_other_statuses_even_with_pr(self, action: str) -> None:
+    @pytest.mark.parametrize("action", ["approve_pr", "comment_pr", "reject_pr"])
+    def test_hidden_for_other_statuses(self, action: str) -> None:
         for status in WorkflowStatus:
             if status == WorkflowStatus.PENDING_PR_APPROVAL:
                 continue
