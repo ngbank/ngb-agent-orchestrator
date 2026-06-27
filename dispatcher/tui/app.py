@@ -12,6 +12,7 @@ from textual.containers import Horizontal
 from textual.timer import Timer
 from textual.widgets import Footer, Header
 
+from dispatcher.tui.action_registry import REGISTRY, action_for
 from dispatcher.tui.actions import (
     ActionError,
     approve_pr,
@@ -55,19 +56,14 @@ class WorkflowTUI(App[None]):
     }
     """
 
+    # ``BINDINGS`` is assembled from the action registry plus the two
+    # bindings that are independent of any selected workflow row (``quit``
+    # always works; ``toggle_tail_pause`` is UI-state, not workflow-state).
+    # The footer is then narrowed per row by ``check_action`` below, so
+    # adding or removing actions touches the registry only — no edits here.
     BINDINGS = [
         ("q", "quit", "Quit"),
-        ("r", "refresh", "Refresh"),
-        ("n", "new_run", "New Run"),
-        ("a", "approve", "Approve"),
-        ("j", "reject", "Reject"),
-        ("c", "clarify", "Clarify"),
-        ("y", "retry", "Retry"),
-        ("x", "cancel", "Cancel"),
-        ("p", "comment_pr", "Comment PR"),
-        ("o", "approve_pr", "Approve PR"),
-        ("l", "logs", "Logs"),
-        ("d", "clear_db", "Clear DB"),
+        *[(a.key, a.action, a.label) for a in REGISTRY],
         ("space", "toggle_tail_pause", "Pause Tail"),
     ]
 
@@ -76,6 +72,12 @@ class WorkflowTUI(App[None]):
         self._service = service
         self._refresh_timer: Optional[Timer] = None
         self._poll_interval = float(os.environ.get("DISPATCHER_TUI_POLL", "2"))
+        # Cached detail for the currently-highlighted row. ``check_action``
+        # consults this on every footer repaint, so we keep it in sync with
+        # the DetailPane in ``_refresh_workflows`` and
+        # ``on_data_table_row_highlighted`` rather than refetching from
+        # the service per repaint.
+        self._selected_detail: Optional[WorkflowDetail] = None
         # Live log tailing state (Stage C).  ``_tail_workflow_id`` is the
         # workflow currently being tailed; ``_tail_offsets`` tracks the
         # next byte to fetch per stage so reconnect-after-poll only
@@ -116,6 +118,7 @@ class WorkflowTUI(App[None]):
         detail_dto = self._fetch_detail(selected)
         detail.update_workflow(detail_dto)
         self._sync_tail(detail_dto)
+        self._set_selected_detail(detail_dto)
 
     def _fetch_detail(self, summary: Optional[WorkflowSummary]) -> Optional[WorkflowDetail]:
         if summary is None:
@@ -124,6 +127,37 @@ class WorkflowTUI(App[None]):
             return self._service.get(summary.id)
         except Exception:
             return None
+
+    def _set_selected_detail(self, detail: Optional[WorkflowDetail]) -> None:
+        """Cache the currently-selected detail and trigger a footer repaint.
+
+        ``check_action`` reads ``self._selected_detail`` to decide which
+        bindings to show. Calling ``refresh_bindings()`` makes Textual re-ask
+        ``check_action`` for every binding so the footer reshapes to match
+        the new selection / status.
+        """
+        self._selected_detail = detail
+        # ``refresh_bindings`` is a no-op when the app is not yet mounted
+        # (e.g. during construction). Guard the call so unit-test setup
+        # doesn't blow up trying to query the screen stack.
+        try:
+            self.refresh_bindings()
+        except Exception:
+            pass
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> Optional[bool]:
+        """Hide footer bindings whose registry predicate rejects the row.
+
+        Returns:
+            ``True`` to show the binding (Textual default), ``False`` to hide
+            it from the ``Footer``, ``None`` for actions not owned by the
+            registry (``quit``, ``toggle_tail_pause``) so the framework's
+            default visibility applies.
+        """
+        entry = action_for(action)
+        if entry is None:
+            return True
+        return entry.applies(self._selected_detail)
 
     def _get_selected(self) -> Optional[WorkflowSummary]:
         return self.query_one(WorkflowList).get_selected_workflow()
@@ -381,6 +415,7 @@ class WorkflowTUI(App[None]):
         detail_dto = self._fetch_detail(selected)
         detail.update_workflow(detail_dto)
         self._sync_tail(detail_dto)
+        self._set_selected_detail(detail_dto)
 
     # ------------------------------------------------------------------
     # Live log tailing (Stage C)
