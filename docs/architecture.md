@@ -181,7 +181,7 @@ Cross-cutting OpenTelemetry instrumentation. Provides ContextVar-based correlati
 
 Goose recipe that produces a `WorkPlan` JSON document from a JIRA ticket. Parameters: `ticket_key`, `output_path`. See [docs/recipes.md](recipes.md) for full documentation.
 
-### `recipes/generate.yaml`
+### `recipes/generate_code.yaml`
 
 Goose recipe that implements an approved WorkPlan. Parameters: `ticket_key`, `work_plan_path`, `output_path`. Creates a feature branch, implements tasks, runs checks, commits, and writes an execution summary JSON. Push and PR creation happen afterward in graph nodes using GitHub App auth. See [docs/recipes.md](recipes.md).
 

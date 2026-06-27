@@ -124,4 +124,4 @@ for r in rules:
 
 ### How the generate recipe uses it
 
-The generate recipe (`recipes/generate.yaml`) calls `get_developer_rules()` as **Step 1** — before any other action — and injects the returned rules into the agent's working context. The agent is required to comply with all rules throughout the session; project-specific commands (how to install hooks, how to run the test suite) are injected separately via `get_project_setup`.
+The generate recipe (`recipes/generate_code.yaml`) calls `get_developer_rules()` as **Step 1** — before any other action — and injects the returned rules into the agent's working context. The agent is required to comply with all rules throughout the session; project-specific commands (how to install hooks, how to run the test suite) are injected separately via `get_project_setup`.

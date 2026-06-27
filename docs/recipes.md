@@ -20,7 +20,7 @@ goose run --recipe recipes/plan.yaml \
   --params output_path=workplans/AOS-41-plan.json
 
 # Run the generate recipe directly (pass an already-generated WorkPlan)
-goose run --recipe recipes/generate.yaml \
+goose run --recipe recipes/generate_code.yaml \
   --params ticket_key=AOS-41 \
   --params work_plan_path=workplans/AOS-41-plan.json \
   --params output_path=/tmp/AOS-41-exec-summary.json
@@ -63,7 +63,7 @@ Use `goose run --recipe recipes/plan.yaml --explain` to see a recipe's parameter
 
 ---
 
-## `recipes/generate.yaml` — WorkPlan Executor
+## `recipes/generate_code.yaml` — WorkPlan Executor
 
 **Purpose**: Implement an approved WorkPlan by making code changes in the local repository.
 
@@ -98,7 +98,7 @@ Use `goose run --recipe recipes/plan.yaml --explain` to see a recipe's parameter
   "branch": "feature/AOS-41-goose-execute-recipe",
   "build": "pass",
   "tests": "pass",
-  "files_changed": ["graph/nodes/generate_code.py", "recipes/generate.yaml"],
+  "files_changed": ["graph/nodes/generate_code.py", "recipes/generate_code.yaml"],
   "commit_sha": "a1b2c3d...",
   "status": "success"
 }

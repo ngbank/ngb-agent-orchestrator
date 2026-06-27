@@ -101,7 +101,7 @@ python -m dispatcher.run --reject  --workflow-id b04fd4e0-... --reason "needs mo
 1. Workflow status → `APPROVED`
 2. The LangGraph graph resumes from the checkpoint
 3. The `generate_code` node is invoked:
-   - Runs `goose run --recipe recipes/generate.yaml`
+   - Runs `goose run --recipe recipes/generate_code.yaml`
   - The code-generator subgraph fetches a GitHub App token before cloning
   - Goose creates a feature branch (`feature/{TICKET}+{slug}`), implements tasks, runs tests, commits
   - A follow-up graph node pushes the branch and opens or updates the PR using GitHub App auth
