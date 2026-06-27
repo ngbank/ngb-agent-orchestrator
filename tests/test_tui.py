@@ -401,6 +401,68 @@ class TestWorkflowTUI:
             assert detail._workflow.id == sample_summaries[0].id
             assert detail._workflow.ticket_key == sample_summaries[0].ticket_key
 
+    async def test_check_action_hides_inapplicable_workflow_actions(
+        self,
+        sample_summaries: List[WorkflowSummary],
+        sample_details: Dict[str, WorkflowDetail],
+    ):
+        """``check_action`` consults the registry so the footer reshapes
+        per-row instead of advertising every binding everywhere."""
+        service = FakeWorkflowService(summaries=sample_summaries, details=sample_details)
+        app = WorkflowTUI(service)
+        async with app.run_test():
+            # First row is PENDING — only globals + retry/cancel apply, not approve.
+            assert app.check_action("approve", ()) is False
+            assert app.check_action("approve_pr", ()) is False
+            assert app.check_action("refresh", ()) is True
+            # ``quit`` is owned by the framework default (not registry).
+            assert app.check_action("quit", ()) is True
+
+    async def test_check_action_enables_approve_when_pending_approval(
+        self,
+        sample_summaries: List[WorkflowSummary],
+        sample_details: Dict[str, WorkflowDetail],
+    ):
+        # Force the first workflow into PENDING_APPROVAL.
+        wf_id = sample_summaries[0].id
+        service = FakeWorkflowService(summaries=sample_summaries, details=sample_details)
+        service.set_status(wf_id, WorkflowStatus.PENDING_APPROVAL)
+        app = WorkflowTUI(service)
+        async with app.run_test():
+            assert app.check_action("approve", ()) is True
+            assert app.check_action("reject", ()) is True
+            # Clarify needs concerns in the work plan — not present here.
+            assert app.check_action("clarify", ()) is False
+            assert app.check_action("retry", ()) is False
+            # PR actions stay hidden until PENDING_PR_APPROVAL.
+            assert app.check_action("approve_pr", ()) is False
+
+    async def test_check_action_pr_requires_pr_url(
+        self,
+        sample_summaries: List[WorkflowSummary],
+    ):
+        """PENDING_PR_APPROVAL without ``pr_url`` should not advertise PR actions."""
+        wf_id = "wf-pr"
+        summary = _make_summary(wf_id, "AOS-9", WorkflowStatus.PENDING_PR_APPROVAL)
+        detail_no_url = _make_detail(wf_id, "AOS-9", WorkflowStatus.PENDING_PR_APPROVAL)
+        service = FakeWorkflowService(summaries=[summary], details={wf_id: detail_no_url})
+        app = WorkflowTUI(service)
+        async with app.run_test():
+            assert app.check_action("approve_pr", ()) is False
+            assert app.check_action("comment_pr", ()) is False
+
+        detail_with_url = _make_detail(
+            wf_id,
+            "AOS-9",
+            WorkflowStatus.PENDING_PR_APPROVAL,
+            pr_url="https://github.com/org/repo/pull/42",
+        )
+        service2 = FakeWorkflowService(summaries=[summary], details={wf_id: detail_with_url})
+        app2 = WorkflowTUI(service2)
+        async with app2.run_test():
+            assert app2.check_action("approve_pr", ()) is True
+            assert app2.check_action("comment_pr", ()) is True
+
 
 # ---------------------------------------------------------------------------
 # Stage C — live log tailing for in-progress workflows

@@ -37,24 +37,32 @@ Both commands launch the same Textual application.
 
 ## Keybindings
 
-| Key | Action |
-|-----|--------|
-| `q` | Quit the TUI |
-| `r` | Refresh the workflow list |
-| `n` | Start a new workflow by entering a ticket key |
-| `↑` / `↓` | Navigate the workflow list |
-| `a` | Approve the selected pending WorkPlan |
-| `j` | Reject the selected pending WorkPlan (prompts for reason) |
-| `c` | Clarify the selected workflow (opens editor) |
-| `y` | Retry the selected failed workflow |
-| `x` | Cancel the selected active workflow (prompts for reason) |
-| `o` | Approve the pending PR for the selected workflow |
-| `p` | Comment on the pending PR for the selected workflow (opens editor) |
-| `l` | Show logs for the selected workflow |
-| `d` | Clear the entire database (confirmation dialog) |
-| `space` | Pause / resume auto-scroll on the live log tail |
+The footer reshapes per row: each binding is hidden when the selected
+workflow can't accept that action. For example, `a` (Approve) only appears
+when the row is in `pending_approval`, and PR actions only appear when both
+the status is `pending_pr_approval` and a `pr_url` is present. The full set
+of bindings and their preconditions is declared in
+[`dispatcher/tui/action_registry.py`](../dispatcher/tui/action_registry.py)
+— add a new action there and the footer picks it up automatically.
 
-All actions delegate to the same handler functions used by the CLI, ensuring zero duplication of orchestration logic.
+| Key | Action | Visible when |
+|-----|--------|--------------|
+| `q` | Quit the TUI | always |
+| `r` | Refresh the workflow list | always |
+| `n` | Start a new workflow by entering a ticket key | always |
+| `↑` / `↓` | Navigate the workflow list | always |
+| `a` | Approve the selected pending WorkPlan | row status is `pending_approval` |
+| `j` | Reject the selected pending WorkPlan (prompts for reason) | row status is `pending_approval` |
+| `c` | Clarify the selected workflow (opens editor) | row status is `pending_workplan_clarification` and the WorkPlan has unanswered concerns |
+| `y` | Retry the selected failed workflow | row status satisfies `WorkflowStatus.is_retryable()` |
+| `x` | Cancel the selected active workflow (prompts for reason) | row status satisfies `WorkflowStatus.is_active()` |
+| `o` | Approve the pending PR for the selected workflow | row status is `pending_pr_approval` and `pr_url` is set |
+| `p` | Comment on the pending PR for the selected workflow (opens editor) | row status is `pending_pr_approval` and `pr_url` is set |
+| `l` | Show logs for the selected workflow | a row is selected |
+| `d` | Clear the entire database (confirmation dialog) | always |
+| `space` | Pause / resume auto-scroll on the live log tail | always |
+
+All actions delegate to the same handler functions used by the CLI, ensuring zero duplication of orchestration logic. The handler-side status guards in `dispatcher/commands/*` remain in place as defence in depth: the registry decides what to *show*, the handler decides whether to refuse if state changed between footer-render and action-invocation.
 
 ### Responsiveness
 
@@ -156,6 +164,7 @@ The TUI is organised under `dispatcher/tui/`:
 | `widgets.py` | `WorkflowList`, `DetailPane` |
 | `modals.py` | `InputModal` (free-text) and `ConfirmModal` (yes/no) |
 | `actions.py` | Thin wrappers that import and call existing CLI handlers |
+| `action_registry.py` | Per-action precondition predicates consulted by `App.check_action` to drive the dynamic footer |
 | `screens.py` | Placeholder for future full-screen views |
 
 The TUI reads workflow state exclusively through the `WorkflowService` Protocol
