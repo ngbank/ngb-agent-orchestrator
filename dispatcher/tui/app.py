@@ -27,7 +27,7 @@ from dispatcher.tui.actions import (
     show_logs,
 )
 from dispatcher.tui.modals import ConfirmModal, InputModal
-from dispatcher.tui.widgets import DetailPane, StatusBar, WorkflowList
+from dispatcher.tui.widgets import DetailPane, WorkflowList
 from orchestrator.runtime_secrets import load_runtime_secrets_from_keyvault
 from orchestrator.workflow_service import (
     WorkflowDetail,
@@ -95,7 +95,6 @@ class WorkflowTUI(App[None]):
         with Horizontal(id="main"):
             yield WorkflowList()
             yield DetailPane()
-        yield StatusBar()
         yield Footer()
 
     def on_mount(self) -> None:

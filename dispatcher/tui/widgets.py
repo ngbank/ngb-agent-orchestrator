@@ -298,23 +298,3 @@ class DetailPane(Static):
         if tail is None:
             return False
         return bool(tail.display)
-
-
-class StatusBar(Static):
-    """Bottom status bar with keybindings help."""
-
-    DEFAULT_CSS = """
-    StatusBar {
-        height: 1;
-        width: 100%;
-        background: $surface;
-        color: $text;
-        content-align: center middle;
-    }
-    """
-
-    def compose(self):
-        yield Label(
-            "q:quit  r:refresh  n:new-run  a:approve  j:reject  c:clarify  y:retry  x:cancel  "
-            "p:comment-pr  o:approve-pr  l:logs  d:clear-db  space:pause-tail  ↑↓:navigate"
-        )

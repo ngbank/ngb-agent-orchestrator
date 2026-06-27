@@ -153,7 +153,7 @@ The TUI is organised under `dispatcher/tui/`:
 | File | Responsibility |
 |------|----------------|
 | `app.py` | Main `WorkflowTUI` App class, keybindings, refresh timer |
-| `widgets.py` | `WorkflowList`, `DetailPane`, `StatusBar` |
+| `widgets.py` | `WorkflowList`, `DetailPane` |
 | `modals.py` | `InputModal` (free-text) and `ConfirmModal` (yes/no) |
 | `actions.py` | Thin wrappers that import and call existing CLI handlers |
 | `screens.py` | Placeholder for future full-screen views |
