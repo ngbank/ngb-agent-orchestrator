@@ -84,13 +84,21 @@ def _drive_graph_stream(
     service produces identical instrumentation behaviour to the existing CLI
     handlers.
     """
+    from orchestrator.logging_setup import (
+        attach_workflow_file_handler,
+        detach_workflow_file_handler,
+    )
     from otel import instrument_graph_stream, set_workflow_context
 
     set_workflow_context(workflow_id=workflow_id, ticket_key=ticket_key)
-    for _ in instrument_graph_stream(graph, graph_input, config=thread_config):
-        # The stream is consumed for its side effects (state checkpointing +
-        # OTel spans); the per-event payloads are not used here.
-        pass
+    handler = attach_workflow_file_handler(workflow_id)
+    try:
+        for _ in instrument_graph_stream(graph, graph_input, config=thread_config):
+            # The stream is consumed for its side effects (state checkpointing +
+            # OTel spans); the per-event payloads are not used here.
+            pass
+    finally:
+        detach_workflow_file_handler(handler)
 
 
 class LocalWorkflowService:

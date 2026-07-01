@@ -23,6 +23,8 @@ import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Callable, Dict, Optional
 
+from orchestrator.logging_setup import attach_workflow_file_handler, detach_workflow_file_handler
+
 logger = logging.getLogger(__name__)
 
 # Default worker count for the background dispatcher.  Each graph drive
@@ -134,6 +136,7 @@ class BackgroundDispatcher(BackgroundDispatcherProtocol):
         kwargs: Dict[str, Any],
         on_failure: Optional[Callable[[BaseException], None]],
     ) -> Any:
+        handler = attach_workflow_file_handler(workflow_id)
         try:
             return fn(*args, **kwargs)
         except BaseException as exc:  # noqa: BLE001 - we re-raise after notifying
@@ -144,6 +147,8 @@ class BackgroundDispatcher(BackgroundDispatcherProtocol):
                 except Exception:
                     logger.exception("on_failure handler for workflow %s raised", workflow_id)
             raise
+        finally:
+            detach_workflow_file_handler(handler)
 
     def _cleanup(self, workflow_id: str, future: Future[Any]) -> None:
         with self._lock:
