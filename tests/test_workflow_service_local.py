@@ -221,22 +221,17 @@ class TestReadLogs:
         svc = _make_service(repo, FakeGraph())
         assert svc.read_logs(wf_id) == []
 
-    def test_returns_chunks_for_existing_stage_logs(self, temp_db, repo):
+    def test_returns_chunks_for_existing_workflow_log(self, temp_db, repo):
         wf_id = repo.create_workflow(ticket_key="AOS-7")
-        # log_path() creates the workflow dir on demand; write a file there.
-        from orchestrator.utils import log_path
-
-        plan_log = log_path(wf_id, "plan", ticket_key="AOS-7")
-        plan_log.write_text("plan output here")
+        workflow_log = workflow_logs_dir(wf_id) / "workflow.log"
+        workflow_log.write_text("workflow output here", encoding="utf-8")
 
         svc = _make_service(repo, FakeGraph())
         chunks = svc.read_logs(wf_id)
-        stages = {c.stage for c in chunks}
-        assert "plan" in stages
-        assert "execute" not in stages  # not written
-        plan_chunk = next(c for c in chunks if c.stage == "plan")
-        assert plan_chunk.content == "plan output here"
-        assert Path(plan_chunk.path) == plan_log
+        assert len(chunks) == 1
+        assert chunks[0].stage == "workflow"
+        assert chunks[0].content == "workflow output here"
+        assert Path(chunks[0].path) == workflow_log
 
 
 # ---------------------------------------------------------------------------

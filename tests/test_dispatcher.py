@@ -121,7 +121,6 @@ def mock_repo_setup():
         patch("orchestrator.shared.repo_setup.nodes.resolve_repo.resolve_repository_url"),
         patch("orchestrator.shared.repo_setup.nodes.fetch_github_token.fetch_token_for_repo"),
         patch("orchestrator.shared.repo_setup.nodes.clone_repo.clone_repository"),
-        patch("orchestrator.shared.repo_setup.nodes.clone_repo.log_path"),
     ]
 
     started = [p.start() for p in patches]
@@ -132,8 +131,6 @@ def mock_repo_setup():
 
     mock_workdir = tempfile.mkdtemp(prefix="test-plan-")
     started[2].return_value = mock_workdir  # clone_repository
-
-    started[3].return_value = "/tmp/test.log"  # log_path
 
     yield started
 
@@ -387,36 +384,36 @@ def test_run_keyboard_interrupt(test_db, cli_runner, memory_checkpointer):
 
 def test_logs_reads_from_xdg_default_base_dir(test_db, cli_runner, monkeypatch, tmp_path):
     """--logs resolves from XDG base path when LOGS_DIR is not set."""
-    from orchestrator.utils import log_path
+    from orchestrator.paths import workflow_logs_dir
 
     monkeypatch.delenv("LOGS_DIR", raising=False)
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-state"))
     workflow_id = state_store.create_workflow("AOS-119", status=WorkflowStatus.COMPLETED)
 
-    plan_log = log_path(workflow_id, "plan", ticket_key="AOS-119")
-    plan_log.write_text("plan log from xdg default")
+    workflow_log = workflow_logs_dir(workflow_id) / "workflow.log"
+    workflow_log.write_text("workflow log from xdg default", encoding="utf-8")
 
     result = cli_runner.invoke(run, ["--ticket", "AOS-119", "--logs"])
 
     assert result.exit_code == 0
-    assert "plan log from xdg default" in result.output
+    assert "workflow log from xdg default" in result.output
 
 
 def test_logs_uses_explicit_logs_dir_override(test_db, cli_runner, monkeypatch, tmp_path):
     """--logs honors explicit LOGS_DIR override when provided."""
-    from orchestrator.utils import log_path
+    from orchestrator.paths import workflow_logs_dir
 
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-state"))
     monkeypatch.setenv("LOGS_DIR", str(tmp_path / "logs-override"))
     workflow_id = state_store.create_workflow("AOS-119", status=WorkflowStatus.COMPLETED)
 
-    plan_log = log_path(workflow_id, "plan", ticket_key="AOS-119")
-    plan_log.write_text("plan log from override")
+    workflow_log = workflow_logs_dir(workflow_id) / "workflow.log"
+    workflow_log.write_text("workflow log from override", encoding="utf-8")
 
     result = cli_runner.invoke(run, ["--ticket", "AOS-119", "--logs"])
 
     assert result.exit_code == 0
-    assert "plan log from override" in result.output
+    assert "workflow log from override" in result.output
 
 
 class TestPostExecutionComment:

@@ -101,7 +101,7 @@ def test_log_path_honors_logs_dir_override(monkeypatch, tmp_path):
 
 
 def test_prepare_workspace_creates_workspace_paths(monkeypatch, tmp_path):
-    """prepare_workspace must populate all four workspace paths in state."""
+    """prepare_workspace must populate recipe input/output paths in state."""
     import json
     import os
 
@@ -116,14 +116,14 @@ def test_prepare_workspace_creates_workspace_paths(monkeypatch, tmp_path):
 
     result = prepare_workspace(state)
 
-    for key in ("work_plan_path", "summary_path", "reasoning_path", "exec_log_path"):
+    for key in ("work_plan_path", "summary_path", "reasoning_path"):
         assert result.get(key), f"{key} missing or empty"
     assert os.path.isfile(result["work_plan_path"])
     with open(result["work_plan_path"]) as f:
         assert json.load(f) == state["work_plan_data"]
     assert os.path.isfile(result["summary_path"])
     assert os.path.isfile(result["reasoning_path"])
-    assert result["exec_log_path"].endswith("AOS-94_wf-prep_execute.log")
+    assert "exec_log_path" not in result
 
     for p in (result["work_plan_path"], result["summary_path"], result["reasoning_path"]):
         os.unlink(p)
@@ -145,7 +145,6 @@ def test_run_goose_passes_existing_branch_and_comments():
         "work_plan_path": "/tmp/workplan.json",
         "summary_path": "/tmp/summary.json",
         "reasoning_path": "/tmp/reasoning.txt",
-        "exec_log_path": "/tmp/test.log",
         "execution_summary": {"branch": "feature/AOS-92+test"},
         "pr_comments": "Fix typo in line 42",
     }
@@ -262,7 +261,6 @@ def test_run_goose_uses_inferred_branch_prefix():
         "work_plan_path": "/tmp/workplan.json",
         "summary_path": "/tmp/summary.json",
         "reasoning_path": "/tmp/reasoning.txt",
-        "exec_log_path": "/tmp/test.log",
         "branch_prefix": "bugfix",
     }
 

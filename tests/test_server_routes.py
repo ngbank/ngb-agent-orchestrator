@@ -840,12 +840,11 @@ def test_events_stream_heartbeat_when_idle(
 # ---------------------------------------------------------------------------
 
 
-def test_logs_stream_replays_all_stages_and_closes_on_terminal(
+def test_logs_stream_replays_workflow_log_and_closes_on_terminal(
     client: TestClient, fake_service: FakeWorkflowService
 ) -> None:
     fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.COMPLETED))
-    fake_service.append_log("wf-1", "plan", "plan-line-1\nplan-line-2\n")
-    fake_service.append_log("wf-1", "execute", "exec-line-1\n")
+    fake_service.append_log("wf-1", "workflow", "workflow-line-1\nworkflow-line-2\n")
 
     with client.stream("GET", "/workflows/wf-1/logs") as response:
         assert response.status_code == 200
@@ -853,16 +852,16 @@ def test_logs_stream_replays_all_stages_and_closes_on_terminal(
         body = b"".join(response.iter_bytes())
 
     frames = _parse_sse(body)
-    # Two log chunks + stream_end
-    assert len(frames) >= 3
+    # One log chunk + stream_end
+    assert len(frames) >= 2
     log_frames = [f for f in frames if f["id"] is not None]
     payloads = [json.loads(_data(f)) for f in log_frames]
     stages = {p["stage"] for p in payloads}
-    assert stages == {"plan", "execute"}
-    plan_payload = next(p for p in payloads if p["stage"] == "plan")
-    assert plan_payload["offset"] == 0
-    assert plan_payload["content"] == "plan-line-1\nplan-line-2\n"
-    assert plan_payload["end_offset"] == len(plan_payload["content"].encode("utf-8"))
+    assert stages == {"workflow"}
+    workflow_payload = next(p for p in payloads if p["stage"] == "workflow")
+    assert workflow_payload["offset"] == 0
+    assert workflow_payload["content"] == "workflow-line-1\nworkflow-line-2\n"
+    assert workflow_payload["end_offset"] == len(workflow_payload["content"].encode("utf-8"))
     # Final frame: stream_end, no id
     final = frames[-1]
     assert final["id"] is None
@@ -874,11 +873,11 @@ def test_logs_stream_respects_after_offset(
     client: TestClient, fake_service: FakeWorkflowService
 ) -> None:
     fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.COMPLETED))
-    fake_service.append_log("wf-1", "plan", "hello world")
+    fake_service.append_log("wf-1", "workflow", "hello world")
 
     with client.stream(
         "GET",
-        "/workflows/wf-1/logs?stage=plan&after_offset=6",
+        "/workflows/wf-1/logs?stage=workflow&after_offset=6",
     ) as response:
         body = b"".join(response.iter_bytes())
 
@@ -886,7 +885,7 @@ def test_logs_stream_respects_after_offset(
     log_frames = [f for f in frames if f["id"] is not None]
     assert len(log_frames) == 1
     payload = json.loads(_data(log_frames[0]))
-    assert payload["stage"] == "plan"
+    assert payload["stage"] == "workflow"
     assert payload["offset"] == 6
     assert payload["content"] == "world"
     assert payload["end_offset"] == 11
@@ -896,11 +895,11 @@ def test_logs_stream_respects_last_event_id_header(
     client: TestClient, fake_service: FakeWorkflowService
 ) -> None:
     fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.COMPLETED))
-    fake_service.append_log("wf-1", "plan", "abcdef")
+    fake_service.append_log("wf-1", "workflow", "abcdef")
 
     with client.stream(
         "GET",
-        "/workflows/wf-1/logs?stage=plan",
+        "/workflows/wf-1/logs?stage=workflow",
         headers={"Last-Event-ID": "3"},
     ) as response:
         body = b"".join(response.iter_bytes())
@@ -911,19 +910,21 @@ def test_logs_stream_respects_last_event_id_header(
     assert payload["content"] == "def"
 
 
-def test_logs_stream_stage_filter(client: TestClient, fake_service: FakeWorkflowService) -> None:
+def test_logs_stream_workflow_stage_filter(
+    client: TestClient,
+    fake_service: FakeWorkflowService,
+) -> None:
     fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.COMPLETED))
-    fake_service.append_log("wf-1", "plan", "PLAN")
-    fake_service.append_log("wf-1", "execute", "EXEC")
+    fake_service.append_log("wf-1", "workflow", "WORKFLOW")
 
-    with client.stream("GET", "/workflows/wf-1/logs?stage=execute") as response:
+    with client.stream("GET", "/workflows/wf-1/logs?stage=workflow") as response:
         body = b"".join(response.iter_bytes())
 
     log_frames = [f for f in _parse_sse(body) if f["id"] is not None]
     assert len(log_frames) == 1
     payload = json.loads(_data(log_frames[0]))
-    assert payload["stage"] == "execute"
-    assert payload["content"] == "EXEC"
+    assert payload["stage"] == "workflow"
+    assert payload["content"] == "WORKFLOW"
 
 
 def test_logs_stream_404_when_workflow_missing(client: TestClient) -> None:

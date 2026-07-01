@@ -33,20 +33,13 @@ def _handle_logs(
     ticket_key: Optional[str],
     workflow_id: Optional[str],
 ) -> None:
-    """Print the captured Goose log(s) for a workflow."""
+    """Print the captured workflow log for a workflow."""
     resolved_id = _resolve_workflow_id(service, ticket_key, workflow_id)
 
     chunks = service.read_logs(resolved_id)
     if not chunks:
-        for stage in ("plan", "execute"):
-            click.echo(f"ℹ️  No {stage} log found for workflow {resolved_id}")
-        click.echo("No logs found for this workflow.")
+        click.echo(f"ℹ️  No log found for workflow {resolved_id}")
         return
-
-    seen_stages = {c.stage for c in chunks}
-    for stage in ("plan", "execute"):
-        if stage not in seen_stages:
-            click.echo(f"ℹ️  No {stage} log found for workflow {resolved_id}")
 
     for chunk in chunks:
         click.echo(f"\n{'='*60}")

@@ -487,14 +487,12 @@ class TestReadLogs:
         monkeypatch.setattr(sse_mod, "HEARTBEAT_INTERVAL_S", 60.0)
 
         fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.COMPLETED))
-        fake_service.log_bytes.setdefault("wf-1", {})["plan"] = b"plan output line\n"
-        fake_service.log_bytes["wf-1"]["execute"] = b"execute output line\n"
+        fake_service.log_bytes.setdefault("wf-1", {})["workflow"] = b"workflow output line\n"
 
         chunks = http_service.read_logs("wf-1")
         by_stage = {c.stage: c for c in chunks}
-        assert set(by_stage) == {"plan", "execute"}
-        assert by_stage["plan"].content == "plan output line\n"
-        assert by_stage["execute"].content == "execute output line\n"
+        assert set(by_stage) == {"workflow"}
+        assert by_stage["workflow"].content == "workflow output line\n"
 
     def test_read_logs_returns_empty_when_no_logs(
         self,
@@ -509,7 +507,7 @@ class TestReadLogs:
         fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.COMPLETED))
         assert http_service.read_logs("wf-1") == []
 
-    def test_read_logs_returns_only_requested_stage(
+    def test_read_logs_returns_requested_workflow_stage(
         self,
         fake_service: _FakeWorkflowService,
         http_service: HttpWorkflowService,
@@ -521,12 +519,11 @@ class TestReadLogs:
         monkeypatch.setattr(sse_mod, "HEARTBEAT_INTERVAL_S", 60.0)
 
         fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.COMPLETED))
-        fake_service.log_bytes.setdefault("wf-1", {})["plan"] = b"plan-only\n"
-        fake_service.log_bytes["wf-1"]["execute"] = b"execute-only\n"
+        fake_service.log_bytes.setdefault("wf-1", {})["workflow"] = b"workflow-only\n"
 
-        chunks = http_service.read_logs("wf-1", stage="plan")
-        assert [c.stage for c in chunks] == ["plan"]
-        assert chunks[0].content == "plan-only\n"
+        chunks = http_service.read_logs("wf-1", stage="workflow")
+        assert [c.stage for c in chunks] == ["workflow"]
+        assert chunks[0].content == "workflow-only\n"
 
     def test_read_logs_terminates_on_stream_end(
         self,
@@ -543,10 +540,10 @@ class TestReadLogs:
         monkeypatch.setattr(http_client_mod, "LOG_SNAPSHOT_READ_TIMEOUT_S", 30.0)
 
         fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.COMPLETED))
-        fake_service.log_bytes.setdefault("wf-1", {})["plan"] = b"done\n"
+        fake_service.log_bytes.setdefault("wf-1", {})["workflow"] = b"done\n"
 
         chunks = http_service.read_logs("wf-1")
-        assert [c.stage for c in chunks] == ["plan"]
+        assert [c.stage for c in chunks] == ["workflow"]
 
 
 def test_read_logs_returns_on_read_timeout(monkeypatch) -> None:
@@ -554,7 +551,7 @@ def test_read_logs_returns_on_read_timeout(monkeypatch) -> None:
     on the configured read timeout and return whatever chunks arrived."""
 
     sent_chunks = [
-        {"stage": "plan", "offset": 0, "content": "first\n", "end_offset": 6},
+        {"stage": "workflow", "offset": 0, "content": "first\n", "end_offset": 6},
     ]
 
     class _StubStreamCtx:
@@ -600,7 +597,7 @@ def test_read_logs_returns_on_read_timeout(monkeypatch) -> None:
     svc = build_http_workflow_service("http://example.test", client=cast(httpx.Client, stub))
 
     chunks = svc.read_logs("wf-1")
-    assert [c.stage for c in chunks] == ["plan"]
+    assert [c.stage for c in chunks] == ["workflow"]
     assert chunks[0].content == "first\n"
     assert chunks[0].offset == 0
     assert stub.requests and stub.requests[0]["url"].endswith("/workflows/wf-1/logs")

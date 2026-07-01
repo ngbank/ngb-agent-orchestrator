@@ -4,12 +4,10 @@ Thin wrapper over the existing collaborators:
 
 * :class:`state.workflow_repository.WorkflowRepository` for persistence.
 * The langgraph orchestrator graph (constructed via a factory) for execution.
-* :func:`orchestrator.utils.log_path` for reading captured stage logs.
+* :func:`orchestrator.paths.workflow_logs_dir` for reading captured workflow logs.
 
-This class is a one-to-one shim — it does not change any existing behaviour.
-The DTOs it returns mirror what the dispatcher already computes inline; this
-ticket only relocates that computation behind a Protocol so call sites can
-later be swapped to a remote transport (Stage B) without further refactoring.
+The DTOs it returns mirror what the dispatcher consumes, keeping local and
+remote workflow service implementations behind the same Protocol.
 
 Operational notes for callers:
 
@@ -32,8 +30,9 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.errors import GraphInterrupt
 from langgraph.types import Command
 
+from orchestrator.logging_setup import WORKFLOW_LOG_FILENAME
+from orchestrator.paths import workflow_logs_dir
 from orchestrator.retry import prepare_retry
-from orchestrator.utils import log_path
 from state.workflow_repository import WorkflowRepository
 from state.workflow_status import WorkflowStatus
 
@@ -189,39 +188,37 @@ class LocalWorkflowService:
         stage: Optional[str] = None,
         after_offset: int = 0,
     ) -> List[WorkflowLogChunk]:
-        ticket_key: Optional[str] = None
-        row = self._repo.get_workflow(workflow_id)
-        if row is not None:
-            ticket_key = row.get("ticket_key")
-        stages = [stage] if stage else ["plan", "execute"]
-        chunks: List[WorkflowLogChunk] = []
-        for st in stages:
-            path = log_path(workflow_id, st, ticket_key=ticket_key)
-            if not path.exists():
-                continue
-            raw = path.read_bytes()
-            size = len(raw)
-            start = max(0, min(after_offset, size))
-            if start >= size and after_offset > 0:
-                # Caller is already caught up on this stage — skip emitting an
-                # empty chunk so they can distinguish "no new bytes" from "no
-                # log file yet" (the latter is also omitted above).
-                continue
-            content_bytes = raw[start:]
-            try:
-                content = content_bytes.decode("utf-8")
-            except UnicodeDecodeError:
-                content = content_bytes.decode("utf-8", errors="replace")
-            chunks.append(
-                WorkflowLogChunk(
-                    workflow_id=workflow_id,
-                    stage=st,
-                    path=str(path),
-                    content=content,
-                    offset=start,
-                )
+        log_stage = stage or "workflow"
+        if log_stage != "workflow":
+            return []
+
+        path = workflow_logs_dir(workflow_id, ensure_dir=False) / WORKFLOW_LOG_FILENAME
+        if not path.exists():
+            return []
+
+        raw = path.read_bytes()
+        size = len(raw)
+        start = max(0, min(after_offset, size))
+        if start >= size and after_offset > 0:
+            # Caller is already caught up — skip emitting an empty chunk so
+            # they can distinguish "no new bytes" from "no log file yet".
+            return []
+
+        content_bytes = raw[start:]
+        try:
+            content = content_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            content = content_bytes.decode("utf-8", errors="replace")
+
+        return [
+            WorkflowLogChunk(
+                workflow_id=workflow_id,
+                stage=log_stage,
+                path=str(path),
+                content=content,
+                offset=start,
             )
-        return chunks
+        ]
 
     def stream_events(
         self,
