@@ -551,7 +551,7 @@ class TestRunAndTeeGooseSpan:
         monkeypatch.setattr(otel_trace_module, "get_tracer", lambda *_: tracer)
         return utils_module.run_and_tee
 
-    def test_goose_run_emits_span(self, monkeypatch, tmp_path):
+    def test_goose_run_emits_span(self, monkeypatch):
         provider, exporter = _make_in_memory_provider()
         run_and_tee = self._patched_run_and_tee(monkeypatch, provider)
 
@@ -569,7 +569,7 @@ class TestRunAndTeeGooseSpan:
         assert span.attributes.get("goose.recipe") == "execute.yaml"
         assert "process.exit_code" in span.attributes
 
-    def test_goose_span_carries_correlation_attributes(self, monkeypatch, tmp_path):
+    def test_goose_span_carries_correlation_attributes(self, monkeypatch):
         provider, exporter = _make_in_memory_provider()
         run_and_tee = self._patched_run_and_tee(monkeypatch, provider)
         set_workflow_context(workflow_id="wf-goose", ticket_key="AOS-goose")
@@ -585,7 +585,7 @@ class TestRunAndTeeGooseSpan:
         assert span.attributes.get("workflow.id") == "wf-goose"
         assert span.attributes.get("jira.ticket_key") == "AOS-goose"
 
-    def test_goose_span_error_on_nonzero_exit(self, monkeypatch, tmp_path):
+    def test_goose_span_error_on_nonzero_exit(self, monkeypatch):
         provider, exporter = _make_in_memory_provider()
         run_and_tee = self._patched_run_and_tee(monkeypatch, provider)
 
@@ -601,7 +601,7 @@ class TestRunAndTeeGooseSpan:
         # exit code is captured regardless of success/failure
         assert "process.exit_code" in span.attributes
 
-    def test_non_goose_command_no_span(self, monkeypatch, tmp_path):
+    def test_non_goose_command_no_span(self, monkeypatch):
         provider, exporter = _make_in_memory_provider()
         run_and_tee = self._patched_run_and_tee(monkeypatch, provider)
 
@@ -739,7 +739,7 @@ class TestGooseRunEnrichment:
         monkeypatch.setattr(otel_trace_module, "get_tracer", lambda *_: tracer)
         return utils_module.run_and_tee
 
-    def test_goose_stage_derived_from_recipe_basename(self, monkeypatch, tmp_path):
+    def test_goose_stage_derived_from_recipe_basename(self, monkeypatch):
         provider, exporter = _make_in_memory_provider()
         run_and_tee = self._patched_run_and_tee(monkeypatch, provider)
 
@@ -753,7 +753,7 @@ class TestGooseRunEnrichment:
         span = next(s for s in exporter.get_finished_spans() if s.name == "goose.run")
         assert span.attributes.get("goose.stage") == "plan"
 
-    def test_goose_command_line_is_full_joined(self, monkeypatch, tmp_path):
+    def test_goose_command_line_is_full_joined(self, monkeypatch):
         provider, exporter = _make_in_memory_provider()
         run_and_tee = self._patched_run_and_tee(monkeypatch, provider)
 
@@ -776,7 +776,7 @@ class TestGooseRunEnrichment:
             "goose run --recipe orchestrator/code_generator/recipes/execute.yaml --params k=v"
         )
 
-    def test_goose_stdout_lines_counted(self, monkeypatch, tmp_path):
+    def test_goose_stdout_lines_counted(self, monkeypatch):
         """Use printf to emit a known number of stdout lines and verify the count."""
         import subprocess as _subprocess
 
