@@ -12,6 +12,7 @@ AOS-139 (A2) and AOS-140 (A3).
 
 from __future__ import annotations
 
+import logging
 import os
 import tempfile
 from pathlib import Path
@@ -21,6 +22,7 @@ import pytest
 from langgraph.errors import GraphInterrupt
 from langgraph.types import Command
 
+from orchestrator.paths import workflow_logs_dir
 from orchestrator.workflow_service import (
     LocalWorkflowService,
     WorkflowEvent,
@@ -375,6 +377,28 @@ class TestStart:
         # status pulled from repo
         assert result.final_status == WorkflowStatus.PENDING_APPROVAL
         assert result.workflow_id == wf_id
+
+    def test_start_writes_workflow_log(self, temp_db, repo):
+        wf_id = repo.create_workflow(ticket_key="AOS-21", status=WorkflowStatus.PENDING_APPROVAL)
+
+        class LoggingGraph(FakeGraph):
+            def stream(self, *args, **kwargs):
+                logger = logging.getLogger("tests.workflow_service")
+                logger.setLevel(logging.INFO)
+                logger.info("workflow %s ran", wf_id)
+                return super().stream(*args, **kwargs)
+
+        graph = LoggingGraph(
+            post_stream_state=_FakeStateSnapshot(
+                values={"workflow_id": wf_id, "ticket_key": "AOS-21"}
+            )
+        )
+        svc = _make_service(repo, graph)
+        svc.start(WorkflowStartRequest(ticket_key="AOS-21", workflow_id=wf_id))
+
+        workflow_log = workflow_logs_dir(wf_id) / "workflow.log"
+        assert workflow_log.exists()
+        assert "workflow %s ran" % wf_id in workflow_log.read_text(encoding="utf-8")
 
     def test_start_completes_when_approval_already_present(self, temp_db, repo):
         wf_id = repo.create_workflow(ticket_key="AOS-22", status=WorkflowStatus.PENDING_APPROVAL)

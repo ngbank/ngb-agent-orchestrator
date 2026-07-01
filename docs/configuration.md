@@ -262,7 +262,7 @@ OTEL_ELASTIC_API_KEY=<api-key>
 |---|---|---|
 | `DEFAULT_PROJECT_KEY` | `AOS` | Default JIRA project for commands that accept a project |
 | `LOG_LEVEL` | `INFO` | Python logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Affects all application and third-party logs |
-| `LOGS_DIR` | `$XDG_STATE_HOME/ngb-agent-orchestrator/logs` (or `~/.local/state/ngb-agent-orchestrator/logs` when `XDG_STATE_HOME` is unset) | Base directory for run logs. Each workflow writes into a `{workflow_id}/` subdirectory containing stage logs, `llm_token_usage.jsonl`, and `otel.jsonl` (always written). Shares the same XDG state root as `DB_PATH` so the host CLI and the containerised server see the same logs by default. |
+| `LOGS_DIR` | `$XDG_STATE_HOME/ngb-agent-orchestrator/logs` (or `~/.local/state/ngb-agent-orchestrator/logs` when `XDG_STATE_HOME` is unset) | Base directory for run logs. Each workflow writes into a `{workflow_id}/` subdirectory containing `workflow.log` for operator-visible Python logging, stage logs, `llm_token_usage.jsonl`, and `otel.jsonl` (always written). Shares the same XDG state root as `DB_PATH` so the host CLI and the containerised server see the same logs by default. |
 
 ---
 
