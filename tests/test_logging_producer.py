@@ -49,7 +49,6 @@ def test_run_goose_logs_nonzero_exit(caplog, tmp_path):
     from orchestrator.code_generator.nodes.run_goose import run_goose
 
     work_plan_path = tmp_path / "workplan.json"
-    exec_log_path = tmp_path / "execute.log"
     reasoning_path = tmp_path / "reasoning.txt"
     work_plan_path.write_text('{"summary": "adopt python logging"}', encoding="utf-8")
 
@@ -60,7 +59,6 @@ def test_run_goose_logs_nonzero_exit(caplog, tmp_path):
         "work_plan_path": str(work_plan_path),
         "summary_path": str(tmp_path / "summary.json"),
         "reasoning_path": str(reasoning_path),
-        "exec_log_path": str(exec_log_path),
     }
 
     @contextmanager

@@ -97,9 +97,9 @@ DISPATCHER_TUI_POLL=0 dispatcher --tui
 ## Live Log Tailing
 
 When the selected workflow is `in_progress`, the detail pane shows a live tail
-of captured stage logs (Goose `plan` and `execute` output) instead of the
-static snapshot view. Lines are appended as they arrive and the view
-auto-scrolls to the tail by default.
+of the workflow log (`LOGS_DIR/<workflow_id>/workflow.log`) instead of the
+static snapshot view. Lines are appended as they arrive and the view auto-scrolls
+to the tail by default.
 
 - **Trigger** — selecting any workflow whose status is `IN_PROGRESS`. Selecting
   a workflow in any other status (queued, paused for approval, completed,

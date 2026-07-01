@@ -3,7 +3,7 @@
 import os
 import shutil
 import tempfile
-from typing import Optional, TextIO
+from typing import Optional
 
 from dispatcher.github_client import GitHubAuthError, get_installation_token
 from mcp_server.server import get_repo_for_project
@@ -45,7 +45,6 @@ def clone_repository(
     github_token: Optional[str],
     *,
     temp_prefix: str,
-    log_file: TextIO,
 ) -> str:
     """Clone repository into a newly-created temp directory and return it."""
     if not repo_url:
@@ -60,7 +59,7 @@ def clone_repository(
             f"https://x-access-token:{github_token}@github.com/",
         )
 
-    result = run_and_tee(["git", "clone", clone_url, working_dir], log_file)
+    result = run_and_tee(["git", "clone", clone_url, working_dir], "subprocess.git")
     if result.returncode != 0:
         raise RuntimeError(f"git clone exited with code {result.returncode}")
 

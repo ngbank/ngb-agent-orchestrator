@@ -1,9 +1,9 @@
 """Node: prepare_workspace — materialize temp files needed by the execute recipe.
 
 The shared repo_setup subgraph only clones the repository; everything else the
-Goose execute recipe needs on disk (the work plan JSON, the output paths it
-writes to, and the per-stage log file) is created here so each node stays
-single-responsibility and the cleanup node can find the paths via state.
+Goose execute recipe needs on disk (the work plan JSON and the output paths it
+writes to) is created here so each node stays single-responsibility and the
+cleanup node can find the paths via state.
 """
 
 import json
@@ -14,17 +14,15 @@ from orchestrator.code_generator.state import (
     PrepareWorkspaceInputState,
     PrepareWorkspaceOutputState,
 )
-from orchestrator.utils import log_path
 
 
 def prepare_workspace(state: PrepareWorkspaceInputState) -> PrepareWorkspaceOutputState:
-    """Write the work plan to a temp file and reserve summary/reasoning/log paths.
+    """Write the work plan to a temp file and reserve summary/reasoning paths.
 
     Reads:  workflow_id, ticket_key, work_plan_data
-    Writes: work_plan_path, summary_path, reasoning_path, exec_log_path
+    Writes: work_plan_path, summary_path, reasoning_path
     """
     workflow_id = state.get("workflow_id") or "unknown"
-    ticket_key = state.get("ticket_key", "")
     work_plan_data = state.get("work_plan_data")
 
     with tempfile.NamedTemporaryFile(
@@ -48,11 +46,8 @@ def prepare_workspace(state: PrepareWorkspaceInputState) -> PrepareWorkspaceOutp
     )
     os.close(reasoning_fd)
 
-    exec_log_path = log_path(workflow_id, "execute", ticket_key=ticket_key)
-
     return {
         "work_plan_path": work_plan_path,
         "summary_path": summary_path,
         "reasoning_path": reasoning_path,
-        "exec_log_path": str(exec_log_path),
     }

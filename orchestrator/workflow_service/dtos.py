@@ -54,9 +54,9 @@ class WorkflowDetail:
 
 @dataclass(frozen=True)
 class WorkflowLogChunk:
-    """One stage's captured log output.
+    """One captured workflow log stream chunk.
 
-    ``offset`` is the byte offset within the stage's full log file where
+    ``offset`` is the byte offset within the stream's full log file where
     ``content`` begins.  Callers can pass ``offset + len(content.encode())``
     back as ``after_offset`` on the next ``read_logs`` call to resume without
     re-receiving bytes already delivered (used by the SSE log-streaming
@@ -64,7 +64,7 @@ class WorkflowLogChunk:
     """
 
     workflow_id: str
-    stage: str  # e.g. "plan", "execute"
+    stage: str  # stream name, e.g. "workflow"
     path: str  # absolute path on disk (informational)
     content: str  # log contents starting at ``offset``
     offset: int = 0  # byte offset of ``content`` within the full log file

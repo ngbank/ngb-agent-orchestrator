@@ -1,6 +1,7 @@
 """Node: generate_plan — invoke the Goose plan recipe to generate a WorkPlan JSON."""
 
 import json
+import logging
 import os
 import tempfile
 from typing import Any
@@ -8,12 +9,14 @@ from typing import Any
 import click
 
 from orchestrator.litellm_callbacks import aggregate_token_usage
-from orchestrator.utils import goose_session, log_path, run_and_tee
+from orchestrator.utils import goose_session, run_and_tee
 from orchestrator.work_planner.state import (
     GeneratePlanInputState,
     GeneratePlanOutputState,
 )
 from state.workflow_repository import update_usage_summary
+
+logger = logging.getLogger(__name__)
 
 
 def generate_plan(state: GeneratePlanInputState) -> GeneratePlanOutputState:
@@ -49,15 +52,14 @@ def generate_plan(state: GeneratePlanInputState) -> GeneratePlanOutputState:
             json.dump(clarifications, f, indent=2)
 
     try:
-        lp = log_path(workflow_id, "plan", ticket_key=ticket_key)
         round_num = len(clarifications)
         if round_num:
             click.echo(
                 f"🪿 Re-running plan recipe for {ticket_key} "
-                f"with {round_num} clarification round(s)... (log: {lp})"
+                f"with {round_num} clarification round(s)..."
             )
         else:
-            click.echo(f"🪿 Running plan recipe for {ticket_key}... (log: {lp})")
+            click.echo(f"🪿 Running plan recipe for {ticket_key}...")
 
         cmd = [
             "goose",
@@ -80,14 +82,14 @@ def generate_plan(state: GeneratePlanInputState) -> GeneratePlanOutputState:
                 "failed_node": "generate_plan",
             }
 
-        with open(lp, "w") as log_file:
-            with goose_session(
-                workflow_id=workflow_id, stage="plan", ticket_key=ticket_key
-            ) as goose_env:
-                run_kwargs: dict[str, Any] = {"env": goose_env}
-                if working_dir:
-                    run_kwargs["cwd"] = working_dir
-                result = run_and_tee(cmd, log_file, **run_kwargs)
+        logger.info("=== goose run plan recipe ===")
+        with goose_session(
+            workflow_id=workflow_id, stage="plan", ticket_key=ticket_key
+        ) as goose_env:
+            run_kwargs: dict[str, Any] = {"env": goose_env}
+            if working_dir:
+                run_kwargs["cwd"] = working_dir
+            result = run_and_tee(cmd, "subprocess.goose", **run_kwargs)
 
         # Persist token usage to SQLite
         try:

@@ -91,7 +91,6 @@ def mock_repo_setup():
         patch("orchestrator.shared.repo_setup.nodes.resolve_repo.resolve_repository_url"),
         patch("orchestrator.shared.repo_setup.nodes.fetch_github_token.fetch_token_for_repo"),
         patch("orchestrator.shared.repo_setup.nodes.clone_repo.clone_repository"),
-        patch("orchestrator.shared.repo_setup.nodes.clone_repo.log_path"),
     ]
 
     started = [p.start() for p in patches]
@@ -102,8 +101,6 @@ def mock_repo_setup():
 
     mock_workdir = tf.mkdtemp(prefix="test-plan-")
     started[2].return_value = mock_workdir  # clone_repository
-
-    started[3].return_value = "/tmp/test.log"  # log_path
 
     yield started
 

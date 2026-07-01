@@ -38,9 +38,9 @@ from orchestrator.workflow_service import (
 )
 from state.workflow_status import WorkflowStatus
 
-# Stage names tailed in the live log view.  Matches the stages
-# ``WorkflowService.read_logs`` knows about (plan + execute).
-_TAIL_STAGES = ("plan", "execute")
+# Log stream tailed in the live log view.  Matches
+# ``WorkflowService.read_logs``' canonical workflow log.
+_TAIL_STAGES = ("workflow",)
 
 
 class WorkflowTUI(App[None]):

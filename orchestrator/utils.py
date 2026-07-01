@@ -2,6 +2,7 @@
 
 import contextlib
 import getpass
+import logging
 import os
 import socket
 import subprocess
@@ -208,7 +209,7 @@ def goose_session(
     Usage::
 
         with goose_session() as env:
-            run_and_tee(["goose", "run", ...], log_file, env=env)
+            run_and_tee(["goose", "run", ...], "subprocess.goose", env=env)
     """
     model = os.environ.get("GOOSE_MODEL", "")
     if not model:
@@ -321,11 +322,11 @@ def goose_session(
 
 def run_and_tee(
     cmd: List[str],
-    log_file: IO[str],
+    logger_name: str = "subprocess",
     **kwargs,
 ) -> subprocess.CompletedProcess:
     """
-    Run a command, streaming stdout+stderr to both the terminal and log_file.
+    Run a command, streaming stdout+stderr through Python logging.
 
     Returns a CompletedProcess-like object with returncode set.
     All subprocess kwargs (cwd, env, etc.) are forwarded.
@@ -340,6 +341,7 @@ def run_and_tee(
       - correlation attributes from the current OTel context
     """
     is_goose = bool(cmd and cmd[0] == "goose")
+    subprocess_logger = logging.getLogger(logger_name)
 
     def _goose_recipe(cmd: List[str]) -> str:
         """Extract --recipe value from a goose run command list."""
@@ -384,8 +386,7 @@ def run_and_tee(
                             if isinstance(raw_line, bytes)
                             else raw_line
                         )
-                        log_file.write(line)
-                        log_file.flush()
+                        subprocess_logger.info("%s", line.rstrip("\n"))
                         stdout_lines += 1
                 process.wait()
                 span.set_attribute("process.exit_code", process.returncode)
@@ -409,8 +410,7 @@ def run_and_tee(
 
     for raw_line in process.stdout:
         line = raw_line.decode(errors="replace") if isinstance(raw_line, bytes) else raw_line
-        log_file.write(line)
-        log_file.flush()
+        subprocess_logger.info("%s", line.rstrip("\n"))
 
     process.wait()
     return subprocess.CompletedProcess(cmd, process.returncode)

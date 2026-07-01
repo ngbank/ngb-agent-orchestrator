@@ -19,8 +19,8 @@ def run_goose(state: RunGooseInputState) -> dict:
     only node that requires a live Goose session.
 
     Reads:  workflow_id, ticket_key, working_dir, work_plan_path, summary_path,
-            reasoning_path, exec_log_path, execution_summary (for existing_branch
-            on PR re-runs), pr_comments
+            reasoning_path, execution_summary (for existing_branch on PR re-runs),
+            pr_comments
     Writes: nothing (summary written to summary_path on disk by the recipe)
     """
     workflow_id = state.get("workflow_id")
@@ -29,7 +29,6 @@ def run_goose(state: RunGooseInputState) -> dict:
     work_plan_path = state.get("work_plan_path", "")
     summary_path = state.get("summary_path", "")
     reasoning_path = state.get("reasoning_path", "")
-    exec_log_path = state.get("exec_log_path", "")
 
     # Existing branch is used on PR re-runs to avoid re-creating the branch.
     existing_exec_summary = state.get("execution_summary") or {}
@@ -55,11 +54,10 @@ def run_goose(state: RunGooseInputState) -> dict:
 
     logger.info("Running generate recipe for %s...", ticket_key)
 
-    with (
-        open(exec_log_path, "a") as log_file,
-        goose_session(workflow_id=workflow_id, stage="execute", ticket_key=ticket_key) as goose_env,
-    ):
-        log_file.write("\n=== goose run generate recipe ===\n")
+    logger.info("=== goose run generate recipe ===")
+    with goose_session(
+        workflow_id=workflow_id, stage="execute", ticket_key=ticket_key
+    ) as goose_env:
         result = run_and_tee(
             [
                 "goose",
@@ -87,20 +85,16 @@ def run_goose(state: RunGooseInputState) -> dict:
                 "--params",
                 f"branch_name={branch_name}",
             ],
-            log_file,
+            "subprocess.goose",
             cwd=working_dir,
             env=goose_env,
         )
 
-    # Append reasoning diary to log
+    # Append reasoning diary to workflow log.
     if os.path.exists(reasoning_path):
         reasoning_text = open(reasoning_path).read().strip()
         if reasoning_text:
-            with open(exec_log_path, "a") as log_file:
-                log_file.write("\n\n" + "=" * 60 + "\n")
-                log_file.write("  AGENT REASONING DIARY\n")
-                log_file.write("=" * 60 + "\n")
-                log_file.write(reasoning_text + "\n")
+            logger.info("\n%s\n  AGENT REASONING DIARY\n%s\n%s", "=" * 60, "=" * 60, reasoning_text)
 
     if result.returncode != 0:
         logger.warning("Goose exited with code %s", result.returncode)
