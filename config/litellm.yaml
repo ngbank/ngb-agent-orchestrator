@@ -53,8 +53,8 @@ general_settings:
 
 litellm_settings:
   drop_params: true  # silently drop unsupported provider params for cross-provider compatibility
-  # Bootstrap OTel file routing + token-usage logger inside the proxy
-  # subprocess.  See otel/litellm_proxy_setup.py — importing the module installs
+  # Bootstrap OTel file routing inside the proxy subprocess.  See
+  # otel/litellm_proxy_setup.py — importing the module installs
   # LocalJsonFileExporter and registers OtelLiteLLMCallback so `llm.call` spans
   # land in LOGS_DIR/<workflow_id>/otel.jsonl alongside dispatcher spans.
   #

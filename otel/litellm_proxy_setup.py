@@ -11,28 +11,41 @@ This module is referenced from the proxy YAML (see
 ``graph.utils._litellm_config_yaml``) as the single ``callbacks`` entry.
 Importing it has three side-effects:
 
-1. Seeds :mod:`otel.context` from ``NGB_WORKFLOW_ID`` / ``NGB_TICKET_KEY``
-   env vars (forwarded by the dispatcher) so the proxy-side
-   ``OtelContext.capture()`` populates ``workflow.id`` and
-   ``jira.ticket_key`` on every span.
+1. Seeds :mod:`otel.context` from ``NGB_WORKFLOW_ID`` / ``NGB_TICKET_KEY`` /
+   ``NGB_WORKFLOW_STAGE`` env vars (forwarded by the dispatcher) so the
+   proxy-side ``OtelContext.capture()`` populates ``workflow.id``,
+   ``jira.ticket_key``, and ``workflow.stage`` on every span. The
+   ``workflow.stage`` attribute is what lets
+   :func:`orchestrator.litellm_callbacks.aggregate_token_usage` filter
+   ``llm.call`` spans by stage when reading ``otel.jsonl``.
 2. Calls :func:`otel.instrumentation.setup_tracing` which installs the
    :class:`otel.exporters.LocalJsonFileExporter` and appends
    :data:`otel.litellm_callback.otel_callback_instance` to
    ``litellm.callbacks`` so ``llm.call`` spans are emitted.
-3. Re-exports :data:`graph.litellm_callbacks.proxy_handler_instance` (the
-   existing :class:`graph.litellm_callbacks.TokenUsageLogger`) as the YAML
-   callback target.  LiteLLM only loads one dotted-path callback per
-   config; routing through this module preserves the existing token-usage
-   JSONL while adding the OTel pipeline.
+3. Exposes :data:`proxy_handler_instance`, a no-op ``CustomLogger``, as the
+   YAML callback target. LiteLLM only loads one dotted-path callback per
+   config; this module's import is what triggers side-effects 1-2 above,
+   so ``proxy_handler_instance`` only needs to exist as a valid target —
+   it deliberately does not re-register ``otel_callback_instance`` itself
+   to avoid double-registering it with ``litellm.callbacks`` (already done
+   by ``setup_tracing()``).
 """
 
 from __future__ import annotations
 
 import os
 
-from orchestrator.litellm_callbacks import proxy_handler_instance
+from litellm.integrations.custom_logger import CustomLogger
+
 from otel.context import set_proxy_parent_context, set_workflow_context
 from otel.instrumentation import setup_tracing
+
+
+class _ProxyCallbackTarget(CustomLogger):
+    """Placeholder YAML callback target — see module docstring point 3."""
+
+
+proxy_handler_instance = _ProxyCallbackTarget()
 
 
 def _bootstrap_proxy_otel() -> None:
@@ -59,8 +72,9 @@ def _bootstrap_proxy_otel() -> None:
     """
     workflow_id = os.environ.get("NGB_WORKFLOW_ID")
     ticket_key = os.environ.get("NGB_TICKET_KEY")
-    if workflow_id or ticket_key:
-        set_workflow_context(workflow_id=workflow_id, ticket_key=ticket_key)
+    stage = os.environ.get("NGB_WORKFLOW_STAGE")
+    if workflow_id or ticket_key or stage:
+        set_workflow_context(workflow_id=workflow_id, ticket_key=ticket_key, stage=stage)
     setup_tracing(synchronous=True)
 
     carrier: dict[str, str] = {}

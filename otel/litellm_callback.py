@@ -1,8 +1,8 @@
 """OTel LiteLLM callback — emits an ``llm.call`` span per LLM API call.
 
-Plugs into LiteLLM's ``CustomLogger`` hook system alongside the existing
-``TokenUsageLogger``.  Each span is a child of the active OTel context so
-it automatically nests under the enclosing ``graph.node.*`` span:
+Plugs into LiteLLM's ``CustomLogger`` hook system.  Each span is a child of
+the active OTel context so it automatically nests under the enclosing
+``graph.node.*`` span:
 
     graph.node.work_planner
     └── llm.call   (model, input_tokens, output_tokens, latency_ms,

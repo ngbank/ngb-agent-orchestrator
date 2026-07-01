@@ -178,9 +178,7 @@ def _litellm_config_yaml(model_string: str) -> str:
         "  drop_params: true\n"
         # Routed through otel.litellm_proxy_setup so the proxy subprocess
         # installs the dispatcher's LocalJsonFileExporter and emits
-        # ``llm.call`` spans into LOGS_DIR/<workflow_id>/otel.jsonl. That
-        # module re-exports ``proxy_handler_instance`` so the existing
-        # token-usage logger keeps working unchanged.
+        # ``llm.call`` spans into LOGS_DIR/<workflow_id>/otel.jsonl.
         #
         # The list form (vs scalar) is REQUIRED: LiteLLM's proxy YAML loader
         # replaces ``litellm.callbacks`` entirely when ``callbacks`` is a
