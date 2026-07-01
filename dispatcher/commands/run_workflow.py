@@ -27,6 +27,17 @@ class _ClickLogHandler(logging.Handler):
 
 @contextmanager
 def _workflow_cli_logs():
+    """Echo workflow log records to the terminal through Click, once each.
+
+    ``setup_logging`` installs a timestamped console ``StreamHandler`` bound
+    to the process's original stderr. Since AOS-168 routes subprocess output
+    (Goose, git) through the same root logger, leaving that handler attached
+    here would print every line twice: once with the raw timestamp/logger
+    prefix, once more through this handler's plain Click echo. Detach it for
+    the duration of the run so each line prints once; ``workflow.log`` still
+    captures the full timestamped record independently via its own
+    ``WorkflowFileHandler``.
+    """
     handler = _ClickLogHandler()
     handler.setLevel(logging.INFO)
     handler.setFormatter(logging.Formatter("%(message)s"))
@@ -35,11 +46,22 @@ def _workflow_cli_logs():
     original_level = root.level
     if root.level > logging.INFO:
         root.setLevel(logging.INFO)
+
+    console_handlers = [
+        h
+        for h in root.handlers
+        if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+    ]
+    for h in console_handlers:
+        root.removeHandler(h)
+
     root.addHandler(handler)
     try:
         yield
     finally:
         root.removeHandler(handler)
+        for h in console_handlers:
+            root.addHandler(h)
         root.setLevel(original_level)
 
 
