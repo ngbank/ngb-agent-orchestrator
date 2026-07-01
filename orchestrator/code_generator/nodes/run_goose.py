@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def run_goose(state: RunGooseInputState) -> dict:
-    """Shell out to `goose run --recipe recipes/generate_code.yaml`.
+    """Shell out to `goose run --recipe orchestrator/code_generator/recipes/generate_code.yaml`.
 
     goose_session is opened and closed entirely within this node — it is the
     only node that requires a live Goose session.
@@ -50,7 +50,7 @@ def run_goose(state: RunGooseInputState) -> dict:
 
     mcp_python = os.environ.get("GOOSE_MCP_PYTHON", "python")
     max_turns = os.environ.get("GOOSE_MAX_TURNS", "200")
-    recipe_path = Path(__file__).resolve().parents[3] / "recipes" / "generate_code.yaml"
+    recipe_path = Path(__file__).resolve().parents[2] / "recipes" / "generate_code.yaml"
 
     logger.info("Running generate recipe for %s...", ticket_key)
 

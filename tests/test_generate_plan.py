@@ -88,7 +88,7 @@ def test_generate_plan_passes_correct_params(log_tmp, write_workplan_to_output):
 
     cmd = mock_tee.call_args[0][0]
     assert "goose" in cmd
-    assert "recipes/plan.yaml" in cmd
+    assert any(a.endswith("orchestrator/work_planner/recipes/plan.yaml") for a in cmd)
     assert any(a == "ticket_key=AOS-51" for a in cmd)
     assert any(a.startswith("output_path=") for a in cmd)
     assert "cwd" not in mock_tee.call_args.kwargs

@@ -145,16 +145,19 @@ ngb-agent-orchestrator/
 │   ├── nodes/
 │   │   ├── await_approval.py     # Approval gate (LangGraph interrupt)
 │   │   └── generate_code.py      # Generate code recipe node
+│   ├── code_generator/
+│   │   ├── nodes/                # Individual code-gen steps
+│   │   └── recipes/
+│   │       └── generate_code.yaml  # Goose execute recipe
 │   └── work_planner/
 │       ├── builder.py            # Work planner subgraph
 │       ├── edges.py              # Routing functions
 │       ├── state.py              # WorkPlannerState TypedDict
-│       └── nodes/                # Individual planner steps
-├── recipes/
-│   ├── plan.yaml                 # Goose plan recipe
-│   └── execute.yaml              # Goose execute recipe
-├── schemas/
-│   └── work_plan_v1.json         # WorkPlan JSON Schema
+│       ├── nodes/                # Individual planner steps
+│       ├── recipes/
+│       │   └── plan.yaml         # Goose plan recipe
+│       └── schemas/
+│           └── work_plan_v1.json # WorkPlan JSON Schema
 ├── scripts/
 │   └── check_sql_migrations.py   # Pre-commit SQL safety hook
 ├── state/

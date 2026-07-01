@@ -1,6 +1,6 @@
 # Goose Recipes
 
-Recipes are YAML files in `recipes/` that define reusable Goose agent workflows. Each recipe declares parameters, extensions (tools the agent can use), LLM settings, and a natural-language prompt.
+Recipes are YAML files co-located with their consumer subgraph under `orchestrator/<subgraph>/recipes/`. Each recipe declares parameters, extensions (tools the agent can use), LLM settings, and a natural-language prompt.
 
 ---
 
@@ -15,22 +15,22 @@ Recipes are invoked by the orchestrator automatically, but you can also run them
 export PATH="$HOME/.local/bin:$PATH"
 
 # Run the plan recipe directly
-goose run --recipe recipes/plan.yaml \
+goose run --recipe orchestrator/work_planner/recipes/plan.yaml \
   --params ticket_key=AOS-41 \
   --params output_path=workplans/AOS-41-plan.json
 
 # Run the generate recipe directly (pass an already-generated WorkPlan)
-goose run --recipe recipes/generate_code.yaml \
+goose run --recipe orchestrator/code_generator/recipes/generate_code.yaml \
   --params ticket_key=AOS-41 \
   --params work_plan_path=workplans/AOS-41-plan.json \
   --params output_path=/tmp/AOS-41-exec-summary.json
 ```
 
-Use `goose run --recipe recipes/plan.yaml --explain` to see a recipe's parameters without running it.
+Use `goose run --recipe orchestrator/work_planner/recipes/plan.yaml --explain` to see a recipe's parameters without running it.
 
 ---
 
-## `recipes/plan.yaml` — WorkPlan Generator
+## `orchestrator/work_planner/recipes/plan.yaml` — WorkPlan Generator
 
 **Purpose**: Turn a JIRA ticket into a structured `WorkPlan` JSON document.
 
@@ -45,7 +45,7 @@ Use `goose run --recipe recipes/plan.yaml --explain` to see a recipe's parameter
 1. Fetches the ticket with `acli jira workitem view {ticket_key}`
 2. Explores the repository structure (README, directory listing, relevant files)
 3. Generates a WorkPlan JSON with LLM (azure-gpt4, temperature 0.3)
-4. Validates the JSON against `schemas/work_plan_v1.json` — retries up to 3 times on failure
+4. Validates the JSON against `orchestrator/work_planner/schemas/work_plan_v1.json` — retries up to 3 times on failure
 5. Writes the validated JSON to `output_path`
 
 **WorkPlan status values**:
@@ -63,7 +63,7 @@ Use `goose run --recipe recipes/plan.yaml --explain` to see a recipe's parameter
 
 ---
 
-## `recipes/generate_code.yaml` — WorkPlan Executor
+## `orchestrator/code_generator/recipes/generate_code.yaml` — WorkPlan Executor
 
 **Purpose**: Implement an approved WorkPlan by making code changes in the local repository.
 
@@ -98,7 +98,7 @@ Use `goose run --recipe recipes/plan.yaml --explain` to see a recipe's parameter
   "branch": "feature/AOS-41-goose-execute-recipe",
   "build": "pass",
   "tests": "pass",
-  "files_changed": ["graph/nodes/generate_code.py", "recipes/generate_code.yaml"],
+  "files_changed": ["graph/nodes/generate_code.py", "orchestrator/code_generator/recipes/generate_code.yaml"],
   "commit_sha": "a1b2c3d...",
   "status": "success"
 }
@@ -118,9 +118,9 @@ Use `goose run --recipe recipes/plan.yaml --explain` to see a recipe's parameter
 
 ## Creating a New Recipe
 
-1. Copy an existing recipe as a template:
+1. Copy an existing recipe as a template (place the new file alongside the recipe used by the subgraph that will own it):
    ```bash
-   cp recipes/plan.yaml recipes/my-recipe.yaml
+   cp orchestrator/work_planner/recipes/plan.yaml orchestrator/work_planner/recipes/my-recipe.yaml
    ```
 
 2. Update the top-level fields: `title`, `description`, `parameters`
@@ -133,7 +133,7 @@ Use `goose run --recipe recipes/plan.yaml --explain` to see a recipe's parameter
 
 5. Test it manually before wiring into the graph:
    ```bash
-   goose run --recipe recipes/my-recipe.yaml --params key=value
+   goose run --recipe orchestrator/work_planner/recipes/my-recipe.yaml --params key=value
    ```
 
 **Recipe file structure**:

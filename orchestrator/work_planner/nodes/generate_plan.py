@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import tempfile
+from pathlib import Path
 from typing import Any
 
 import click
@@ -16,6 +17,8 @@ from orchestrator.work_planner.state import (
 )
 from state.workflow_repository import update_usage_summary
 
+_RECIPE_PATH = Path(__file__).resolve().parent.parent / "recipes" / "plan.yaml"
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,7 +26,7 @@ def generate_plan(state: GeneratePlanInputState) -> GeneratePlanOutputState:
     """Invoke the Goose plan recipe and return the resulting WorkPlan as state.
 
     1. Creates a temp file path for the output JSON.
-    2. Shells out to `goose run --recipe recipes/plan.yaml`.
+    2. Shells out to `goose run --recipe orchestrator/work_planner/recipes/plan.yaml`.
     3. Reads and parses the WorkPlan JSON written by the recipe.
     4. Returns {"work_plan_data": <dict>} on success.
     5. Returns {"error": <message>} on any failure so route_after_generate_plan
@@ -65,7 +68,7 @@ def generate_plan(state: GeneratePlanInputState) -> GeneratePlanOutputState:
             "goose",
             "run",
             "--recipe",
-            "recipes/plan.yaml",
+            str(_RECIPE_PATH),
             "--max-turns",
             os.environ.get("GOOSE_MAX_TURNS", "200"),
             "--params",

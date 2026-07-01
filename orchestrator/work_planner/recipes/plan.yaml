@@ -98,7 +98,7 @@ prompt: |
   Follow these steps exactly:
   1. List the top-level directory structure (e.g., `ls` or `tree . --depth 2`)
   2. Read key files to understand conventions: dispatcher/run.py
-  3. List relevant directories: dispatcher/, schemas/, state/, tests/, recipes/
+  3. List relevant directories: dispatcher/, orchestrator/, state/, tests/
 
   **Do NOT**:
   - Use `analyze focus:` to search for the feature's keywords (e.g., push, PR, github, branch) — they won't be found

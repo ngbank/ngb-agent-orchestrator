@@ -744,7 +744,7 @@ class TestGooseRunEnrichment:
         run_and_tee = self._patched_run_and_tee(monkeypatch, provider)
 
         run_and_tee(
-            ["goose", "run", "--recipe", "recipes/plan.yaml"],
+            ["goose", "run", "--recipe", "orchestrator/work_planner/recipes/plan.yaml"],
             "tests.subprocess",
             stdout=__import__("subprocess").DEVNULL,
             stderr=__import__("subprocess").DEVNULL,
@@ -758,7 +758,14 @@ class TestGooseRunEnrichment:
         run_and_tee = self._patched_run_and_tee(monkeypatch, provider)
 
         run_and_tee(
-            ["goose", "run", "--recipe", "recipes/execute.yaml", "--params", "k=v"],
+            [
+                "goose",
+                "run",
+                "--recipe",
+                "orchestrator/code_generator/recipes/execute.yaml",
+                "--params",
+                "k=v",
+            ],
             "tests.subprocess",
             stdout=__import__("subprocess").DEVNULL,
             stderr=__import__("subprocess").DEVNULL,
@@ -766,7 +773,7 @@ class TestGooseRunEnrichment:
 
         span = next(s for s in exporter.get_finished_spans() if s.name == "goose.run")
         assert span.attributes.get("process.command_line") == (
-            "goose run --recipe recipes/execute.yaml --params k=v"
+            "goose run --recipe orchestrator/code_generator/recipes/execute.yaml --params k=v"
         )
 
     def test_goose_stdout_lines_counted(self, monkeypatch, tmp_path):
@@ -790,7 +797,7 @@ class TestGooseRunEnrichment:
         fake = _FakeProc(["line1\n", "line2\n", "line3\n"])
         with _patch("subprocess.Popen", return_value=fake):
             run_and_tee(
-                ["goose", "run", "--recipe", "recipes/plan.yaml"],
+                ["goose", "run", "--recipe", "orchestrator/work_planner/recipes/plan.yaml"],
                 "tests.subprocess",
                 stdout=_subprocess.PIPE,
                 stderr=_subprocess.STDOUT,
