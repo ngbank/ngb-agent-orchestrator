@@ -1,7 +1,9 @@
 """Handler for the main --ticket workflow run."""
 
+import logging
 import sys
 import uuid
+from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 import click
@@ -14,6 +16,31 @@ from state.workflow_status import WorkflowStatus
 
 if TYPE_CHECKING:
     from orchestrator.workflow_service import WorkflowService
+
+
+class _ClickLogHandler(logging.Handler):
+    """Emit workflow log records through Click for interactive CLI runs."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        click.echo(self.format(record))
+
+
+@contextmanager
+def _workflow_cli_logs():
+    handler = _ClickLogHandler()
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+
+    root = logging.getLogger()
+    original_level = root.level
+    if root.level > logging.INFO:
+        root.setLevel(logging.INFO)
+    root.addHandler(handler)
+    try:
+        yield
+    finally:
+        root.removeHandler(handler)
+        root.setLevel(original_level)
 
 
 def _handle_run(
@@ -38,13 +65,14 @@ def _handle_run(
     workflow_id = str(uuid.uuid4())
 
     try:
-        result = submit_and_follow(
-            service,
-            service.start,
-            WorkflowStartRequest(ticket_key=ticket, workflow_id=workflow_id),
-            workflow_id_hint=workflow_id,
-            detach=detach,
-        )
+        with _workflow_cli_logs():
+            result = submit_and_follow(
+                service,
+                service.start,
+                WorkflowStartRequest(ticket_key=ticket, workflow_id=workflow_id),
+                workflow_id_hint=workflow_id,
+                detach=detach,
+            )
 
         if result.error:
             sys.exit(1)

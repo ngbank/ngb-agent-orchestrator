@@ -1,10 +1,9 @@
 """Node: push_and_create_pr — push branch and open/update PR."""
 
+import logging
 import subprocess
 from pathlib import Path
 from typing import Optional
-
-import click
 
 from dispatcher.github_client import (
     GitHubAuthError,
@@ -18,6 +17,8 @@ from orchestrator.code_generator.state import (
     PushAndCreatePrInputState,
     PushAndCreatePrOutputState,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _read_pr_template(working_dir: str) -> Optional[str]:
@@ -112,7 +113,7 @@ def push_and_create_pr(
     # Skip if previous nodes failed
     exec_error = state.get("exec_error")
     if exec_error or execution_summary.get("status") == "failed":
-        click.echo("⊘ Skipping push/PR — previous node failed")
+        logger.info("Skipping push/PR; previous node failed.")
         return {
             "execution_summary": execution_summary,
             "failed_node": None,
@@ -124,7 +125,7 @@ def push_and_create_pr(
     pr_url = execution_summary.get("pr_url", "")
 
     if not branch or not commit_sha:
-        click.echo("⊘ Skipping push/PR — missing branch or commit SHA", err=True)
+        logger.warning("Skipping push/PR; missing branch or commit SHA.")
         execution_summary["pr_url"] = ""
         return {
             "execution_summary": execution_summary,
@@ -132,7 +133,7 @@ def push_and_create_pr(
         }
 
     if not repo_url:
-        click.echo("⊘ Skipping push/PR — missing repository URL", err=True)
+        logger.warning("Skipping push/PR; missing repository URL.")
         execution_summary["pr_url"] = ""
         return {
             "execution_summary": execution_summary,
@@ -142,7 +143,7 @@ def push_and_create_pr(
     try:
         owner, repo = _parse_repo_url(repo_url)
     except Exception as e:
-        click.echo(f"❌ Failed to parse repo URL: {e}", err=True)
+        logger.error("Failed to parse repo URL: %s", e)
         execution_summary["pr_url"] = ""
         return {
             "execution_summary": execution_summary,
@@ -160,10 +161,7 @@ def push_and_create_pr(
                 text=True,
             )
             if rev_result.returncode == 0 and rev_result.stdout.strip() == commit_sha:
-                click.echo(
-                    "⊘ Re-execution produced no new commits — branch is unchanged",
-                    err=True,
-                )
+                logger.warning("Re-execution produced no new commits; branch is unchanged.")
                 execution_summary["status"] = "failed"
                 execution_summary["error"] = (
                     "Re-execution produced no new commits. "
@@ -177,7 +175,7 @@ def push_and_create_pr(
             pass  # if git isn't callable, fall through and attempt the push normally
 
     # === PUSH ===
-    click.echo(f"📤 Pushing {branch}...")
+    logger.info("Pushing %s...", branch)
     try:
         push_branch_with_token(
             working_dir=working_dir,
@@ -186,9 +184,9 @@ def push_and_create_pr(
             branch=branch,
             token=github_token,
         )
-        click.echo(f"✓ Pushed {branch}")
+        logger.info("Pushed %s", branch)
     except GitHubAuthError as e:
-        click.echo(f"❌ Failed to push branch: {e}", err=True)
+        logger.error("Failed to push branch: %s", e)
         execution_summary["pr_url"] = ""
         # Downgrade status to "partial" (code was committed but push failed)
         if execution_summary.get("status") == "success":
@@ -203,12 +201,12 @@ def push_and_create_pr(
         existing_pr_url = get_open_pr(owner, repo, branch, github_token)
 
         if existing_pr_url:
-            click.echo(f"✓ Found existing PR: {existing_pr_url}")
+            logger.info("Found existing PR: %s", existing_pr_url)
             pr_url = existing_pr_url
 
             # If re-execution after PR comments, add a summary comment
             if pr_comments:
-                click.echo("💬 Adding comment to PR...")
+                logger.info("Adding comment to PR...")
                 comment_body = (
                     f"Addressed review comments:\n\n{pr_comments[:200]}..."
                     if len(pr_comments) > 200
@@ -216,11 +214,11 @@ def push_and_create_pr(
                 )
                 try:
                     add_pr_comment(pr_url, comment_body, github_token)
-                    click.echo("✓ Posted comment to PR")
+                    logger.info("Posted comment to PR")
                 except GitHubAuthError as e:
-                    click.echo(f"⚠️  Failed to post comment: {e}", err=True)
+                    logger.warning("Failed to post comment: %s", e)
         else:
-            click.echo("📝 Creating new PR...")
+            logger.info("Creating new PR...")
             summary = work_plan_data.get("summary", "")
             template = _read_pr_template(working_dir)
             pr_body = _build_pr_body(ticket_key, summary, work_plan_data, template)
@@ -235,11 +233,11 @@ def push_and_create_pr(
                 body=pr_body,
                 token=github_token,
             )
-            click.echo(f"✓ Created PR: {pr_url}")
+            logger.info("Created PR: %s", pr_url)
 
         execution_summary["pr_url"] = pr_url
     except GitHubAuthError as e:
-        click.echo(f"❌ Failed to create/update PR: {e}", err=True)
+        logger.error("Failed to create/update PR: %s", e)
         execution_summary["pr_url"] = ""
         # Downgrade status to "partial" (code was committed and pushed)
         if execution_summary.get("status") == "success":

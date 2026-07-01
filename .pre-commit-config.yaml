@@ -47,6 +47,13 @@ repos:
   # Runs via the project venv so library types resolve correctly.
   - repo: local
     hooks:
+      - id: check-no-print
+        name: check-no-print
+        entry: .venv/bin/python scripts/check_no_print.py
+        language: system
+        types: [python]
+        exclude: ^(scripts/|tests/)
+
       - id: pyright
         name: pyright
         entry: .venv/bin/python -m pyright
