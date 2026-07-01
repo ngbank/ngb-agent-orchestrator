@@ -54,6 +54,12 @@ repos:
         types: [python]
         exclude: ^(scripts/|tests/)
 
+      - id: check-no-fstring-log
+        name: check-no-fstring-log
+        entry: .venv/bin/python scripts/check_no_fstring_log.py
+        language: system
+        types: [python]
+
       - id: pyright
         name: pyright
         entry: .venv/bin/python -m pyright
