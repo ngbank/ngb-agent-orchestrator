@@ -16,9 +16,11 @@ from otel.context import (
     _node_name,
     _ticket_key,
     _workflow_id,
+    _workflow_stage,
     get_node_name,
     get_ticket_key,
     get_workflow_id,
+    get_workflow_stage,
     set_node_context,
     set_workflow_context,
 )
@@ -51,16 +53,26 @@ class TestOtelContext:
         _workflow_id.set(None)
         _ticket_key.set(None)
         _node_name.set(None)
+        _workflow_stage.set(None)
 
     def test_defaults_are_none(self):
         assert get_workflow_id() is None
         assert get_ticket_key() is None
         assert get_node_name() is None
+        assert get_workflow_stage() is None
 
     def test_set_workflow_context(self):
         set_workflow_context(workflow_id="wf-1", ticket_key="AOS-1")
         assert get_workflow_id() == "wf-1"
         assert get_ticket_key() == "AOS-1"
+
+    def test_set_workflow_context_stage(self):
+        set_workflow_context(workflow_id="wf-stage", stage="plan")
+        assert get_workflow_stage() == "plan"
+
+    def test_get_workflow_stage_env_fallback(self, monkeypatch):
+        monkeypatch.setenv("NGB_WORKFLOW_STAGE", "execute")
+        assert get_workflow_stage() == "execute"
 
     def test_set_node_context(self):
         set_node_context("work_planner")
@@ -88,13 +100,14 @@ class TestOtelContext:
         assert "graph.node_name" not in attrs  # node_name is None
 
     def test_as_attributes_all_set(self):
-        set_workflow_context(workflow_id="wf-4", ticket_key="AOS-4")
+        set_workflow_context(workflow_id="wf-4", ticket_key="AOS-4", stage="execute")
         set_node_context("await_approval")
         ctx = OtelContext.capture()
         attrs = ctx.as_attributes()
         assert attrs["workflow.id"] == "wf-4"
         assert attrs["jira.ticket_key"] == "AOS-4"
         assert attrs["graph.node_name"] == "await_approval"
+        assert attrs["workflow.stage"] == "execute"
 
     def test_set_workflow_context_partial_update(self):
         set_workflow_context(workflow_id="wf-5")
@@ -232,6 +245,7 @@ class TestInstrumentGraphStream:
         _workflow_id.set(None)
         _ticket_key.set(None)
         _node_name.set(None)
+        _workflow_stage.set(None)
 
     def _make_mock_graph(self, events):
         graph = MagicMock()
@@ -349,6 +363,7 @@ class TestOtelLiteLLMCallback:
         _workflow_id.set(None)
         _ticket_key.set(None)
         _node_name.set(None)
+        _workflow_stage.set(None)
 
     def _run(self, coro):
         # Use a fresh event loop per call: ``asyncio.get_event_loop()`` is
@@ -385,13 +400,14 @@ class TestOtelLiteLLMCallback:
 
     def test_success_attaches_correlation_attributes(self, monkeypatch):
         provider, exporter = _make_in_memory_provider()
-        set_workflow_context(workflow_id="wf-llm", ticket_key="AOS-llm")
+        set_workflow_context(workflow_id="wf-llm", ticket_key="AOS-llm", stage="plan")
         cb = self._patched_cb(monkeypatch, provider)
         self._run(cb.async_log_success_event(_make_kwargs(), _make_response(), _now(), _now()))
 
         span = next(s for s in exporter.get_finished_spans() if s.name == "llm.call")
         assert span.attributes.get("workflow.id") == "wf-llm"
         assert span.attributes.get("jira.ticket_key") == "AOS-llm"
+        assert span.attributes.get("workflow.stage") == "plan"
 
     def test_success_latency_attached(self, monkeypatch):
         provider, exporter = _make_in_memory_provider()
@@ -539,6 +555,7 @@ class TestRunAndTeeGooseSpan:
         _workflow_id.set(None)
         _ticket_key.set(None)
         _node_name.set(None)
+        _workflow_stage.set(None)
 
     def _patched_run_and_tee(self, monkeypatch, provider):
         """Return run_and_tee with its OTel tracer wired to *provider*."""
@@ -665,6 +682,7 @@ class TestInstrumentGraphStreamRollup:
         _workflow_id.set(None)
         _ticket_key.set(None)
         _node_name.set(None)
+        _workflow_stage.set(None)
 
     def _make_mock_graph(self, events):
         graph = MagicMock()
@@ -729,6 +747,7 @@ class TestGooseRunEnrichment:
         _workflow_id.set(None)
         _ticket_key.set(None)
         _node_name.set(None)
+        _workflow_stage.set(None)
 
     def _patched_run_and_tee(self, monkeypatch, provider):
         import opentelemetry.trace as otel_trace_module
@@ -817,6 +836,7 @@ class TestObservableSqliteSaverCheckpointSpan:
         _workflow_id.set(None)
         _ticket_key.set(None)
         _node_name.set(None)
+        _workflow_stage.set(None)
 
     def _make_saver(self, monkeypatch, provider):
         """Build an ObservableSqliteSaver whose tracer points to *provider*."""

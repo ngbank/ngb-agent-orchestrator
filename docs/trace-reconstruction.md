@@ -13,6 +13,10 @@ History:
   emit a `graph.node.*` span for every dispatched node (incl. subgraphs)
   + propagate W3C `traceparent` from dispatcher to proxy so `llm.call`
   spans share the workflow's trace tree.
+- AOS-170: removed the parallel `llm_token_usage.jsonl` / `llm_failures.jsonl`
+  logger; token usage is now aggregated directly from `llm.call` spans in
+  `otel.jsonl` via `orchestrator.litellm_callbacks.aggregate_token_usage`,
+  filtered by the `workflow.stage` span attribute.
 
 ---
 
@@ -22,7 +26,6 @@ History:
 LOGS_DIR/
 └── <workflow_id>/
     ├── otel.jsonl                  # all spans for the run, NDJSON
-    ├── llm_token_usage.jsonl       # legacy token-usage logger
     ├── <ticket>_<wf>_plan.log      # goose plan stage stdout
     ├── <ticket>_<wf>_execute.log   # goose execute stage stdout
     └── litellm_proxy.log           # proxy uvicorn output
@@ -56,7 +59,7 @@ For a successful plan-stage run (e.g. `dispatcher --ticket AOS-94`):
 | `graph.node.await_approval` | 1 | `workflow.run` | The interrupt node |
 | `graph.checkpoint` | ~13 | `workflow.run` | One per `ObservableSqliteSaver.put` |
 | `goose.run` | 1 | `workflow.run` | `goose run --recipe orchestrator/work_planner/recipes/plan.yaml` |
-| `llm.call` | N (~10–60) | `workflow.run` | Emitted from the proxy subprocess, parented via traceparent |
+| `llm.call` | N (~10–60) | `workflow.run` | Emitted from the proxy subprocess, parented via traceparent; carries `workflow.stage` (`plan` / `execute`) for per-stage token aggregation |
 
 All spans share a single `trace_id`. An execute-stage run roughly doubles
 `goose.run` (one per stage) and adds a second `await_pr_approval`.

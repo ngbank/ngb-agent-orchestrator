@@ -207,7 +207,7 @@ This JSON format is machine-parseable for downstream analysis, dashboards, and d
 | `graph.node.<name>` | `otel.instrumentation` (one per stream event) | `graph.node_name`, `graph.node.state_keys_changed` (sorted keys, no values), `graph.node.output_size_bytes`, `graph.node.error` / `graph.node.failed_node` on failure, `workflow.status` when set |
 | `graph.checkpoint` | `state.observable_sqlite_saver.ObservableSqliteSaver.put` | `checkpoint.step`, `checkpoint.source` (`input` / `loop` / `update` / `fork`), `checkpoint.changed_channels`, `checkpoint.writes_nodes`, `checkpoint.channel_count`, `graph.thread_id` |
 | `goose.run` | `graph.utils.run_and_tee` (when `cmd[0] == "goose"`) | `process.command`, `process.command_line`, `process.exit_code`, `goose.recipe`, `goose.stage` (recipe basename, e.g. `plan` / `execute`), `goose.stdout_lines` |
-| `llm.call` | `otel.litellm_callback.OtelLiteLLMCallback` (registered inside the LiteLLM proxy subprocess via `otel.litellm_proxy_setup`) | `llm.model`, `llm.input_tokens`, `llm.output_tokens`, `llm.total_tokens`, `llm.latency_ms`, `llm.error_type` on failure. Routed into `LOGS_DIR/<workflow_id>/otel.jsonl` via the proxy-side `LocalJsonFileExporter` (AOS-118), using `NGB_WORKFLOW_ID` / `NGB_TICKET_KEY` forwarded by `graph.utils.goose_session`. |
+| `llm.call` | `otel.litellm_callback.OtelLiteLLMCallback` (registered inside the LiteLLM proxy subprocess via `otel.litellm_proxy_setup`) | `llm.model`, `llm.input_tokens`, `llm.output_tokens`, `llm.total_tokens`, `llm.latency_ms`, `llm.finish_reason`, `llm.error_type` on failure. Also carries `workflow.stage` (`plan` / `execute`), forwarded via `NGB_WORKFLOW_STAGE` by `graph.utils.goose_session`, which `orchestrator.litellm_callbacks.aggregate_token_usage` uses to filter spans per stage. Routed into `LOGS_DIR/<workflow_id>/otel.jsonl` via the proxy-side `LocalJsonFileExporter` (AOS-118), using `NGB_WORKFLOW_ID` / `NGB_TICKET_KEY` forwarded the same way. |
 
 #### Local OTLP Export (optional)
 
@@ -262,7 +262,7 @@ OTEL_ELASTIC_API_KEY=<api-key>
 |---|---|---|
 | `DEFAULT_PROJECT_KEY` | `AOS` | Default JIRA project for commands that accept a project |
 | `LOG_LEVEL` | `INFO` | Python logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Affects all application and third-party logs |
-| `LOGS_DIR` | `$XDG_STATE_HOME/ngb-agent-orchestrator/logs` (or `~/.local/state/ngb-agent-orchestrator/logs` when `XDG_STATE_HOME` is unset) | Base directory for run logs. Each workflow writes into a `{workflow_id}/` subdirectory containing `workflow.log` for operator-visible Python and subprocess logging, `llm_token_usage.jsonl`, and `otel.jsonl` (always written). Shares the same XDG state root as `DB_PATH` so the host CLI and the containerised server see the same logs by default. |
+| `LOGS_DIR` | `$XDG_STATE_HOME/ngb-agent-orchestrator/logs` (or `~/.local/state/ngb-agent-orchestrator/logs` when `XDG_STATE_HOME` is unset) | Base directory for run logs. Each workflow writes into a `{workflow_id}/` subdirectory containing `workflow.log` for operator-visible Python and subprocess logging, and `otel.jsonl` (always written; token usage is aggregated from its `llm.call` spans, see `orchestrator.litellm_callbacks.aggregate_token_usage`). Shares the same XDG state root as `DB_PATH` so the host CLI and the containerised server see the same logs by default. |
 
 ---
 

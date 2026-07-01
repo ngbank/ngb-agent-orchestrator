@@ -29,6 +29,7 @@ from opentelemetry.context import Context as _OtelContextType
 _workflow_id: ContextVar[Optional[str]] = ContextVar("otel_workflow_id", default=None)
 _ticket_key: ContextVar[Optional[str]] = ContextVar("otel_ticket_key", default=None)
 _node_name: ContextVar[Optional[str]] = ContextVar("otel_node_name", default=None)
+_workflow_stage: ContextVar[Optional[str]] = ContextVar("otel_workflow_stage", default=None)
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +64,20 @@ def get_node_name() -> Optional[str]:
     return _node_name.get()
 
 
+def get_workflow_stage() -> Optional[str]:
+    """Return the current workflow stage (``plan`` / ``execute``) from context.
+
+    Falls back to ``NGB_WORKFLOW_STAGE`` in the process environment for the
+    same reason as :func:`get_workflow_id`: the LiteLLM proxy subprocess
+    runs each request as a fresh uvicorn task that does not inherit the
+    module-import-time ContextVar, so the env-var fallback is what carries
+    ``workflow.stage`` onto ``llm.call`` spans emitted from the proxy —
+    which ``orchestrator.litellm_callbacks.aggregate_token_usage`` needs to
+    filter spans by stage.
+    """
+    return _workflow_stage.get() or os.environ.get("NGB_WORKFLOW_STAGE") or None
+
+
 # ---------------------------------------------------------------------------
 # Context setters — called once at workflow start and per-node by the
 # stream interceptor; no node code needs to call these.
@@ -72,17 +87,21 @@ def get_node_name() -> Optional[str]:
 def set_workflow_context(
     workflow_id: Optional[str] = None,
     ticket_key: Optional[str] = None,
+    stage: Optional[str] = None,
 ) -> None:
     """Set workflow-level correlation context.  Call once before graph.invoke().
 
     Args:
         workflow_id: UUID identifying this workflow run.
         ticket_key:  JIRA ticket key (e.g. ``"AOS-109"``).
+        stage:       Workflow stage (``"plan"`` / ``"execute"``).
     """
     if workflow_id is not None:
         _workflow_id.set(workflow_id)
     if ticket_key is not None:
         _ticket_key.set(ticket_key)
+    if stage is not None:
+        _workflow_stage.set(stage)
 
 
 def set_node_context(node_name: Optional[str]) -> None:
@@ -139,6 +158,7 @@ class OtelContext:
     workflow_id: Optional[str]
     ticket_key: Optional[str]
     node_name: Optional[str]
+    stage: Optional[str]
 
     @classmethod
     def capture(cls) -> "OtelContext":
@@ -147,6 +167,7 @@ class OtelContext:
             workflow_id=get_workflow_id(),
             ticket_key=get_ticket_key(),
             node_name=get_node_name(),
+            stage=get_workflow_stage(),
         )
 
     def as_attributes(self) -> dict[str, str]:
@@ -157,6 +178,7 @@ class OtelContext:
                 "workflow.id": self.workflow_id,
                 "jira.ticket_key": self.ticket_key,
                 "graph.node_name": self.node_name,
+                "workflow.stage": self.stage,
             }.items()
             if v is not None
         }
