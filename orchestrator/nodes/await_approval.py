@@ -1,12 +1,15 @@
 """Node: await_approval — pause the graph and wait for a CLI approve/reject signal."""
 
-import click
+import logging
+
 from langgraph.types import interrupt
 
 from orchestrator.state import ApprovalInputState, ApprovalOutputState
 from orchestrator.utils import _get_actor
 from state.workflow_repository import get_workflow, update_status
 from state.workflow_status import WorkflowStatus
+
+logger = logging.getLogger(__name__)
 
 
 def await_approval(state: ApprovalInputState) -> ApprovalOutputState:
@@ -29,7 +32,7 @@ def await_approval(state: ApprovalInputState) -> ApprovalOutputState:
     if workflow_id:
         workflow = get_workflow(workflow_id)
         if workflow and workflow["status"] == WorkflowStatus.APPROVED:
-            click.echo("ℹ️  WorkPlan already approved — continuing to execution.")
+            logger.info("WorkPlan already approved; continuing to execution.")
             return {"approval_decision": "approved"}
 
     # Mark as pending approval before suspending.
@@ -42,15 +45,15 @@ def await_approval(state: ApprovalInputState) -> ApprovalOutputState:
         )
 
     ticket_key = state.get("ticket_key", workflow_id)
-    click.echo("")
-    click.echo("⏸️  WorkPlan is ready for review.")
-    click.echo(f"   Workflow ID: {workflow_id}")
-    click.echo("")
-    click.echo(f"   To approve:  dispatcher --approve-plan --ticket {ticket_key}")
-    click.echo(
-        f"   To reject:   dispatcher --reject --ticket {ticket_key}" + ' --reason "your reason"'
+    logger.info(
+        "⏸️  WorkPlan is ready for review.\n"
+        "   Workflow ID: %s\n"
+        "   To approve:  dispatcher --approve-plan --ticket %s\n"
+        '   To reject:   dispatcher --reject --ticket %s --reason "your reason"',
+        workflow_id,
+        ticket_key,
+        ticket_key,
     )
-    click.echo("")
 
     # Suspend here — resumes when Command(resume={"decision": ..., "reason": ...}) is passed.
     resume_payload: dict = interrupt({"workflow_id": workflow_id})
@@ -69,7 +72,7 @@ def await_approval(state: ApprovalInputState) -> ApprovalOutputState:
             actor=actor,
             reason="WorkPlan approved by developer",
         )
-        click.echo(f"✅ WorkPlan approved by {actor}")
+        logger.info("WorkPlan approved by %s", actor)
         return {"approval_decision": "approved"}
 
     else:  # rejected
@@ -79,5 +82,8 @@ def await_approval(state: ApprovalInputState) -> ApprovalOutputState:
             actor=actor,
             reason=reason or "WorkPlan rejected by developer",
         )
-        click.echo(f"🚫 WorkPlan rejected by {actor}" + (f": {reason}" if reason else ""))
+        if reason:
+            logger.warning("WorkPlan rejected by %s: %s", actor, reason)
+        else:
+            logger.warning("WorkPlan rejected by %s", actor)
         return {"approval_decision": "rejected", "rejection_reason": reason}

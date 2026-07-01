@@ -40,6 +40,7 @@ pre-commit install
 | `isort` | Sorts Python imports (black-compatible profile) |
 | `flake8` | Linting: unused imports, line length, undefined names |
 | `mypy` | Type checking (`--ignore-missing-imports`) |
+| `check-no-print` | Blocks production `print()` calls outside `scripts/` and `tests/` |
 | `pytest` | Runs the full test suite |
 | `check-sql-migrations` | Blocks bare `DROP TABLE` without `IF EXISTS` in migration files |
 
@@ -101,6 +102,11 @@ Test files live in `tests/`. Run `python -m pytest tests/ -v` to see the full li
 - **Import order**: `isort` with `profile = black`
 - **Linter**: `flake8` (max-line-length=100, ignores E203/W503 for black compatibility)
 - **Type checker**: `mypy` (--ignore-missing-imports)
+- **Runtime output**: production modules should emit operator-visible output through
+  `logging.getLogger(__name__)`. Keep `click.echo` in dispatcher CLI command modules where
+  the user is expected to read interactive prompts, banners, and final summaries.
+- **No production `print()`**: use logging instead of `print()` outside `scripts/` and `tests/`.
+  The `check-no-print` pre-commit hook enforces this for Python files.
 
 Configuration lives in `pyproject.toml` (black, isort, mypy, pytest) and `.flake8`.
 

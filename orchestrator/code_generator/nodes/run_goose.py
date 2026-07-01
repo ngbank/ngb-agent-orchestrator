@@ -1,14 +1,15 @@
 """Node: run_goose — invoke the Goose generate recipe against the cloned workspace."""
 
 import json
+import logging
 import os
 import re
 from pathlib import Path
 
-import click
-
 from orchestrator.code_generator.state import RunGooseInputState
 from orchestrator.utils import goose_session, run_and_tee
+
+logger = logging.getLogger(__name__)
 
 
 def run_goose(state: RunGooseInputState) -> dict:
@@ -52,7 +53,7 @@ def run_goose(state: RunGooseInputState) -> dict:
     max_turns = os.environ.get("GOOSE_MAX_TURNS", "200")
     recipe_path = Path(__file__).resolve().parents[3] / "recipes" / "generate_code.yaml"
 
-    click.echo(f"🪵 Running generate recipe for {ticket_key}...")
+    logger.info("Running generate recipe for %s...", ticket_key)
 
     with (
         open(exec_log_path, "a") as log_file,
@@ -102,6 +103,6 @@ def run_goose(state: RunGooseInputState) -> dict:
                 log_file.write(reasoning_text + "\n")
 
     if result.returncode != 0:
-        click.echo(f"⚠️  Goose exited with code {result.returncode}")
+        logger.warning("Goose exited with code %s", result.returncode)
 
     return {}

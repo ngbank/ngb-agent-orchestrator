@@ -33,13 +33,12 @@ def setup_logging() -> None:
 
     # Validate log level
     valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+    invalid_log_level = log_level_str not in valid_levels
     if log_level_str not in valid_levels:
-        print(
-            f"Warning: Invalid LOG_LEVEL={log_level_str!r}. "
-            f"Using INFO. Valid values: {', '.join(valid_levels)}",
-            flush=True,
-        )
+        invalid_value = log_level_str
         log_level_str = "INFO"
+    else:
+        invalid_value = ""
 
     log_level = getattr(logging, log_level_str)
 
@@ -53,4 +52,10 @@ def setup_logging() -> None:
 
     # Log the setup
     logger = logging.getLogger("ngb_orchestrator")
-    logger.info(f"Logging configured with LOG_LEVEL={log_level_str}")
+    if invalid_log_level:
+        logger.warning(
+            "Invalid LOG_LEVEL=%r. Using INFO. Valid values: %s",
+            invalid_value,
+            ", ".join(sorted(valid_levels)),
+        )
+    logger.info("Logging configured with LOG_LEVEL=%s", log_level_str)

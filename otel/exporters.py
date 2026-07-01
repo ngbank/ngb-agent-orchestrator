@@ -40,6 +40,7 @@ Redaction can be controlled via:
 from __future__ import annotations
 
 import json
+import logging
 import os
 from collections import defaultdict
 from pathlib import Path
@@ -56,6 +57,7 @@ from otel.redaction import redact_attributes, redact_events
 
 _JSON_EXPORT_LOCK = Lock()
 _UNKNOWN_WORKFLOW_ID = "unknown"
+logger = logging.getLogger(__name__)
 
 
 def _otlp_endpoint() -> str:
@@ -163,7 +165,7 @@ class LocalJsonFileExporter(SpanExporter):
                             f.write(line + "\n")
             return SpanExportResult.SUCCESS
         except Exception as exc:
-            print(f"Error exporting spans to JSON file: {exc}", flush=True)
+            logger.error("Error exporting spans to JSON file: %s", exc)
             return SpanExportResult.FAILURE
 
     def shutdown(self) -> None:
