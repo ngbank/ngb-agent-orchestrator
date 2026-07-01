@@ -555,14 +555,12 @@ class TestRunAndTeeGooseSpan:
         provider, exporter = _make_in_memory_provider()
         run_and_tee = self._patched_run_and_tee(monkeypatch, provider)
 
-        log_file = tmp_path / "test.log"
-        with log_file.open("w") as lf:
-            run_and_tee(
-                ["goose", "run", "--recipe", "execute.yaml", "--params", "k=v"],
-                lf,
-                stdout=__import__("subprocess").DEVNULL,
-                stderr=__import__("subprocess").DEVNULL,
-            )
+        run_and_tee(
+            ["goose", "run", "--recipe", "execute.yaml", "--params", "k=v"],
+            "tests.subprocess",
+            stdout=__import__("subprocess").DEVNULL,
+            stderr=__import__("subprocess").DEVNULL,
+        )
 
         spans = [s for s in exporter.get_finished_spans() if s.name == "goose.run"]
         assert len(spans) == 1
@@ -576,14 +574,12 @@ class TestRunAndTeeGooseSpan:
         run_and_tee = self._patched_run_and_tee(monkeypatch, provider)
         set_workflow_context(workflow_id="wf-goose", ticket_key="AOS-goose")
 
-        log_file = tmp_path / "test.log"
-        with log_file.open("w") as lf:
-            run_and_tee(
-                ["goose", "run", "--recipe", "r.yaml"],
-                lf,
-                stdout=__import__("subprocess").DEVNULL,
-                stderr=__import__("subprocess").DEVNULL,
-            )
+        run_and_tee(
+            ["goose", "run", "--recipe", "r.yaml"],
+            "tests.subprocess",
+            stdout=__import__("subprocess").DEVNULL,
+            stderr=__import__("subprocess").DEVNULL,
+        )
 
         span = next(s for s in exporter.get_finished_spans() if s.name == "goose.run")
         assert span.attributes.get("workflow.id") == "wf-goose"
@@ -593,15 +589,13 @@ class TestRunAndTeeGooseSpan:
         provider, exporter = _make_in_memory_provider()
         run_and_tee = self._patched_run_and_tee(monkeypatch, provider)
 
-        log_file = tmp_path / "test.log"
-        with log_file.open("w") as lf:
-            # "false" exits with code 1 on all POSIX systems
-            run_and_tee(
-                ["goose", "--version"],
-                lf,
-                stdout=__import__("subprocess").DEVNULL,
-                stderr=__import__("subprocess").DEVNULL,
-            )
+        # "false" exits with code 1 on all POSIX systems
+        run_and_tee(
+            ["goose", "--version"],
+            "tests.subprocess",
+            stdout=__import__("subprocess").DEVNULL,
+            stderr=__import__("subprocess").DEVNULL,
+        )
 
         span = next(s for s in exporter.get_finished_spans() if s.name == "goose.run")
         # exit code is captured regardless of success/failure
@@ -611,9 +605,7 @@ class TestRunAndTeeGooseSpan:
         provider, exporter = _make_in_memory_provider()
         run_and_tee = self._patched_run_and_tee(monkeypatch, provider)
 
-        log_file = tmp_path / "test.log"
-        with log_file.open("w") as lf:
-            run_and_tee(["echo", "hello"], lf)
+        run_and_tee(["echo", "hello"], "tests.subprocess")
 
         goose_spans = [s for s in exporter.get_finished_spans() if s.name == "goose.run"]
         assert goose_spans == []
@@ -751,14 +743,12 @@ class TestGooseRunEnrichment:
         provider, exporter = _make_in_memory_provider()
         run_and_tee = self._patched_run_and_tee(monkeypatch, provider)
 
-        log_file = tmp_path / "test.log"
-        with log_file.open("w") as lf:
-            run_and_tee(
-                ["goose", "run", "--recipe", "orchestrator/work_planner/recipes/plan.yaml"],
-                lf,
-                stdout=__import__("subprocess").DEVNULL,
-                stderr=__import__("subprocess").DEVNULL,
-            )
+        run_and_tee(
+            ["goose", "run", "--recipe", "orchestrator/work_planner/recipes/plan.yaml"],
+            "tests.subprocess",
+            stdout=__import__("subprocess").DEVNULL,
+            stderr=__import__("subprocess").DEVNULL,
+        )
 
         span = next(s for s in exporter.get_finished_spans() if s.name == "goose.run")
         assert span.attributes.get("goose.stage") == "plan"
@@ -767,21 +757,19 @@ class TestGooseRunEnrichment:
         provider, exporter = _make_in_memory_provider()
         run_and_tee = self._patched_run_and_tee(monkeypatch, provider)
 
-        log_file = tmp_path / "test.log"
-        with log_file.open("w") as lf:
-            run_and_tee(
-                [
-                    "goose",
-                    "run",
-                    "--recipe",
-                    "orchestrator/code_generator/recipes/execute.yaml",
-                    "--params",
-                    "k=v",
-                ],
-                lf,
-                stdout=__import__("subprocess").DEVNULL,
-                stderr=__import__("subprocess").DEVNULL,
-            )
+        run_and_tee(
+            [
+                "goose",
+                "run",
+                "--recipe",
+                "orchestrator/code_generator/recipes/execute.yaml",
+                "--params",
+                "k=v",
+            ],
+            "tests.subprocess",
+            stdout=__import__("subprocess").DEVNULL,
+            stderr=__import__("subprocess").DEVNULL,
+        )
 
         span = next(s for s in exporter.get_finished_spans() if s.name == "goose.run")
         assert span.attributes.get("process.command_line") == (
@@ -795,7 +783,6 @@ class TestGooseRunEnrichment:
         provider, exporter = _make_in_memory_provider()
         run_and_tee = self._patched_run_and_tee(monkeypatch, provider)
 
-        log_file = tmp_path / "test.log"
         # We need real stdout to flow into run_and_tee; mock Popen to a known stream.
         from unittest.mock import patch as _patch
 
@@ -809,13 +796,12 @@ class TestGooseRunEnrichment:
 
         fake = _FakeProc(["line1\n", "line2\n", "line3\n"])
         with _patch("subprocess.Popen", return_value=fake):
-            with log_file.open("w") as lf:
-                run_and_tee(
-                    ["goose", "run", "--recipe", "orchestrator/work_planner/recipes/plan.yaml"],
-                    lf,
-                    stdout=_subprocess.PIPE,
-                    stderr=_subprocess.STDOUT,
-                )
+            run_and_tee(
+                ["goose", "run", "--recipe", "orchestrator/work_planner/recipes/plan.yaml"],
+                "tests.subprocess",
+                stdout=_subprocess.PIPE,
+                stderr=_subprocess.STDOUT,
+            )
 
         span = next(s for s in exporter.get_finished_spans() if s.name == "goose.run")
         assert span.attributes.get("goose.stdout_lines") == 3

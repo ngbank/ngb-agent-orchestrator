@@ -76,17 +76,15 @@ class WorkflowService(Protocol):
         stage: Optional[str] = None,
         after_offset: int = 0,
     ) -> List[WorkflowLogChunk]:
-        """Read captured stage logs from disk.
+        """Read captured workflow logs from disk.
 
-        When ``stage`` is ``None`` returns every stage that has a log file
-        (typically ``"plan"`` and ``"execute"``).  Stages with no log file on
-        disk are omitted from the result rather than raising.
+        When ``stage`` is ``None`` returns the canonical ``"workflow"`` log
+        stream.  Unknown or unavailable stages are omitted from the result
+        rather than raising.
 
         ``after_offset`` (bytes) skips already-delivered content from the
-        **start** of each returned stage's log file.  It applies to every
-        stage uniformly — callers that need per-stage resume should pass a
-        single ``stage`` plus the corresponding offset.  Each returned chunk
-        carries its starting ``offset`` so the caller can advance reliably.
+        **start** of the returned log file.  Each returned chunk carries its
+        starting ``offset`` so the caller can advance reliably.
         """
         ...
 

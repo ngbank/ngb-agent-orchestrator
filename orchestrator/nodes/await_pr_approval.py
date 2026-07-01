@@ -1,12 +1,15 @@
 """Node: await_pr_approval — pause the graph and wait for PR review signals."""
 
-import click
+import logging
+
 from langgraph.types import interrupt
 
 from orchestrator.state import PRApprovalInputState, PRApprovalOutputState
 from orchestrator.utils import _get_actor
 from state.workflow_repository import get_workflow, update_pr_comments, update_status
 from state.workflow_status import WorkflowStatus
+
+logger = logging.getLogger(__name__)
 
 
 def await_pr_approval(state: PRApprovalInputState) -> PRApprovalOutputState:
@@ -30,7 +33,7 @@ def await_pr_approval(state: PRApprovalInputState) -> PRApprovalOutputState:
     if workflow_id:
         workflow = get_workflow(workflow_id)
         if workflow and workflow["status"] == WorkflowStatus.COMPLETED:
-            click.echo("ℹ️  PR already approved — workflow completed.")
+            logger.info("PR already approved; workflow completed.")
             return {"pr_approval_decision": "approved"}
 
     # Mark as pending PR approval before suspending.
@@ -43,17 +46,19 @@ def await_pr_approval(state: PRApprovalInputState) -> PRApprovalOutputState:
         )
 
     ticket_key = state.get("ticket_key", workflow_id)
-    click.echo("")
-    click.echo("⏸️  Pull request is ready for review.")
-    click.echo(f"   Workflow ID: {workflow_id}")
+    message = "⏸️  Pull request is ready for review.\n   Workflow ID: %s"
+    args: tuple[str | None, ...]
     if pr_url:
-        click.echo(f"   PR URL:      {pr_url}")
-    click.echo("")
-    click.echo(f"   To approve:  dispatcher --approve-pr --ticket {ticket_key}")
-    click.echo(f"   To comment:  dispatcher --comment-pr --ticket {ticket_key}")
-    reject_cmd = f"dispatcher --reject-pr --ticket {ticket_key}"
-    click.echo(f'   To reject:   {reject_cmd} --reason "your reason"')
-    click.echo("")
+        message += "\n   PR URL:      %s"
+        args = (workflow_id, pr_url)
+    else:
+        args = (workflow_id,)
+    message += (
+        "\n   To approve:  dispatcher --approve-pr --ticket %s"
+        "\n   To comment:  dispatcher --comment-pr --ticket %s"
+        '\n   To reject:   dispatcher --reject-pr --ticket %s --reason "your reason"'
+    )
+    logger.info(message, *args, ticket_key, ticket_key, ticket_key)
 
     # Suspend here — resumes when Command(resume={...}) is passed.
     resume_payload: dict = interrupt({"workflow_id": workflow_id, "pr_url": pr_url})
@@ -73,7 +78,7 @@ def await_pr_approval(state: PRApprovalInputState) -> PRApprovalOutputState:
             actor=actor,
             reason="PR approved by reviewer",
         )
-        click.echo(f"✅ PR approved by {actor}")
+        logger.info("PR approved by %s", actor)
         return {"pr_approval_decision": "approved"}
 
     elif decision == "commented":
@@ -85,7 +90,7 @@ def await_pr_approval(state: PRApprovalInputState) -> PRApprovalOutputState:
         )
         if comments:
             update_pr_comments(workflow_id, comments, actor=actor)
-        click.echo(f"💬 PR commented on by {actor}")
+        logger.info("PR commented on by %s", actor)
         return {"pr_approval_decision": "commented", "pr_comments": comments}
 
     else:  # rejected
@@ -95,5 +100,8 @@ def await_pr_approval(state: PRApprovalInputState) -> PRApprovalOutputState:
             actor=actor,
             reason=reason or "PR rejected by reviewer",
         )
-        click.echo(f"🚫 PR rejected by {actor}" + (f": {reason}" if reason else ""))
+        if reason:
+            logger.warning("PR rejected by %s: %s", actor, reason)
+        else:
+            logger.warning("PR rejected by %s", actor)
         return {"pr_approval_decision": "rejected", "pr_comments": comments}

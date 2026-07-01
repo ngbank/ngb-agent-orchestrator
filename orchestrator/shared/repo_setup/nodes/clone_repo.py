@@ -1,11 +1,14 @@
 """clone_repo node for the shared repo_setup subgraph."""
 
+import logging
+
 import click
 
 from orchestrator.shared.repo_setup.nodes.common import failure_update
 from orchestrator.shared.repo_setup.repo_operations import clone_repository
 from orchestrator.shared.repo_setup.state import RepoSetupState
-from orchestrator.utils import log_path
+
+logger = logging.getLogger(__name__)
 
 
 def build_clone_repo_node(mode: str):
@@ -13,7 +16,6 @@ def build_clone_repo_node(mode: str):
 
     def _node(state: RepoSetupState) -> dict:
         workflow_id = state.get("workflow_id") or "unknown"
-        ticket_key = state.get("ticket_key", "")
         repo_url = (state.get("repo_url") or "").strip()
         github_token = (state.get("github_token") or "").strip()
 
@@ -22,20 +24,16 @@ def build_clone_repo_node(mode: str):
             click.echo(f"❌ {error_msg}", err=True)
             return failure_update(state, error_msg, mode)
 
-        stage = "execute" if mode == "code_generator" else "plan"
         prefix = f"ngb-{'execute' if mode == 'code_generator' else 'plan'}-{workflow_id}-"
-        lp = log_path(workflow_id, stage, ticket_key=ticket_key)
 
         try:
-            with open(lp, "a") as log_file:
-                log_file.write(f"\n=== git clone {repo_url} ===\n")
-                working_dir = clone_repository(
-                    repo_url,
-                    github_token,
-                    temp_prefix=prefix,
-                    log_file=log_file,
-                )
-            click.echo(f"📂 Cloning {repo_url} into {working_dir}... (log: {lp})")
+            logger.info("=== git clone %s ===", repo_url)
+            working_dir = clone_repository(
+                repo_url,
+                github_token,
+                temp_prefix=prefix,
+            )
+            click.echo(f"📂 Cloning {repo_url} into {working_dir}...")
             return {"working_dir": working_dir}
         except Exception as exc:  # noqa: BLE001
             error_msg = f"Failed to clone {repo_url}: {exc}"

@@ -186,7 +186,7 @@ docker run --rm -p 8080:8080 \
 | Path | Purpose |
 |---|---|
 | `/home/orchestrator/.local/state/ngb-agent-orchestrator/db/local.db` | SQLite DB — bind-mount the host XDG state dir here to persist runs and share state with the host CLI |
-| `/home/orchestrator/.local/state/ngb-agent-orchestrator/logs/<workflow_id>/` | Per-workflow stage logs + `otel.jsonl` |
+| `/home/orchestrator/.local/state/ngb-agent-orchestrator/logs/<workflow_id>/` | Per-workflow `workflow.log`, token usage, and `otel.jsonl` |
 | `/app/config/` | Read-only config baked into the image (recipes and the WorkPlan schema ship inside the installed `orchestrator` package) |
 | `/usr/local/bin/orchestrator-server` | Console script (the default `CMD`) |
 
@@ -236,7 +236,7 @@ All `/workflows*` routes require a bearer token when
 | `GET` | `/workflows/{id}/history` | Return the node traversal history |
 | `GET` | `/workflows/{id}/audit-log` | Return the audit log entries |
 | `GET` | `/workflows/{id}/events` | **SSE** — stream workflow lifecycle events |
-| `GET` | `/workflows/{id}/logs` | **SSE** — stream captured stage log content |
+| `GET` | `/workflows/{id}/logs` | **SSE** — stream captured workflow log content |
 | `POST` | `/admin/clear-db` | **Admin** — wipe all workflows + checkpoints |
 | `POST` | `/admin/workflows/{id}/mark-interrupted` | **Admin** — mark in-flight workflow FAILED |
 
@@ -428,35 +428,34 @@ unknown — before the stream is opened.
 
 ### `GET /workflows/{id}/logs` (SSE)
 
-Live stream of captured `plan` / `execute` stage logs. Each event
-carries a JSON payload with the stage, the byte offset of the chunk
-within the stage's full log file, and the chunk content:
+Live stream of the captured workflow log. Each event carries a JSON payload
+with the stream name, the byte offset of the chunk within `workflow.log`, and
+the chunk content:
 
 ```
 id: 1024
-data: {"stage": "plan", "offset": 0, "end_offset": 1024, "content": "..."}
+data: {"stage": "workflow", "offset": 0, "end_offset": 1024, "content": "..."}
 ```
 
 Query parameters:
 
-- `stage` — limit to one stage (`plan` or `execute`). When omitted, both
-    stages are followed with independent offsets.
-- `after_offset` — skip bytes already delivered. Applies to every
-    streamed stage uniformly; typically only useful with a single
-    `stage`. Can also be supplied via `Last-Event-ID`.
+- `stage` — optional stream name. `workflow` is the canonical stream; when
+    omitted, `workflow` is followed.
+- `after_offset` — skip bytes already delivered. Can also be supplied via
+    `Last-Event-ID`.
 
 Same heartbeat (15s) and terminal-`stream_end`/close semantics as
 `/events`. The trailing event has no `id:` and looks like:
 
 ```
-data: {"stage": "plan", "kind": "stream_end", "final_status": "completed"}
+data: {"stage": "workflow", "kind": "stream_end", "final_status": "completed"}
 ```
 
 #### Consuming with `curl`
 
 ```bash
 curl -N "http://localhost:8080/workflows/$WF_ID/events"
-curl -N "http://localhost:8080/workflows/$WF_ID/logs?stage=execute&after_offset=4096"
+curl -N "http://localhost:8080/workflows/$WF_ID/logs?stage=workflow&after_offset=4096"
 ```
 
 `-N` disables curl's output buffering so frames render immediately.

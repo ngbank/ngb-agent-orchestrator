@@ -27,7 +27,6 @@ def _make_run_result(returncode=0):
 
 
 _PATCH_TEE = "orchestrator.work_planner.nodes.generate_plan.run_and_tee"
-_PATCH_LOG = "orchestrator.work_planner.nodes.generate_plan.log_path"
 _PATCH_SESSION = "orchestrator.work_planner.nodes.generate_plan.goose_session"
 
 
@@ -45,16 +44,16 @@ def mock_goose_session():
 
 @pytest.fixture
 def log_tmp(tmp_path):
-    """Patch log_path to write into tmp_path so tests don't create real logs/."""
-    with patch(_PATCH_LOG, return_value=tmp_path / "test.log"):
-        yield tmp_path
+    """Compatibility fixture for tests that previously isolated stage logs."""
+    yield tmp_path
 
 
 @pytest.fixture
 def write_workplan_to_output():
     """Side-effect for run_and_tee: writes a valid WorkPlan to output_path param."""
 
-    def _side_effect(cmd, log_file, **kwargs):
+    def _side_effect(cmd, logger_name, **kwargs):
+        assert logger_name == "subprocess.goose"
         params = [a for a in cmd if a.startswith("output_path=")]
         assert params, "output_path param not passed to goose"
         output_path = params[0].split("=", 1)[1]

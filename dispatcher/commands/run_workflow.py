@@ -1,7 +1,9 @@
 """Handler for the main --ticket workflow run."""
 
+import logging
 import sys
 import uuid
+from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 import click
@@ -14,6 +16,53 @@ from state.workflow_status import WorkflowStatus
 
 if TYPE_CHECKING:
     from orchestrator.workflow_service import WorkflowService
+
+
+class _ClickLogHandler(logging.Handler):
+    """Emit workflow log records through Click for interactive CLI runs."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        click.echo(self.format(record))
+
+
+@contextmanager
+def _workflow_cli_logs():
+    """Echo workflow log records to the terminal through Click, once each.
+
+    ``setup_logging`` installs a timestamped console ``StreamHandler`` bound
+    to the process's original stderr. Subprocess output (Goose, git) is
+    routed through the same root logger, so leaving that handler attached
+    here would print every line twice: once with the raw timestamp/logger
+    prefix, once more through this handler's plain Click echo. Detach it for
+    the duration of the run so each line prints once; ``workflow.log`` still
+    captures the full timestamped record independently via its own
+    ``WorkflowFileHandler``.
+    """
+    handler = _ClickLogHandler()
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+
+    root = logging.getLogger()
+    original_level = root.level
+    if root.level > logging.INFO:
+        root.setLevel(logging.INFO)
+
+    console_handlers = [
+        h
+        for h in root.handlers
+        if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+    ]
+    for h in console_handlers:
+        root.removeHandler(h)
+
+    root.addHandler(handler)
+    try:
+        yield
+    finally:
+        root.removeHandler(handler)
+        for h in console_handlers:
+            root.addHandler(h)
+        root.setLevel(original_level)
 
 
 def _handle_run(
@@ -38,13 +87,14 @@ def _handle_run(
     workflow_id = str(uuid.uuid4())
 
     try:
-        result = submit_and_follow(
-            service,
-            service.start,
-            WorkflowStartRequest(ticket_key=ticket, workflow_id=workflow_id),
-            workflow_id_hint=workflow_id,
-            detach=detach,
-        )
+        with _workflow_cli_logs():
+            result = submit_and_follow(
+                service,
+                service.start,
+                WorkflowStartRequest(ticket_key=ticket, workflow_id=workflow_id),
+                workflow_id_hint=workflow_id,
+                detach=detach,
+            )
 
         if result.error:
             sys.exit(1)

@@ -25,7 +25,6 @@ class PrepareWorkspaceOutputState(TypedDict, total=False):
     work_plan_path: str
     summary_path: str
     reasoning_path: str
-    exec_log_path: str
 
 
 class RunGooseInputState(TypedDict, total=False):
@@ -37,7 +36,6 @@ class RunGooseInputState(TypedDict, total=False):
     work_plan_path: str
     summary_path: str
     reasoning_path: str
-    exec_log_path: str
     execution_summary: Optional[dict]
     pr_comments: Optional[str]
     branch_prefix: str
@@ -139,5 +137,4 @@ class CodeGeneratorState(TypedDict, total=False):
     work_plan_path: str
     summary_path: str
     reasoning_path: str
-    exec_log_path: str
     branch_prefix: str

@@ -103,9 +103,7 @@ class LogTail(Static):
     """Live log tailing widget.
 
     Wraps a Textual ``Log`` so the TUI can append streamed bytes as they
-    arrive from ``WorkflowService.read_logs`` and toggle auto-scroll.  Each
-    appended chunk is prefixed with a ``[stage]`` marker so plan/execute
-    output stays distinguishable when both streams interleave.
+    arrive from ``WorkflowService.read_logs`` and toggle auto-scroll.
     """
 
     DEFAULT_CSS = """
@@ -128,24 +126,18 @@ class LogTail(Static):
     def __init__(self) -> None:
         super().__init__()
         self._paused = False
-        self._last_stage: Optional[str] = None
 
     def compose(self):
         yield Log(id="tail_log", auto_scroll=True, max_lines=10000)
         yield Static("[live · auto-scroll]", id="tail_status")
 
-    def append_content(self, stage: str, content: str) -> None:
+    def append_content(self, content: str) -> None:
         if not content:
             return
         try:
             log = self.query_one("#tail_log", Log)
         except Exception:
             return
-        if stage != self._last_stage:
-            if self._last_stage is not None:
-                log.write_line("")
-            log.write_line(f"── [{stage}] ──")
-            self._last_stage = stage
         log.write(content)
 
     def clear(self) -> None:
@@ -153,7 +145,6 @@ class LogTail(Static):
             self.query_one("#tail_log", Log).clear()
         except Exception:
             pass
-        self._last_stage = None
 
     def set_paused(self, paused: bool) -> None:
         self._paused = paused
@@ -269,11 +260,11 @@ class DetailPane(Static):
             tail.clear()
             tail.set_paused(False)
 
-    def append_log_chunk(self, stage: str, content: str) -> None:
+    def append_log_chunk(self, content: str) -> None:
         tail = self._get_tail()
         if tail is None:
             return
-        tail.append_content(stage, content)
+        tail.append_content(content)
 
     def clear_log_tail(self) -> None:
         tail = self._get_tail()

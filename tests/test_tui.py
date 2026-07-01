@@ -36,7 +36,7 @@ class FakeWorkflowService:
     ) -> None:
         self._summaries = summaries or []
         self._details = details or {}
-        # ``log_scripts[workflow_id][stage]`` is a list of byte-string
+        # ``log_scripts[workflow_id][stream]`` is a list of byte-string
         # snippets the tail loop will receive across successive
         # ``read_logs`` calls.  Each call pops one snippet per stage so
         # tests can simulate a streamed sequence.
@@ -482,8 +482,7 @@ class TestWorkflowTUI:
 
 
 def _running_setup(
-    plan_chunks: Optional[List[str]] = None,
-    execute_chunks: Optional[List[str]] = None,
+    workflow_chunks: Optional[List[str]] = None,
 ) -> tuple[FakeWorkflowService, str]:
     """Build a FakeWorkflowService with a single IN_PROGRESS workflow and a
     scripted log stream for tailing tests."""
@@ -491,10 +490,8 @@ def _running_setup(
     summary = _make_summary(wf_id, "AOS-145", WorkflowStatus.IN_PROGRESS)
     detail = _make_detail(wf_id, "AOS-145", WorkflowStatus.IN_PROGRESS)
     scripts: Dict[str, List[str]] = {}
-    if plan_chunks:
-        scripts["plan"] = plan_chunks
-    if execute_chunks:
-        scripts["execute"] = execute_chunks
+    if workflow_chunks:
+        scripts["workflow"] = workflow_chunks
     service = FakeWorkflowService(
         summaries=[summary],
         details={wf_id: detail},
@@ -507,8 +504,7 @@ def _running_setup(
 class TestLiveLogTailing:
     async def test_tail_appears_for_in_progress_workflow(self):
         service, wf_id = _running_setup(
-            plan_chunks=["plan line 1\n", "plan line 2\n"],
-            execute_chunks=["exec line 1\n"],
+            workflow_chunks=["workflow line 1\n", "workflow line 2\n"],
         )
         app = WorkflowTUI(service)
         async with app.run_test():
@@ -516,20 +512,16 @@ class TestLiveLogTailing:
             # Tail widget is visible because the selected workflow is IN_PROGRESS.
             assert detail.is_tail_visible() is True
             # First poll happens synchronously inside _start_tail; trigger one
-            # more cycle so the second scripted plan chunk is consumed.
+            # more cycle so the second scripted workflow chunk is consumed.
             app._poll_tail()
             tail_log = detail.query_one("#tail_log")
-            # ``Log.lines`` returns the rendered lines; expect both plan chunks
-            # plus the single execute chunk plus the stage header lines.
+            # ``Log.lines`` returns the rendered lines; expect both chunks.
             rendered = "\n".join(str(line) for line in tail_log.lines)
-            assert "plan line 1" in rendered
-            assert "plan line 2" in rendered
-            assert "exec line 1" in rendered
-            assert "[plan]" in rendered
-            assert "[execute]" in rendered
+            assert "workflow line 1" in rendered
+            assert "workflow line 2" in rendered
 
     async def test_tail_advances_offset_so_lines_are_not_repeated(self):
-        service, wf_id = _running_setup(plan_chunks=["alpha\n", "beta\n", "gamma\n"])
+        service, wf_id = _running_setup(workflow_chunks=["alpha\n", "beta\n", "gamma\n"])
         app = WorkflowTUI(service)
         async with app.run_test():
             # Three poll cycles consume one scripted chunk each; fourth poll
@@ -543,13 +535,13 @@ class TestLiveLogTailing:
             assert rendered.count("alpha") == 1
             assert rendered.count("beta") == 1
             assert rendered.count("gamma") == 1
-            # Offsets advanced past every emitted byte.
-            assert app._tail_offsets["plan"] == sum(
+            # Offset advanced past every emitted byte.
+            assert app._tail_offset == sum(
                 len(s.encode("utf-8")) for s in ["alpha\n", "beta\n", "gamma\n"]
             )
 
     async def test_tail_hides_when_workflow_finishes_mid_view(self):
-        service, wf_id = _running_setup(plan_chunks=["running...\n"])
+        service, wf_id = _running_setup(workflow_chunks=["running...\n"])
         app = WorkflowTUI(service)
         async with app.run_test():
             detail = app.query_one(DetailPane)
@@ -565,7 +557,7 @@ class TestLiveLogTailing:
             assert app._tail_timer is None
 
     async def test_pause_binding_toggles_auto_scroll(self):
-        service, _ = _running_setup(plan_chunks=["x\n"])
+        service, _ = _running_setup(workflow_chunks=["x\n"])
         app = WorkflowTUI(service)
         async with app.run_test() as pilot:
             detail = app.query_one(DetailPane)
@@ -673,7 +665,7 @@ class TestAsyncTailPolling:
         service = BlockingService(
             summaries=[summary],
             details={wf_id: detail},
-            log_scripts={wf_id: {"plan": ["streamed-line\n"]}},
+            log_scripts={wf_id: {"workflow": ["streamed-line\n"]}},
         )
         app = WorkflowTUI(service)
         async with app.run_test() as pilot:
@@ -709,7 +701,7 @@ class TestAsyncTailPolling:
         skip rather than stack workers \u2014 otherwise a slow ``read_logs`` would
         spawn a thread per tick.
         """
-        service, _wf = _running_setup(plan_chunks=["x\n"])
+        service, _wf = _running_setup(workflow_chunks=["x\n"])
         app = WorkflowTUI(service)
         async with app.run_test() as pilot:
             # Drain the initial poll worker spawned by ``_start_tail`` and its

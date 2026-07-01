@@ -142,18 +142,13 @@ async def stream_logs_sse(
     clients can pass this value back as ``after_offset`` (or via
     ``Last-Event-ID``) to resume after reconnect.
 
-    When ``stage`` is ``None`` both ``"plan"`` and ``"execute"`` are followed.
-    The byte-offset bookkeeping is per stage so the two never collide.
+    When ``stage`` is ``None`` the canonical ``"workflow"`` stream is followed.
     """
     offsets: Dict[str, int] = {}
     if stage is not None:
         offsets[stage] = max(0, after_offset)
     else:
-        # When no stage filter is given the caller's after_offset applies to
-        # every stage uniformly — typically 0 on first connect.
-        seed = max(0, after_offset)
-        offsets["plan"] = seed
-        offsets["execute"] = seed
+        offsets["workflow"] = max(0, after_offset)
 
     idle_elapsed = 0.0
     while True:
