@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
-from typing import Callable, Dict, List, Optional
+from typing import Callable, List, Optional
 
 from dotenv import load_dotenv
 from textual.app import App, ComposeResult
@@ -37,10 +37,6 @@ from orchestrator.workflow_service import (
     build_workflow_service_from_env,
 )
 from state.workflow_status import WorkflowStatus
-
-# Log stream tailed in the live log view.  Matches
-# ``WorkflowService.read_logs``' canonical workflow log.
-_TAIL_STAGES = ("workflow",)
 
 
 class WorkflowTUI(App[None]):
@@ -79,13 +75,13 @@ class WorkflowTUI(App[None]):
         # the service per repaint.
         self._selected_detail: Optional[WorkflowDetail] = None
         # Live log tailing state (Stage C).  ``_tail_workflow_id`` is the
-        # workflow currently being tailed; ``_tail_offsets`` tracks the
-        # next byte to fetch per stage so reconnect-after-poll only
+        # workflow currently being tailed; ``_tail_offset`` tracks the next
+        # byte to fetch from the workflow log so reconnect-after-poll only
         # delivers new bytes.
         self._tail_timer: Optional[Timer] = None
         self._tail_interval = float(os.environ.get("DISPATCHER_TUI_TAIL_POLL", "1"))
         self._tail_workflow_id: Optional[str] = None
-        self._tail_offsets: Dict[str, int] = {}
+        self._tail_offset: int = 0
         self._tail_paused: bool = False
         # ``_tail_in_flight`` debounces overlapping polls: if a previous
         # ``read_logs`` is still running (slow SSE connect, blocked server)
@@ -438,7 +434,7 @@ class WorkflowTUI(App[None]):
     def _start_tail(self, workflow_id: str) -> None:
         self._stop_tail()
         self._tail_workflow_id = workflow_id
-        self._tail_offsets = {stage: 0 for stage in _TAIL_STAGES}
+        self._tail_offset = 0
         self._tail_paused = False
         try:
             self.query_one(DetailPane).clear_log_tail()
@@ -461,7 +457,7 @@ class WorkflowTUI(App[None]):
                 pass
             self._tail_timer = None
         self._tail_workflow_id = None
-        self._tail_offsets = {}
+        self._tail_offset = 0
         self._tail_paused = False
         # A worker still in flight will discard its results via the
         # workflow-id guard in ``_apply_tail_chunk``; reset the flag so the
@@ -491,39 +487,31 @@ class WorkflowTUI(App[None]):
     def _poll_tail_worker(self, workflow_id: str) -> None:
         """Worker-thread body for one tail poll cycle.
 
-        Reads new bytes per stage and schedules ``_apply_tail_chunk`` on the
-        main loop for each non-empty chunk. Errors are swallowed so a
-        transient ``read_logs`` failure doesn't stop the tail — the next
-        timer tick will retry.
+        Reads new bytes from the workflow log and schedules
+        ``_apply_tail_chunk`` on the main loop for each non-empty chunk.
+        Errors are swallowed so a transient ``read_logs`` failure doesn't
+        stop the tail — the next timer tick will retry.
         """
         try:
-            for stage in _TAIL_STAGES:
-                offset = self._tail_offsets.get(stage, 0)
-                try:
-                    chunks = self._service.read_logs(
-                        workflow_id,
-                        stage=stage,
-                        after_offset=offset,
-                    )
-                except Exception:
+            try:
+                chunks = self._service.read_logs(workflow_id, after_offset=self._tail_offset)
+            except Exception:
+                return
+            for chunk in chunks:
+                if not chunk.content:
                     continue
-                for chunk in chunks:
-                    if chunk.stage != stage or not chunk.content:
-                        continue
-                    self.call_from_thread(
-                        self._apply_tail_chunk,
-                        workflow_id,
-                        chunk.stage,
-                        chunk.content,
-                        chunk.offset,
-                    )
+                self.call_from_thread(
+                    self._apply_tail_chunk,
+                    workflow_id,
+                    chunk.content,
+                    chunk.offset,
+                )
         finally:
             self.call_from_thread(self._mark_tail_idle)
 
     def _apply_tail_chunk(
         self,
         workflow_id: str,
-        stage: str,
         content: str,
         chunk_offset: int,
     ) -> None:
@@ -536,16 +524,15 @@ class WorkflowTUI(App[None]):
         """
         if self._tail_workflow_id != workflow_id:
             return
-        current = self._tail_offsets.get(stage, 0)
         end = chunk_offset + len(content.encode("utf-8"))
-        if end <= current:
+        if end <= self._tail_offset:
             return
         try:
             detail = self.query_one(DetailPane)
         except Exception:
             return
-        detail.append_log_chunk(stage, content)
-        self._tail_offsets[stage] = end
+        detail.append_log_chunk(content)
+        self._tail_offset = end
 
     def _mark_tail_idle(self) -> None:
         self._tail_in_flight = False
@@ -565,21 +552,15 @@ class WorkflowTUI(App[None]):
             detail = self.query_one(DetailPane)
         except Exception:
             return
-        for stage in _TAIL_STAGES:
-            offset = self._tail_offsets.get(stage, 0)
-            try:
-                chunks = self._service.read_logs(
-                    workflow_id,
-                    stage=stage,
-                    after_offset=offset,
-                )
-            except Exception:
+        try:
+            chunks = self._service.read_logs(workflow_id, after_offset=self._tail_offset)
+        except Exception:
+            return
+        for chunk in chunks:
+            if not chunk.content:
                 continue
-            for chunk in chunks:
-                if chunk.stage != stage or not chunk.content:
-                    continue
-                detail.append_log_chunk(chunk.stage, chunk.content)
-                self._tail_offsets[stage] = chunk.offset + len(chunk.content.encode("utf-8"))
+            detail.append_log_chunk(chunk.content)
+            self._tail_offset = chunk.offset + len(chunk.content.encode("utf-8"))
 
     def action_toggle_tail_pause(self) -> None:
         try:

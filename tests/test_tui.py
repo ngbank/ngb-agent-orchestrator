@@ -515,12 +515,10 @@ class TestLiveLogTailing:
             # more cycle so the second scripted workflow chunk is consumed.
             app._poll_tail()
             tail_log = detail.query_one("#tail_log")
-            # ``Log.lines`` returns the rendered lines; expect both workflow
-            # chunks plus the stream header line.
+            # ``Log.lines`` returns the rendered lines; expect both chunks.
             rendered = "\n".join(str(line) for line in tail_log.lines)
             assert "workflow line 1" in rendered
             assert "workflow line 2" in rendered
-            assert "[workflow]" in rendered
 
     async def test_tail_advances_offset_so_lines_are_not_repeated(self):
         service, wf_id = _running_setup(workflow_chunks=["alpha\n", "beta\n", "gamma\n"])
@@ -537,8 +535,8 @@ class TestLiveLogTailing:
             assert rendered.count("alpha") == 1
             assert rendered.count("beta") == 1
             assert rendered.count("gamma") == 1
-            # Offsets advanced past every emitted byte.
-            assert app._tail_offsets["workflow"] == sum(
+            # Offset advanced past every emitted byte.
+            assert app._tail_offset == sum(
                 len(s.encode("utf-8")) for s in ["alpha\n", "beta\n", "gamma\n"]
             )
 
