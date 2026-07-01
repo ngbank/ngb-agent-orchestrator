@@ -30,8 +30,8 @@ def _workflow_cli_logs():
     """Echo workflow log records to the terminal through Click, once each.
 
     ``setup_logging`` installs a timestamped console ``StreamHandler`` bound
-    to the process's original stderr. Since AOS-168 routes subprocess output
-    (Goose, git) through the same root logger, leaving that handler attached
+    to the process's original stderr. Subprocess output (Goose, git) is
+    routed through the same root logger, so leaving that handler attached
     here would print every line twice: once with the raw timestamp/logger
     prefix, once more through this handler's plain Click echo. Detach it for
     the duration of the run so each line prints once; ``workflow.log`` still
