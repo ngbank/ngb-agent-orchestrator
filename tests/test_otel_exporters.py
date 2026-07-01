@@ -144,6 +144,25 @@ class TestLocalJsonFileExporter:
         # File should not exist if no spans were exported
         # (or exist but be empty)
 
+    def test_export_failure_logs_error(self, temp_logs_dir, caplog, monkeypatch):
+        """Export failures are logged, not printed (AOS-166/AOS-169)."""
+        exporter = LocalJsonFileExporter()
+        span = MockSpan(name="test.span")
+
+        def _boom(_workflow_id):
+            raise OSError("disk full")
+
+        monkeypatch.setattr("otel.exporters._otel_json_path_for", _boom)
+
+        with caplog.at_level("ERROR", logger="otel.exporters"):
+            result = exporter.export([span])
+
+        assert result == SpanExportResult.FAILURE
+        assert any(
+            record.levelname == "ERROR" and "disk full" in record.getMessage()
+            for record in caplog.records
+        )
+
     def test_export_routes_by_workflow_id_attribute(self, logs_base_dir):
         """Spans land in LOGS_DIR/<workflow.id>/otel.jsonl based on the span attribute.
 
