@@ -179,7 +179,7 @@ def _make_detail(
         updated_at="2026-06-22T00:00:00",
         pr_url=None,
         work_plan=None,
-        execution_summary=None,
+        code_generation_summary=None,
         clarification_history=[],
         pr_comments=None,
         usage_summary={},

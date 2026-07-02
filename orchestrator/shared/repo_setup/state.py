@@ -16,4 +16,4 @@ class RepoSetupState(TypedDict, total=False):
     error: Optional[str]
     exec_error: Optional[str]
     failed_node: Optional[str]
-    execution_summary: Optional[dict]
+    code_generation_summary: Optional[dict]

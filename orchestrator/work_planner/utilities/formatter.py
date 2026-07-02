@@ -88,53 +88,53 @@ def _format_work_plan(work_plan: Dict, ticket_id: str) -> str:
     return "\n".join(sections)
 
 
-def format_execution_summary_comment(execution_summary: Dict) -> str:
+def format_code_generation_summary_comment(code_generation_summary: Dict) -> str:
     """
-    Format an execution summary as a Jira comment.
+    Format a code generation summary as a Jira comment.
 
     Args:
-        execution_summary: Execution summary dict from the execute recipe
+        code_generation_summary: Code generation summary dict from the generate_code recipe
 
     Returns:
         str: Formatted Jira markdown comment
     """
     sections = []
 
-    status = execution_summary.get("status", "unknown")
+    status = code_generation_summary.get("status", "unknown")
     status_emoji = {"success": "✅", "partial": "⚠️", "failed": "❌"}
     emoji = status_emoji.get(status, "❓")
 
-    sections.append(f"# {emoji} Execution Summary")
+    sections.append(f"# {emoji} Code Generation Summary")
     sections.append("")
 
-    branch = execution_summary.get("branch", "")
+    branch = code_generation_summary.get("branch", "")
     if branch:
         sections.append(f"*Branch:* {{code}}{branch}{{code}}")
         sections.append("")
 
     sections.append(f"*Status:* {status.upper()}")
-    sections.append(f"*Build:* {execution_summary.get('build', 'unknown')}")
-    sections.append(f"*Tests:* {execution_summary.get('tests', 'unknown')}")
+    sections.append(f"*Build:* {code_generation_summary.get('build', 'unknown')}")
+    sections.append(f"*Tests:* {code_generation_summary.get('tests', 'unknown')}")
     sections.append("")
 
-    files_changed = execution_summary.get("files_changed", [])
+    files_changed = code_generation_summary.get("files_changed", [])
     if files_changed:
         sections.append("*Files changed:*")
         for f in files_changed:
             sections.append(f"- {{code}}{f}{{code}}")
         sections.append("")
 
-    commit_sha = execution_summary.get("commit_sha", "")
+    commit_sha = code_generation_summary.get("commit_sha", "")
     if commit_sha:
         sections.append(f"*Commit:* {{code}}{commit_sha[:12]}{{code}}")
         sections.append("")
 
-    pr_url = execution_summary.get("pr_url", "")
+    pr_url = code_generation_summary.get("pr_url", "")
     if pr_url:
         sections.append(f"*Pull Request:* [{pr_url}|{pr_url}]")
         sections.append("")
 
-    error = execution_summary.get("error", "")
+    error = code_generation_summary.get("error", "")
     if error:
         sections.append(f"*Error:* {error}")
         sections.append("")

@@ -7,7 +7,7 @@ def _base_state():
         "working_dir": "/tmp/repo",
         "repo_url": "https://github.com/ngbank/ngb-agent-orchestrator.git",
         "github_token": "token-123",
-        "execution_summary": {
+        "code_generation_summary": {
             "ticket_key": "AOS-120",
             "branch": "feature/AOS-120+github-app-auth",
             "build": "pass",
@@ -43,7 +43,7 @@ def test_push_and_create_pr_creates_new_pr_when_none_exists():
     ):
         result = push_and_create_pr(_base_state())
 
-    assert result["execution_summary"]["pr_url"].endswith("/pull/5")
+    assert result["code_generation_summary"]["pr_url"].endswith("/pull/5")
     assert mock_create.called
     mock_push.assert_called_once()
 
@@ -66,7 +66,7 @@ def test_push_and_create_pr_reuses_existing_pr_and_adds_comment_when_needed():
     ):
         result = push_and_create_pr(state)
 
-    assert result["execution_summary"]["pr_url"].endswith("/pull/7")
+    assert result["code_generation_summary"]["pr_url"].endswith("/pull/7")
     mock_comment.assert_called_once()
 
 
@@ -81,7 +81,7 @@ def test_push_and_create_pr_skips_when_exec_error_set():
     ) as mock_push:
         result = push_and_create_pr(state)
 
-    assert result["execution_summary"]["status"] == "success"
+    assert result["code_generation_summary"]["status"] == "success"
     mock_push.assert_not_called()
 
 
@@ -107,8 +107,8 @@ def test_push_and_create_pr_fails_when_reexecution_produces_no_new_commits():
     ):
         result = push_and_create_pr(state)
 
-    assert result["execution_summary"]["status"] == "failed"
-    assert "no new commits" in result["execution_summary"]["error"]
+    assert result["code_generation_summary"]["status"] == "failed"
+    assert "no new commits" in result["code_generation_summary"]["error"]
     assert result["failed_node"] == "generate_code"
     mock_push.assert_not_called()
     mock_sub.assert_called_once()
@@ -142,7 +142,7 @@ def test_push_and_create_pr_proceeds_when_reexecution_has_new_commits():
         result = push_and_create_pr(state)
 
     mock_push.assert_called_once()
-    assert result["execution_summary"]["pr_url"].endswith("/pull/7")
+    assert result["code_generation_summary"]["pr_url"].endswith("/pull/7")
 
 
 def test_push_and_create_pr_downgrades_to_partial_on_push_failure():
@@ -155,5 +155,5 @@ def test_push_and_create_pr_downgrades_to_partial_on_push_failure():
     ):
         result = push_and_create_pr(_base_state())
 
-    assert result["execution_summary"]["status"] == "partial"
-    assert result["execution_summary"]["pr_url"] == ""
+    assert result["code_generation_summary"]["status"] == "partial"
+    assert result["code_generation_summary"]["pr_url"] == ""

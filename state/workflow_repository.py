@@ -70,10 +70,10 @@ class WorkflowRepository(Protocol):
         reason: Optional[str] = None,
     ) -> None: ...
 
-    def update_execution_summary(
+    def update_code_generation_summary(
         self,
         workflow_id: str,
-        execution_summary: Dict,
+        code_generation_summary: Dict,
         actor: str = "system",
     ) -> None: ...
 
@@ -152,12 +152,14 @@ def update_work_plan(
     return _default_repo().update_work_plan(workflow_id, work_plan, actor, reason)
 
 
-def update_execution_summary(
+def update_code_generation_summary(
     workflow_id: str,
-    execution_summary: Dict,
+    code_generation_summary: Dict,
     actor: str = "system",
 ) -> None:
-    return _default_repo().update_execution_summary(workflow_id, execution_summary, actor)
+    return _default_repo().update_code_generation_summary(
+        workflow_id, code_generation_summary, actor
+    )
 
 
 def update_clarification_history(
@@ -225,7 +227,7 @@ __all__ = [
     "create_workflow",
     "update_status",
     "update_work_plan",
-    "update_execution_summary",
+    "update_code_generation_summary",
     "update_clarification_history",
     "update_pr_comments",
     "update_usage_summary",

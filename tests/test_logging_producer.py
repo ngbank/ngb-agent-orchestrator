@@ -32,7 +32,7 @@ def test_push_and_create_pr_logs_missing_branch_warning(caplog):
     state = {
         "ticket_key": "AOS-166",
         "repo_url": "https://github.com/ngbank/ngb-agent-orchestrator.git",
-        "execution_summary": {"status": "success"},
+        "code_generation_summary": {"status": "success"},
     }
 
     with caplog.at_level(
@@ -41,7 +41,7 @@ def test_push_and_create_pr_logs_missing_branch_warning(caplog):
     ):
         result = push_and_create_pr(state)
 
-    assert result["execution_summary"]["pr_url"] == ""
+    assert result["code_generation_summary"]["pr_url"] == ""
     assert "Skipping push/PR; missing branch or commit SHA" in caplog.text
 
 

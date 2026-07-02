@@ -44,7 +44,7 @@ def _detail(
     status: WorkflowStatus,
     ticket_key: str = "AOS-149",
     pr_url: Optional[str] = None,
-    execution_summary: Optional[dict[str, Any]] = None,
+    code_generation_summary: Optional[dict[str, Any]] = None,
 ) -> WorkflowDetail:
     return WorkflowDetail(
         id=workflow_id,
@@ -54,7 +54,7 @@ def _detail(
         updated_at="2026-06-22T00:00:00",
         pr_url=pr_url,
         work_plan=None,
-        execution_summary=execution_summary,
+        code_generation_summary=code_generation_summary,
         clarification_history=[],
         pr_comments=None,
         usage_summary={},
@@ -232,7 +232,7 @@ class TestSubmitAndFollow:
             "wf-9",
             status=WorkflowStatus.COMPLETED,
             pr_url="https://github.com/example/repo/pull/42",
-            execution_summary={"status": "all green"},
+            code_generation_summary={"status": "all green"},
         )
 
         # 202 snapshot from the server: just enough to identify the workflow,
@@ -250,7 +250,7 @@ class TestSubmitAndFollow:
         # The result is now refreshed from server state, not the 202 snapshot.
         assert result.final_status == WorkflowStatus.COMPLETED
         assert result.pr_url == "https://github.com/example/repo/pull/42"
-        assert result.execution_summary == {"status": "all green"}
+        assert result.code_generation_summary == {"status": "all green"}
         # We subscribed to the lifecycle stream exactly once, from seq 0.
         assert svc.stream_calls == [("wf-9", 0)]
 

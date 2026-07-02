@@ -798,7 +798,7 @@ class FakeWorkflowRepository:
         if workflow_id in self._workflows:
             self._workflows[workflow_id]["work_plan"] = work_plan
 
-    def update_execution_summary(self, workflow_id, execution_summary, actor="system"):
+    def update_code_generation_summary(self, workflow_id, code_generation_summary, actor="system"):
         pass
 
     def update_clarification_history(self, workflow_id, round_entry, actor="system"):
@@ -915,25 +915,25 @@ def test_work_plan_update_atomicity(test_db):
     assert any(entry["action"] == "work_plan_updated" for entry in audit_log)
 
 
-def test_execution_summary_atomicity(test_db):
+def test_code_generation_summary_atomicity(test_db):
     """Test that execution summary update and audit entry are written atomically."""
     workflow_id = state_store.create_workflow(ticket_key="AOS-113")
 
     summary = {"status": "completed", "output": "results"}
 
     # Update execution summary
-    state_store.update_execution_summary(
+    state_store.update_code_generation_summary(
         workflow_id=workflow_id,
-        execution_summary=summary,
+        code_generation_summary=summary,
         actor="test_actor",
     )
 
     # Verify both workflow state and audit entry exist
     workflow = state_store.get_workflow(workflow_id)
-    assert workflow["execution_summary"] == summary
+    assert workflow["code_generation_summary"] == summary
 
     audit_log = state_store.get_audit_log(workflow_id)
-    assert any(entry["action"] == "execution_summary_stored" for entry in audit_log)
+    assert any(entry["action"] == "code_generation_summary_stored" for entry in audit_log)
 
 
 def test_usage_summary_atomicity(test_db):
@@ -1060,19 +1060,19 @@ def test_work_plan_update_rollback_no_partial_state(test_db):
     assert workflow_after["work_plan"] == initial_plan
 
 
-def test_execution_summary_rollback_preserves_original(test_db):
+def test_code_generation_summary_rollback_preserves_original(test_db):
     """Test that execution summary update rolls back on failure.
 
-    If audit creation fails, the execution_summary update should be rolled back.
+    If audit creation fails, the code_generation_summary update should be rolled back.
     """
     workflow_id = state_store.create_workflow(ticket_key="AOS-113")
 
-    # Set an initial execution_summary
+    # Set an initial code_generation_summary
     initial_summary = {"status": "pending", "step": 1}
-    state_store.update_execution_summary(workflow_id, initial_summary, actor="system")
+    state_store.update_code_generation_summary(workflow_id, initial_summary, actor="system")
 
     workflow_before = state_store.get_workflow(workflow_id)
-    stored_before = workflow_before["execution_summary"]
+    stored_before = workflow_before["code_generation_summary"]
 
     # Try to update with a corrupted database
     try:
@@ -1085,16 +1085,16 @@ def test_execution_summary_rollback_preserves_original(test_db):
 
     new_summary = {"status": "running", "step": 2}
     try:
-        state_store.update_execution_summary(workflow_id, new_summary, actor="test_actor")
+        state_store.update_code_generation_summary(workflow_id, new_summary, actor="test_actor")
     except (sqlite3.OperationalError, Exception):
         pass
 
     # Restore
     state_store.run_migrations()
 
-    # Verify execution_summary was NOT changed
+    # Verify code_generation_summary was NOT changed
     workflow_after = state_store.get_workflow(workflow_id)
-    assert workflow_after["execution_summary"] == stored_before
+    assert workflow_after["code_generation_summary"] == stored_before
 
 
 def test_usage_summary_rollback_no_orphaned_state(test_db):

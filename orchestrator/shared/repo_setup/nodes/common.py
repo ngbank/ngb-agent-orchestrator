@@ -3,8 +3,8 @@
 from orchestrator.shared.repo_setup.state import RepoSetupState
 
 
-def execution_failure_summary(ticket_key: str, error: str) -> dict:
-    """Return a standard failed execution summary dict."""
+def code_generation_failure_summary(ticket_key: str, error: str) -> dict:
+    """Return a standard failed code generation summary dict."""
     return {
         "ticket_key": ticket_key,
         "branch": "",
@@ -22,7 +22,9 @@ def failure_update(state: RepoSetupState, message: str, mode: str) -> dict:
     """Map failures to mode-specific fields expected by parent subgraphs."""
     if mode == "code_generator":
         return {
-            "execution_summary": execution_failure_summary(state.get("ticket_key", ""), message),
+            "code_generation_summary": code_generation_failure_summary(
+                state.get("ticket_key", ""), message
+            ),
             "exec_error": message,
             "failed_node": "generate_code",
         }

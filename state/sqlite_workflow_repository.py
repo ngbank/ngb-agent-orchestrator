@@ -51,11 +51,13 @@ class SQLiteWorkflowRepository:
                     )
                 except (json.JSONDecodeError, TypeError):
                     workflow["clarification_history"] = []
-            if workflow.get("execution_summary"):
+            if workflow.get("code_generation_summary"):
                 try:
-                    workflow["execution_summary"] = json.loads(workflow["execution_summary"])
+                    workflow["code_generation_summary"] = json.loads(
+                        workflow["code_generation_summary"]
+                    )
                 except (json.JSONDecodeError, TypeError):
-                    workflow["execution_summary"] = None
+                    workflow["code_generation_summary"] = None
             if workflow.get("usage_summary"):
                 try:
                     workflow["usage_summary"] = json.loads(workflow["usage_summary"])
@@ -320,19 +322,19 @@ class SQLiteWorkflowRepository:
         finally:
             conn.close()
 
-    def update_execution_summary(
+    def update_code_generation_summary(
         self,
         workflow_id: str,
-        execution_summary: Dict,
+        code_generation_summary: Dict,
         actor: str = "system",
     ) -> None:
-        """Persist the execution summary for *workflow_id*.
+        """Persist the code generation summary for *workflow_id*.
 
-        The execution summary update and corresponding audit log entry are written
+        The code generation summary update and corresponding audit log entry are written
         atomically in a single transaction. If either fails, both are rolled back.
         """
         now = datetime.now(UTC).isoformat()
-        summary_json = json.dumps(execution_summary)
+        summary_json = json.dumps(code_generation_summary)
 
         conn = get_connection()
         try:
@@ -342,7 +344,7 @@ class SQLiteWorkflowRepository:
                 conn.execute(
                     """
                     UPDATE workflows
-                    SET execution_summary = ?, updated_at = ?
+                    SET code_generation_summary = ?, updated_at = ?
                     WHERE id = ?
                     """,
                     (summary_json, now, workflow_id),
@@ -351,8 +353,8 @@ class SQLiteWorkflowRepository:
                     conn,
                     workflow_id=workflow_id,
                     actor=actor,
-                    action="execution_summary_stored",
-                    reason="Execution summary saved from execute recipe",
+                    action="code_generation_summary_stored",
+                    reason="Code generation summary saved from generate_code recipe",
                 )
                 # Commit both operations atomically
                 conn.commit()

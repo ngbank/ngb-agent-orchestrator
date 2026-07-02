@@ -14,7 +14,7 @@ from .workflow_repository import (
     get_audit_log,
     get_workflow,
     get_workflow_by_ticket,
-    update_execution_summary,
+    update_code_generation_summary,
     update_status,
     update_work_plan,
 )
@@ -33,5 +33,5 @@ __all__ = [
     "run_migrations",
     "get_connection",
     "update_work_plan",
-    "update_execution_summary",
+    "update_code_generation_summary",
 ]

@@ -36,7 +36,7 @@ class RunGooseInputState(TypedDict, total=False):
     work_plan_path: str
     summary_path: str
     reasoning_path: str
-    execution_summary: Optional[dict]
+    code_generation_summary: Optional[dict]
     pr_comments: Optional[str]
     branch_prefix: str
 
@@ -51,14 +51,14 @@ class ProcessResultsInputState(TypedDict, total=False):
 class ProcessResultsOutputState(TypedDict, total=False):
     """Output produced by process_results node."""
 
-    execution_summary: Optional[dict]
+    code_generation_summary: Optional[dict]
 
 
 class PersistResultsInputState(TypedDict, total=False):
     """Input required by persist_results node."""
 
     workflow_id: str
-    execution_summary: Optional[dict]
+    code_generation_summary: Optional[dict]
 
 
 class PersistResultsOutputState(TypedDict, total=False):
@@ -76,7 +76,7 @@ class PushAndCreatePrInputState(TypedDict, total=False):
     working_dir: str
     repo_url: str
     github_token: str
-    execution_summary: Optional[dict]
+    code_generation_summary: Optional[dict]
     work_plan_data: dict
     pr_comments: Optional[str]
     exec_error: Optional[str]
@@ -85,7 +85,7 @@ class PushAndCreatePrInputState(TypedDict, total=False):
 class PushAndCreatePrOutputState(TypedDict, total=False):
     """Output produced by push_and_create_pr node."""
 
-    execution_summary: Optional[dict]
+    code_generation_summary: Optional[dict]
     failed_node: Optional[str]
 
 
@@ -115,7 +115,7 @@ class CodeGeneratorState(TypedDict, total=False):
     workflow_id: str
     ticket_key: str
     work_plan_data: dict
-    execution_summary: Optional[dict]
+    code_generation_summary: Optional[dict]
     failed_node: Optional[str]
     pr_url: Optional[str]
     pr_comments: Optional[str]

@@ -75,16 +75,16 @@ def _handle_approve(
             if result.pr_url:
                 click.echo(f"   PR URL: {result.pr_url}")
         elif result.final_status == WorkflowStatus.FAILED:
-            execution_summary = result.execution_summary or {}
+            code_generation_summary = result.code_generation_summary or {}
             click.echo(
                 f"❌ Workflow failed — "
-                f"build: {execution_summary.get('build', 'unknown')}, "
-                f"tests: {execution_summary.get('tests', 'unknown')}",
+                f"build: {code_generation_summary.get('build', 'unknown')}, "
+                f"tests: {code_generation_summary.get('tests', 'unknown')}",
                 err=True,
             )
 
         ticket_for_comment = result.ticket_key or ticket_key or detail.ticket_key
-        common._post_execution_comment(ticket_for_comment, result.execution_summary)
+        common._post_execution_comment(ticket_for_comment, result.code_generation_summary)
 
     except KeyboardInterrupt:
         click.echo("\n⚠️  Workflow interrupted by user", err=True)

@@ -29,50 +29,50 @@ _NODE_EMOJI = NODE_EMOJI
 # can patch them without importing heavy dependencies at module import time.
 JiraClient = None
 JiraCommentError = Exception
-format_execution_summary_comment = None
+format_code_generation_summary_comment = None
 
 
 def _post_execution_comment(
     ticket_key: Optional[str],
-    execution_summary: Optional[dict],
+    code_generation_summary: Optional[dict],
     comment_poster: Optional[CommentPoster] = None,
 ) -> None:
     """Post execution summary (including pr_url if present) as a JIRA comment.
 
     Args:
         ticket_key: The JIRA ticket key to post to.
-        execution_summary: The execution summary dict from the graph final state.
+        code_generation_summary: The execution summary dict from the graph final state.
         comment_poster: Optional CommentPoster implementation. Defaults to a
             freshly-constructed JiraClient so existing call sites require no
             changes.
     """
-    global JiraClient, JiraCommentError, format_execution_summary_comment
+    global JiraClient, JiraCommentError, format_code_generation_summary_comment
 
-    if not ticket_key or not execution_summary:
+    if not ticket_key or not code_generation_summary:
         return
     try:
         if (
             JiraClient is None
             or JiraCommentError is Exception
-            or format_execution_summary_comment is None
+            or format_code_generation_summary_comment is None
         ):
             from dispatcher.jira_client import JiraClient as _JiraClient
             from dispatcher.jira_client import JiraCommentError as _JiraCommentError
             from orchestrator.work_planner.utilities import (
-                format_execution_summary_comment as _format_execution_summary_comment,
+                format_code_generation_summary_comment as _format_code_generation_summary_comment,
             )
 
             if JiraClient is None:
                 JiraClient = _JiraClient
             if JiraCommentError is Exception:
                 JiraCommentError = _JiraCommentError
-            if format_execution_summary_comment is None:
-                format_execution_summary_comment = _format_execution_summary_comment
+            if format_code_generation_summary_comment is None:
+                format_code_generation_summary_comment = _format_code_generation_summary_comment
 
-        comment = format_execution_summary_comment(execution_summary)
+        comment = format_code_generation_summary_comment(code_generation_summary)
         poster: CommentPoster = comment_poster if comment_poster is not None else JiraClient()
         poster.post_comment(ticket_key, comment)
-        pr_url = execution_summary.get("pr_url", "")
+        pr_url = code_generation_summary.get("pr_url", "")
         if pr_url:
             click.echo(f"🔗 PR created: {pr_url}")
         click.echo(f"💬 Execution summary posted to {ticket_key}")

@@ -528,14 +528,16 @@ class LocalWorkflowService:
             final_state = runnable.get_state(thread_config).values or {}
             row = self._repo.get_workflow(workflow_id)
             status = row["status"] if row else WorkflowStatus.PENDING
-            execution_summary = final_state.get("execution_summary")
+            code_generation_summary = final_state.get("code_generation_summary")
             return WorkflowRunResult(
                 workflow_id=workflow_id,
                 ticket_key=final_state.get("ticket_key") or ticket_key,
                 final_status=status,
                 interrupted=True,
-                execution_summary=execution_summary if execution_summary else None,
-                pr_url=(execution_summary or {}).get("pr_url"),
+                code_generation_summary=(
+                    code_generation_summary if code_generation_summary else None
+                ),
+                pr_url=(code_generation_summary or {}).get("pr_url"),
                 failed_node=final_state.get("failed_node"),
                 final_state=dict(final_state) if final_state else None,
             )
@@ -544,14 +546,16 @@ class LocalWorkflowService:
         if post_process is None:
             row = self._repo.get_workflow(workflow_id)
             status = row["status"] if row else WorkflowStatus.PENDING
-            execution_summary = final_state.get("execution_summary")
+            code_generation_summary = final_state.get("code_generation_summary")
             return WorkflowRunResult(
                 workflow_id=workflow_id,
                 ticket_key=final_state.get("ticket_key") or ticket_key,
                 final_status=status,
                 error=final_state.get("error"),
-                execution_summary=execution_summary if execution_summary else None,
-                pr_url=(execution_summary or {}).get("pr_url"),
+                code_generation_summary=(
+                    code_generation_summary if code_generation_summary else None
+                ),
+                pr_url=(code_generation_summary or {}).get("pr_url"),
                 failed_node=final_state.get("failed_node"),
                 final_state=dict(final_state) if final_state else None,
             )
@@ -587,14 +591,14 @@ class LocalWorkflowService:
 
         row = self._repo.get_workflow(wf_id)
         status = row["status"] if row else WorkflowStatus.PENDING
-        execution_summary = final_state.get("execution_summary")
+        code_generation_summary = final_state.get("code_generation_summary")
         return WorkflowRunResult(
             workflow_id=wf_id,
             ticket_key=ticket,
             final_status=status,
             error=error,
-            execution_summary=execution_summary if execution_summary else None,
-            pr_url=(execution_summary or {}).get("pr_url"),
+            code_generation_summary=code_generation_summary if code_generation_summary else None,
+            pr_url=(code_generation_summary or {}).get("pr_url"),
             failed_node=final_state.get("failed_node"),
             final_state=final_state,
         )
@@ -607,8 +611,8 @@ class LocalWorkflowService:
     ) -> WorkflowRunResult:
         wf_id = final_state.get("workflow_id", workflow_id)
         ticket = final_state.get("ticket_key") or ticket_key
-        execution_summary = final_state.get("execution_summary") or {}
-        exec_status = execution_summary.get("status", "")
+        code_generation_summary = final_state.get("code_generation_summary") or {}
+        exec_status = code_generation_summary.get("status", "")
         actor = "dispatcher"
 
         if exec_status in ("success", "partial"):
@@ -629,7 +633,7 @@ class LocalWorkflowService:
                 actor=actor,
                 reason=(
                     f"Execution failed: "
-                    f"{execution_summary.get('error', exec_status or 'no execution summary')}"
+                    f"{code_generation_summary.get('error', exec_status or 'no execution summary')}"
                 ),
             )
 
@@ -639,8 +643,8 @@ class LocalWorkflowService:
             workflow_id=wf_id,
             ticket_key=ticket,
             final_status=status,
-            execution_summary=execution_summary if execution_summary else None,
-            pr_url=execution_summary.get("pr_url") if execution_summary else None,
+            code_generation_summary=code_generation_summary if code_generation_summary else None,
+            pr_url=code_generation_summary.get("pr_url") if code_generation_summary else None,
             failed_node=final_state.get("failed_node"),
             final_state=final_state,
         )
@@ -653,27 +657,27 @@ class LocalWorkflowService:
     ) -> WorkflowRunResult:
         wf_id = workflow_id
         ticket = final_state.get("ticket_key") or ticket_key
-        execution_summary = final_state.get("execution_summary") or {}
-        exec_status = execution_summary.get("status", "")
+        code_generation_summary = final_state.get("code_generation_summary") or {}
+        exec_status = code_generation_summary.get("status", "")
         new_failed_node = final_state.get("failed_node")
         graph_error = final_state.get("error")
         actor = "dispatcher"
 
-        if execution_summary and exec_status in ("success", "partial"):
+        if code_generation_summary and exec_status in ("success", "partial"):
             self._repo.update_status(
                 wf_id,
                 WorkflowStatus.COMPLETED,
                 actor=actor,
                 reason="All stages completed successfully after retry",
             )
-        elif execution_summary or graph_error or new_failed_node:
+        elif code_generation_summary or graph_error or new_failed_node:
             self._repo.update_status(
                 wf_id,
                 WorkflowStatus.FAILED,
                 actor=actor,
                 reason=(
                     f"Retry failed: "
-                    f"{execution_summary.get('error') or graph_error or new_failed_node or 'unknown'}"  # noqa: E501
+                    f"{code_generation_summary.get('error') or graph_error or new_failed_node or 'unknown'}"  # noqa: E501
                 ),
             )
 
@@ -684,8 +688,8 @@ class LocalWorkflowService:
             ticket_key=ticket,
             final_status=status,
             error=graph_error,
-            execution_summary=execution_summary if execution_summary else None,
-            pr_url=execution_summary.get("pr_url") if execution_summary else None,
+            code_generation_summary=code_generation_summary if code_generation_summary else None,
+            pr_url=code_generation_summary.get("pr_url") if code_generation_summary else None,
             failed_node=new_failed_node,
             final_state=final_state,
         )
@@ -716,13 +720,15 @@ class LocalWorkflowService:
                 actor="dispatcher",
                 reason=update_reason,
             )
-            execution_summary = final_state.get("execution_summary")
+            code_generation_summary = final_state.get("code_generation_summary")
             return WorkflowRunResult(
                 workflow_id=wf_id,
                 ticket_key=ticket,
                 final_status=target_status,
-                execution_summary=execution_summary if execution_summary else None,
-                pr_url=(execution_summary or {}).get("pr_url"),
+                code_generation_summary=(
+                    code_generation_summary if code_generation_summary else None
+                ),
+                pr_url=(code_generation_summary or {}).get("pr_url"),
                 final_state=final_state,
             )
 
@@ -762,7 +768,7 @@ def _to_detail(row: Dict[str, Any]) -> WorkflowDetail:
         updated_at=row["updated_at"],
         pr_url=row.get("pr_url"),
         work_plan=row.get("work_plan"),
-        execution_summary=row.get("execution_summary"),
+        code_generation_summary=row.get("code_generation_summary"),
         clarification_history=row.get("clarification_history") or [],
         pr_comments=row.get("pr_comments"),
         usage_summary=usage or {},
