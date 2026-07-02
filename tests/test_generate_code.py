@@ -55,16 +55,16 @@ def test_log_path_without_ticket_key(monkeypatch, tmp_path):
     from orchestrator.utils import log_path
 
     monkeypatch.setenv("LOGS_DIR", str(tmp_path / "logs"))
-    lp = log_path("wf-123", "execute")
-    assert lp.name == "wf-123_execute.log"
+    lp = log_path("wf-123", "generate_code")
+    assert lp.name == "wf-123_generate_code.log"
 
 
 def test_log_path_with_ticket_key_prefix(monkeypatch, tmp_path):
     from orchestrator.utils import log_path
 
     monkeypatch.setenv("LOGS_DIR", str(tmp_path / "logs"))
-    lp = log_path("wf-123", "execute", ticket_key="AOS-77")
-    assert lp.name == "AOS-77_wf-123_execute.log"
+    lp = log_path("wf-123", "generate_code", ticket_key="AOS-77")
+    assert lp.name == "AOS-77_wf-123_generate_code.log"
 
 
 def test_log_path_uses_xdg_state_home_by_default(monkeypatch, tmp_path):
@@ -75,7 +75,7 @@ def test_log_path_uses_xdg_state_home_by_default(monkeypatch, tmp_path):
     monkeypatch.delenv("LOGS_DIR", raising=False)
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-state"))
 
-    lp = log_path(workflow_id, "execute", ticket_key="AOS-119")
+    lp = log_path(workflow_id, "generate_code", ticket_key="AOS-119")
 
     expected_prefix = (tmp_path / "xdg-state") / "ngb-agent-orchestrator" / "logs" / workflow_id
     assert str(lp).startswith(str(expected_prefix))
@@ -89,7 +89,7 @@ def test_log_path_honors_logs_dir_override(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-state"))
     monkeypatch.setenv("LOGS_DIR", str(tmp_path / "logs-override"))
 
-    lp = log_path(workflow_id, "execute", ticket_key="AOS-119")
+    lp = log_path(workflow_id, "generate_code", ticket_key="AOS-119")
 
     expected_prefix = (tmp_path / "logs-override") / workflow_id
     assert str(lp).startswith(str(expected_prefix))

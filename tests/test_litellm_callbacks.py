@@ -93,7 +93,7 @@ def test_aggregate_filters_by_stage(jsonl_dir):
         [
             _span(stage="plan", input_tokens=100, output_tokens=40, total_tokens=140),
             _span(
-                stage="execute",
+                stage="generate_code",
                 input_tokens=500,
                 output_tokens=200,
                 total_tokens=700,
@@ -103,13 +103,13 @@ def test_aggregate_filters_by_stage(jsonl_dir):
     )
 
     plan_result = aggregate_token_usage(wf_id, "plan")
-    exec_result = aggregate_token_usage(wf_id, "execute")
+    generate_code_result = aggregate_token_usage(wf_id, "generate_code")
 
     assert plan_result["turns"] == 1
     assert plan_result["total_tokens"] == 140
-    assert exec_result["turns"] == 1
-    assert exec_result["total_tokens"] == 700
-    assert exec_result["stop_reasons"] == ["max_tokens"]
+    assert generate_code_result["turns"] == 1
+    assert generate_code_result["total_tokens"] == 700
+    assert generate_code_result["stop_reasons"] == ["max_tokens"]
 
 
 def test_aggregate_ignores_non_llm_call_spans(jsonl_dir):
@@ -135,12 +135,12 @@ def test_aggregate_ignores_failed_spans(jsonl_dir):
         jsonl_dir,
         wf_id,
         [
-            _span(stage="execute", status_code="ERROR"),
-            _span(stage="execute", total_tokens=15, finish_reason="stop"),
+            _span(stage="generate_code", status_code="ERROR"),
+            _span(stage="generate_code", total_tokens=15, finish_reason="stop"),
         ],
     )
 
-    result = aggregate_token_usage(wf_id, "execute")
+    result = aggregate_token_usage(wf_id, "generate_code")
 
     assert result["turns"] == 1
     assert result["total_tokens"] == 15
@@ -177,10 +177,10 @@ def test_aggregate_null_finish_reason_excluded(jsonl_dir):
     _write_spans(
         jsonl_dir,
         wf_id,
-        [_span(stage="execute", total_tokens=15)],
+        [_span(stage="generate_code", total_tokens=15)],
     )
 
-    result = aggregate_token_usage(wf_id, "execute")
+    result = aggregate_token_usage(wf_id, "generate_code")
 
     assert result["turns"] == 1
     assert result["stop_reasons"] == []

@@ -17,6 +17,10 @@ History:
   logger; token usage is now aggregated directly from `llm.call` spans in
   `otel.jsonl` via `orchestrator.litellm_callbacks.aggregate_token_usage`,
   filtered by the `workflow.stage` span attribute.
+- AOS-194: renamed the `execute` workflow-stage identifier to `generate_code`
+  throughout (`goose_session` stage, `NGB_WORKFLOW_STAGE`, `workflow.stage`
+  span attribute, log filenames) to match the `execute_plan` → `generate_code`
+  node rename from AOS-181.
 
 ---
 
@@ -25,10 +29,10 @@ History:
 ```
 LOGS_DIR/
 └── <workflow_id>/
-    ├── otel.jsonl                  # all spans for the run, NDJSON
-    ├── <ticket>_<wf>_plan.log      # goose plan stage stdout
-    ├── <ticket>_<wf>_execute.log   # goose execute stage stdout
-    └── litellm_proxy.log           # proxy uvicorn output
+    ├── otel.jsonl                        # all spans for the run, NDJSON
+    ├── <ticket>_<wf>_plan.log            # goose plan stage stdout
+    ├── <ticket>_<wf>_generate_code.log   # goose generate_code stage stdout
+    └── litellm_proxy.log                 # proxy uvicorn output
 ```
 
 Default `LOGS_DIR` resolves to `$XDG_STATE_HOME/ngb-agent-orchestrator/logs`.
@@ -59,9 +63,9 @@ For a successful plan-stage run (e.g. `dispatcher --ticket AOS-94`):
 | `graph.node.await_approval` | 1 | `workflow.run` | The interrupt node |
 | `graph.checkpoint` | ~13 | `workflow.run` | One per `ObservableSqliteSaver.put` |
 | `goose.run` | 1 | `workflow.run` | `goose run --recipe orchestrator/work_planner/recipes/plan.yaml` |
-| `llm.call` | N (~10–60) | `workflow.run` | Emitted from the proxy subprocess, parented via traceparent; carries `workflow.stage` (`plan` / `execute`) for per-stage token aggregation |
+| `llm.call` | N (~10–60) | `workflow.run` | Emitted from the proxy subprocess, parented via traceparent; carries `workflow.stage` (`plan` / `generate_code`) for per-stage token aggregation |
 
-All spans share a single `trace_id`. An execute-stage run roughly doubles
+All spans share a single `trace_id`. A generate_code-stage run roughly doubles
 `goose.run` (one per stage) and adds a second `await_pr_approval`.
 
 ---

@@ -71,8 +71,8 @@ class TestOtelContext:
         assert get_workflow_stage() == "plan"
 
     def test_get_workflow_stage_env_fallback(self, monkeypatch):
-        monkeypatch.setenv("NGB_WORKFLOW_STAGE", "execute")
-        assert get_workflow_stage() == "execute"
+        monkeypatch.setenv("NGB_WORKFLOW_STAGE", "generate_code")
+        assert get_workflow_stage() == "generate_code"
 
     def test_set_node_context(self):
         set_node_context("work_planner")
@@ -100,14 +100,14 @@ class TestOtelContext:
         assert "graph.node_name" not in attrs  # node_name is None
 
     def test_as_attributes_all_set(self):
-        set_workflow_context(workflow_id="wf-4", ticket_key="AOS-4", stage="execute")
+        set_workflow_context(workflow_id="wf-4", ticket_key="AOS-4", stage="generate_code")
         set_node_context("await_approval")
         ctx = OtelContext.capture()
         attrs = ctx.as_attributes()
         assert attrs["workflow.id"] == "wf-4"
         assert attrs["jira.ticket_key"] == "AOS-4"
         assert attrs["graph.node_name"] == "await_approval"
-        assert attrs["workflow.stage"] == "execute"
+        assert attrs["workflow.stage"] == "generate_code"
 
     def test_set_workflow_context_partial_update(self):
         set_workflow_context(workflow_id="wf-5")

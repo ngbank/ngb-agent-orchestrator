@@ -65,7 +65,7 @@ def get_node_name() -> Optional[str]:
 
 
 def get_workflow_stage() -> Optional[str]:
-    """Return the current workflow stage (``plan`` / ``execute``) from context.
+    """Return the current workflow stage (``plan`` / ``generate_code``) from context.
 
     Falls back to ``NGB_WORKFLOW_STAGE`` in the process environment for the
     same reason as :func:`get_workflow_id`: the LiteLLM proxy subprocess
@@ -94,7 +94,7 @@ def set_workflow_context(
     Args:
         workflow_id: UUID identifying this workflow run.
         ticket_key:  JIRA ticket key (e.g. ``"AOS-109"``).
-        stage:       Workflow stage (``"plan"`` / ``"execute"``).
+        stage:       Workflow stage (``"plan"`` / ``"generate_code"``).
     """
     if workflow_id is not None:
         _workflow_id.set(workflow_id)

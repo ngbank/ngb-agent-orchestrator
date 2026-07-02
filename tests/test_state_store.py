@@ -548,8 +548,8 @@ def test_update_usage_summary_merges_multiple_stages(test_db):
         "total_tokens": 1400,
         "stop_reasons": ["stop"],
     }
-    execute_data = {
-        "stage": "execute",
+    generate_code_data = {
+        "stage": "generate_code",
         "turns": 42,
         "prompt_tokens": 18500,
         "completion_tokens": 6200,
@@ -558,14 +558,14 @@ def test_update_usage_summary_merges_multiple_stages(test_db):
     }
 
     state_store.update_usage_summary(workflow_id, "plan", plan_data)
-    state_store.update_usage_summary(workflow_id, "execute", execute_data)
+    state_store.update_usage_summary(workflow_id, "generate_code", generate_code_data)
 
     workflow = state_store.get_workflow(workflow_id)
     usage_summary = workflow["usage_summary"]
     assert "plan" in usage_summary
-    assert "execute" in usage_summary
+    assert "generate_code" in usage_summary
     assert usage_summary["plan"]["turns"] == 10
-    assert usage_summary["execute"]["turns"] == 42
+    assert usage_summary["generate_code"]["turns"] == 42
 
 
 def test_update_usage_summary_overwrites_same_stage(test_db):
@@ -623,9 +623,9 @@ def test_update_usage_summary_creates_audit_log(test_db):
     workflow_id = state_store.create_workflow(ticket_key="AOS-85")
     state_store.update_usage_summary(
         workflow_id,
-        "execute",
+        "generate_code",
         {
-            "stage": "execute",
+            "stage": "generate_code",
             "turns": 3,
             "prompt_tokens": 50,
             "completion_tokens": 20,
@@ -637,7 +637,7 @@ def test_update_usage_summary_creates_audit_log(test_db):
     audit_log = state_store.get_audit_log(workflow_id)
     usage_entries = [e for e in audit_log if e["action"] == "usage_summary_stored"]
     assert len(usage_entries) == 1
-    assert "execute" in usage_entries[0]["reason"]
+    assert "generate_code" in usage_entries[0]["reason"]
 
 
 # ---------------------------------------------------------------------------
