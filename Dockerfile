@@ -64,6 +64,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     ORCHESTRATOR_HOST=0.0.0.0 \
     ORCHESTRATOR_PORT=8080
 
+# Goose CLI and git — required by the repo_setup / work_planner / generate_code
+# graph nodes, which clone the target repo and shell out to `goose run --recipe
+# ...`. Goose is installed via the project's official prebuilt-binary script
+# (no cargo/rust build needed in the image).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates bzip2 git \
+    && rm -rf /var/lib/apt/lists/* \
+    && export CONFIGURE=false GOOSE_BIN_DIR=/usr/local/bin \
+    && curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | bash \
+    && goose --version
+
 # Non-root user.
 RUN groupadd --system --gid 1001 orchestrator \
     && useradd  --system --uid 1001 --gid orchestrator --create-home orchestrator
@@ -74,9 +85,15 @@ COPY --from=builder /install /usr/local
 WORKDIR /app
 
 # Bring in the package source so the working directory mirrors the repo
-# layout (config/ is read at runtime by some nodes; recipes and the WorkPlan
-# schema now live inside the orchestrator package).
+# layout. orchestrator/utils.py and mcp_server/server.py resolve config/
+# relative to the installed package tree (Path(__file__).resolve().parents[1]),
+# not the process cwd, so it must also be reachable as a sibling of the
+# installed packages in site-packages — symlink it there instead of copying
+# twice so the two locations can't drift.
 COPY --from=builder /build/config ./config
+RUN python3 -c "\
+import os, site; \
+os.symlink('/app/config', os.path.join(site.getsitepackages()[0], 'config'))"
 
 # Pre-create the XDG state dir under the orchestrator user's $HOME so a host
 # bind-mount lands on an owned, writable directory. The orchestrator resolves

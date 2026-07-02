@@ -165,11 +165,11 @@ dispatcher --clear-db
 By default, the dispatcher runs the orchestrator **in-process** — no server required. If you want to share one orchestrator across multiple dispatchers, IDEs, or the TUI, start the FastAPI server and point the dispatcher at it.
 
 ```bash
-# Option 1: detached background process (recommended for local dev)
-orchestrator-server-ctl start          # detach + survives terminal close
-orchestrator-server-ctl status         # PID + /healthz probe
-orchestrator-server-ctl logs -f        # follow the server log
-orchestrator-server-ctl stop           # graceful SIGTERM, then SIGKILL
+# Option 1: container via orchestrator-server-ctl (recommended for local dev)
+orchestrator-server-ctl start          # docker compose up -d --build; survives terminal close
+orchestrator-server-ctl status         # container state + /healthz probe
+orchestrator-server-ctl logs -f        # follow container logs
+orchestrator-server-ctl stop           # docker compose down
 
 # Option 2: console script in the foreground (uses .env from your shell)
 orchestrator-server
@@ -177,18 +177,14 @@ orchestrator-server
 # Option 3: uvicorn directly (handy for --reload during dev)
 uvicorn orchestrator.server.app:app --host 0.0.0.0 --port 8080
 
-# Option 4: container (multi-stage Dockerfile, non-root, /healthz)
+# Option 4: docker compose directly (same thing orchestrator-server-ctl wraps)
 docker compose up --build
-# or:
-docker build -t ngb-orchestrator:dev .
-docker run --rm -p 8080:8080 --env-file .env \
-    -v "$PWD/state:/app/state" ngb-orchestrator:dev
 
 # Verify
 curl http://localhost:8080/healthz   # → {"status":"ok"}
 ```
 
-The `orchestrator-server-ctl` helper lives in [`bin/`](bin/orchestrator-server-ctl) and is put on `PATH` by direnv (see [`.envrc`](.envrc)). PID and log files are written to `.run/` at the repo root.
+The `orchestrator-server-ctl` helper lives in [`bin/`](bin/orchestrator-server-ctl), is put on `PATH` by direnv (see [`.envrc`](.envrc)), and drives the container via `docker compose` (config lives in [`docker-compose.yml`](docker-compose.yml), not in the script). Requires a `docker compose` provider — `./setup-env.sh --docker` checks for and reports how to install one.
 
 Then route the CLI through the server by setting two env vars (typically in `.env`):
 
