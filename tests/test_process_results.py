@@ -30,7 +30,7 @@ def test_process_results_parses_valid_summary_json():
 
     try:
         result = process_results({"ticket_key": "AOS-97", "summary_path": path})
-        assert result["execution_summary"] == summary
+        assert result["code_generation_summary"] == summary
     finally:
         os.unlink(path)
 
@@ -40,7 +40,7 @@ def test_process_results_returns_failure_summary_on_missing_file():
     from orchestrator.code_generator.nodes.process_results import process_results
 
     result = process_results({"ticket_key": "AOS-97", "summary_path": "/nonexistent/path_xyz.json"})
-    summary = result["execution_summary"]
+    summary = result["code_generation_summary"]
 
     assert summary["status"] == "failed"
     assert summary["ticket_key"] == "AOS-97"
@@ -57,7 +57,7 @@ def test_process_results_returns_failure_summary_on_invalid_json():
 
     try:
         result = process_results({"ticket_key": "AOS-97", "summary_path": path})
-        summary = result["execution_summary"]
+        summary = result["code_generation_summary"]
         assert summary["status"] == "failed"
         assert summary["ticket_key"] == "AOS-97"
     finally:
@@ -85,6 +85,6 @@ def test_process_results_partial_status_preserved():
 
     try:
         result = process_results({"ticket_key": "AOS-97", "summary_path": path})
-        assert result["execution_summary"]["status"] == "partial"
+        assert result["code_generation_summary"]["status"] == "partial"
     finally:
         os.unlink(path)

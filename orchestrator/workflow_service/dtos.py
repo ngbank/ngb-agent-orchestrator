@@ -45,7 +45,7 @@ class WorkflowDetail:
     updated_at: str
     pr_url: Optional[str] = None
     work_plan: Optional[Dict[str, Any]] = None
-    execution_summary: Optional[Dict[str, Any]] = None
+    code_generation_summary: Optional[Dict[str, Any]] = None
     clarification_history: List[Dict[str, Any]] = field(default_factory=list)
     pr_comments: Optional[str] = None
     usage_summary: Dict[str, Any] = field(default_factory=dict)
@@ -117,7 +117,7 @@ class WorkflowRunResult:
     paused at an ``interrupt()`` call (e.g. await_approval).  ``error`` is set
     when the operation failed.
 
-    ``execution_summary`` and ``pr_url`` are surfaced separately so callers
+    ``code_generation_summary`` and ``pr_url`` are surfaced separately so callers
     (CLI / future HTTP layer) can render or forward them without re-reading
     the workflow record.
     """
@@ -127,7 +127,7 @@ class WorkflowRunResult:
     final_status: WorkflowStatus
     interrupted: bool = False
     error: Optional[str] = None
-    execution_summary: Optional[Dict[str, Any]] = None
+    code_generation_summary: Optional[Dict[str, Any]] = None
     pr_url: Optional[str] = None
     failed_node: Optional[str] = None
     final_state: Optional[Dict[str, Any]] = None

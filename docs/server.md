@@ -367,7 +367,7 @@ Returns the node traversal history, oldest first. Each entry has:
     "step": 3,
     "node": "generate_code",
     "outcome": "ok",
-    "result_keys": ["execution_summary"],
+    "result_keys": ["code_generation_summary"],
     "error": null
 }
 ```

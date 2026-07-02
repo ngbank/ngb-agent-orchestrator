@@ -318,7 +318,11 @@ def test_retry_resolves_by_ticket(test_db, cli_runner):
     service = _make_test_service(
         graph=_mock_graph_with_failed_node(
             "generate_code",
-            {"workflow_id": wf_id, "ticket_key": "TEST-1", "execution_summary": success_summary},
+            {
+                "workflow_id": wf_id,
+                "ticket_key": "TEST-1",
+                "code_generation_summary": success_summary,
+            },
         )
     )
     with patch("dispatcher.commands.common._post_execution_comment"):
@@ -343,7 +347,11 @@ def test_retry_resolves_by_workflow_id(test_db, cli_runner):
     service = _make_test_service(
         graph=_mock_graph_with_failed_node(
             "generate_code",
-            {"workflow_id": wf_id, "ticket_key": "TEST-1", "execution_summary": success_summary},
+            {
+                "workflow_id": wf_id,
+                "ticket_key": "TEST-1",
+                "code_generation_summary": success_summary,
+            },
         )
     )
     with patch("dispatcher.commands.common._post_execution_comment"):
@@ -387,7 +395,7 @@ def test_retry_transitions_to_in_progress_then_completed(test_db, cli_runner):
         {
             "workflow_id": wf_id,
             "ticket_key": "TEST-1",
-            "execution_summary": success_summary,
+            "code_generation_summary": success_summary,
         },
     )
     mock_graph.stream = fake_stream
@@ -415,7 +423,7 @@ def test_retry_marks_failed_when_second_attempt_also_fails(test_db, cli_runner):
             {
                 "workflow_id": wf_id,
                 "ticket_key": "TEST-1",
-                "execution_summary": failure_summary,
+                "code_generation_summary": failure_summary,
                 "failed_node": "generate_code",
             },
         )
@@ -527,7 +535,11 @@ def test_retry_accepts_in_progress_workflow(test_db, cli_runner):
     service = _make_test_service(
         graph=_mock_graph_with_failed_node(
             "generate_code",
-            {"workflow_id": wf_id, "ticket_key": "TEST-1", "execution_summary": success_summary},
+            {
+                "workflow_id": wf_id,
+                "ticket_key": "TEST-1",
+                "code_generation_summary": success_summary,
+            },
         )
     )
     with patch("dispatcher.commands.common._post_execution_comment"):
@@ -552,13 +564,13 @@ def test_retry_derives_failed_node_from_next_when_missing(test_db, cli_runner):
     mock_graph = Mock()
     # No failed_node in state, but snapshot.next reveals where it stopped.
     # The dispatcher calls get_state twice: once before retry to inspect
-    # next/failed_node, and once after the stream to read execution_summary.
+    # next/failed_node, and once after the stream to read code_generation_summary.
     # A single Mock with both attributes satisfies both reads.
     mock_graph.get_state.return_value = Mock(
         values={
             "workflow_id": wf_id,
             "ticket_key": "TEST-1",
-            "execution_summary": success_summary,
+            "code_generation_summary": success_summary,
         },
         next=("generate_code",),
     )

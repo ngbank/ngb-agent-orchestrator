@@ -187,7 +187,7 @@ class WorkflowDetailResponse(BaseModel):
     updated_at: str
     pr_url: Optional[str] = None
     work_plan: Optional[Dict[str, Any]] = None
-    execution_summary: Optional[Dict[str, Any]] = None
+    code_generation_summary: Optional[Dict[str, Any]] = None
     clarification_history: List[Dict[str, Any]] = Field(default_factory=list)
     pr_comments: Optional[str] = None
     usage_summary: Dict[str, Any] = Field(default_factory=dict)
@@ -203,7 +203,7 @@ class WorkflowDetailResponse(BaseModel):
             updated_at=detail.updated_at,
             pr_url=detail.pr_url,
             work_plan=detail.work_plan,
-            execution_summary=detail.execution_summary,
+            code_generation_summary=detail.code_generation_summary,
             clarification_history=list(detail.clarification_history),
             pr_comments=detail.pr_comments,
             usage_summary=dict(detail.usage_summary),
@@ -219,7 +219,7 @@ class WorkflowRunResponse(BaseModel):
     final_status: str
     interrupted: bool = False
     error: Optional[str] = None
-    execution_summary: Optional[Dict[str, Any]] = None
+    code_generation_summary: Optional[Dict[str, Any]] = None
     pr_url: Optional[str] = None
     failed_node: Optional[str] = None
 
@@ -231,7 +231,7 @@ class WorkflowRunResponse(BaseModel):
             final_status=result.final_status.value,
             interrupted=result.interrupted,
             error=result.error,
-            execution_summary=result.execution_summary,
+            code_generation_summary=result.code_generation_summary,
             pr_url=result.pr_url,
             failed_node=result.failed_node,
         )

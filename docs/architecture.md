@@ -227,7 +227,7 @@ Goose execute recipe  ◀──────────────────�
     │  (reads WorkPlan, creates branch, implements tasks)
     ▼
 Execution Summary JSON
-    │  (stored in SQLite workflows.execution_summary)
+    │  (stored in SQLite workflows.code_generation_summary)
     ▼
 Status → COMPLETED or FAILED
 ```

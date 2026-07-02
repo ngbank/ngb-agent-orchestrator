@@ -447,7 +447,7 @@ class TestWorkflowTUI:
 
         ``code_generator/persist_results`` writes the status without writing
         the dedicated ``pr_url`` column (the URL lives in
-        ``execution_summary.pr_url``), so requiring ``d.pr_url`` here would
+        ``code_generation_summary.pr_url``), so requiring ``d.pr_url`` here would
         hide the actions for every PR-awaiting workflow in practice. The
         CLI handlers (``_handle_*_pr``) gate on status only, so the TUI
         must match.

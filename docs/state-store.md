@@ -27,7 +27,7 @@ All workflow state mutations are persisted atomically with their corresponding a
 - **No missing audit entries**: If an audit entry fails to create, the entire transaction is rolled back and the workflow state is unchanged.
 - **Transaction safety**: Each mutation (status change, work plan update, etc.) and its audit entry are committed in a single `BEGIN IMMEDIATE ... COMMIT` transaction.
 
-This is enforced in `SQLiteWorkflowRepository` — all write methods (`create_workflow`, `update_status`, `update_work_plan`, `update_execution_summary`, etc.) perform both the state update and audit log creation in one atomic block.
+This is enforced in `SQLiteWorkflowRepository` — all write methods (`create_workflow`, `update_status`, `update_work_plan`, `update_code_generation_summary`, etc.) perform both the state update and audit log creation in one atomic block.
 
 Example transaction for `update_status()`:
 ```python
@@ -60,7 +60,7 @@ Append-only record of every state change and significant action.
 | `id` | TEXT (UUID) | Primary key |
 | `workflow_id` | TEXT | Foreign key → `workflows.id` |
 | `actor` | TEXT | Who/what performed the action (e.g. `system`, `dispatcher`, username) |
-| `action` | TEXT | Action name (e.g. `workflow_created`, `status_change`, `execution_summary_stored`) |
+| `action` | TEXT | Action name (e.g. `workflow_created`, `status_change`, `code_generation_summary_stored`) |
 | `reason` | TEXT | Human-readable reason (nullable) |
 | `created_at` | TEXT | ISO 8601 timestamp |
 

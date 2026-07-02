@@ -128,7 +128,7 @@ def submit_and_follow(
     In remote mode the HTTP call returns ``202 Accepted`` with a snapshot
     of the workflow row.  We then subscribe to the lifecycle SSE stream and
     (when it terminates) re-read the workflow detail to produce a
-    ``WorkflowRunResult`` whose ``final_status`` / ``execution_summary`` /
+    ``WorkflowRunResult`` whose ``final_status`` / ``code_generation_summary`` /
     ``pr_url`` match the post-run state — keeping the existing handler
     post-processing (status banners, comment-on-ticket) unchanged.
 
@@ -156,7 +156,7 @@ def submit_and_follow(
         ticket_key=detail.ticket_key,
         final_status=detail.status,
         interrupted=detail.status in _PAUSED_STATUSES,
-        execution_summary=detail.execution_summary,
+        code_generation_summary=detail.code_generation_summary,
         pr_url=detail.pr_url,
     )
 

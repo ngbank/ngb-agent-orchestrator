@@ -106,20 +106,20 @@ def _handle_retry(
         click.echo("⏸️  Graph paused at approval gate after retry.")
         return
 
-    execution_summary = result.execution_summary or {}
-    exec_status = execution_summary.get("status", "")
+    code_generation_summary = result.code_generation_summary or {}
+    exec_status = code_generation_summary.get("status", "")
     ticket_key_final = result.ticket_key or ticket_key or detail.ticket_key
 
-    if execution_summary and exec_status in ("success", "partial"):
+    if code_generation_summary and exec_status in ("success", "partial"):
         click.echo("🎉 Workflow completed successfully")
-        common._post_execution_comment(ticket_key_final, execution_summary)
-    elif execution_summary or result.error or result.failed_node:
+        common._post_execution_comment(ticket_key_final, code_generation_summary)
+    elif code_generation_summary or result.error or result.failed_node:
         click.echo(
             f"❌ Retry failed — failed_node: {result.failed_node or 'n/a'}",
             err=True,
         )
-        if execution_summary:
-            common._post_execution_comment(ticket_key_final, execution_summary)
+        if code_generation_summary:
+            common._post_execution_comment(ticket_key_final, code_generation_summary)
         sys.exit(1)
     else:
         click.echo("⏸️  Retry resumed graph; awaiting next action.")

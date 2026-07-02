@@ -69,7 +69,7 @@ class CodeGenerationOutputState(TypedDict, total=False):
     """Output produced by code_generator subgraph."""
 
     pr_url: Optional[str]
-    execution_summary: Optional[dict]
+    code_generation_summary: Optional[dict]
     failed_node: Optional[str]
 
 
@@ -126,4 +126,4 @@ class OrchestratorState(TypedDict, total=False):
     pr_approval_decision: Optional[str]  # "approved" | "rejected" | "commented"
 
     # --- populated by code_generator subgraph ---
-    execution_summary: Optional[dict]  # summary written by code generator
+    code_generation_summary: Optional[dict]  # summary written by code generator

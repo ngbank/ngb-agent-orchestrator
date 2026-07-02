@@ -118,7 +118,7 @@ class TestPRPredicates:
 
     The dedicated ``pr_url`` column on the workflow row is not populated when
     ``code_generator/persist_results`` writes ``PENDING_PR_APPROVAL`` — the URL
-    lives in ``execution_summary.pr_url``. The CLI handlers (``_handle_*_pr``)
+    lives in ``code_generation_summary.pr_url``. The CLI handlers (``_handle_*_pr``)
     only check status, so the TUI must match.
     """
 

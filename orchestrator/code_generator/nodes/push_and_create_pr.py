@@ -98,45 +98,45 @@ def push_and_create_pr(
 ) -> PushAndCreatePrOutputState:
     """Push branch and create/update pull request.
 
-        Reads:  ticket_key, working_dir, repo_url, github_token, execution_summary,
+        Reads:  ticket_key, working_dir, repo_url, github_token, code_generation_summary,
             work_plan_data, pr_comments
-    Writes: execution_summary (updated with pr_url and status), failed_node
+    Writes: code_generation_summary (updated with pr_url and status), failed_node
     """
     ticket_key = state.get("ticket_key", "")
     working_dir = state.get("working_dir", "")
     repo_url = state.get("repo_url", "")
     github_token = state.get("github_token", "")
-    execution_summary = state.get("execution_summary") or {}
+    code_generation_summary = state.get("code_generation_summary") or {}
     work_plan_data = state.get("work_plan_data") or {}
     pr_comments = state.get("pr_comments", "")
 
     # Skip if previous nodes failed
     exec_error = state.get("exec_error")
-    if exec_error or execution_summary.get("status") == "failed":
+    if exec_error or code_generation_summary.get("status") == "failed":
         logger.info("Skipping push/PR; previous node failed.")
         return {
-            "execution_summary": execution_summary,
+            "code_generation_summary": code_generation_summary,
             "failed_node": None,
         }
 
     # Extract branch, commit SHA from summary
-    branch = execution_summary.get("branch", "")
-    commit_sha = execution_summary.get("commit_sha", "")
-    pr_url = execution_summary.get("pr_url", "")
+    branch = code_generation_summary.get("branch", "")
+    commit_sha = code_generation_summary.get("commit_sha", "")
+    pr_url = code_generation_summary.get("pr_url", "")
 
     if not branch or not commit_sha:
         logger.warning("Skipping push/PR; missing branch or commit SHA.")
-        execution_summary["pr_url"] = ""
+        code_generation_summary["pr_url"] = ""
         return {
-            "execution_summary": execution_summary,
+            "code_generation_summary": code_generation_summary,
             "failed_node": None,
         }
 
     if not repo_url:
         logger.warning("Skipping push/PR; missing repository URL.")
-        execution_summary["pr_url"] = ""
+        code_generation_summary["pr_url"] = ""
         return {
-            "execution_summary": execution_summary,
+            "code_generation_summary": code_generation_summary,
             "failed_node": None,
         }
 
@@ -144,9 +144,9 @@ def push_and_create_pr(
         owner, repo = _parse_repo_url(repo_url)
     except Exception as e:
         logger.error("Failed to parse repo URL: %s", e)
-        execution_summary["pr_url"] = ""
+        code_generation_summary["pr_url"] = ""
         return {
-            "execution_summary": execution_summary,
+            "code_generation_summary": code_generation_summary,
             "failed_node": None,
         }
 
@@ -162,13 +162,13 @@ def push_and_create_pr(
             )
             if rev_result.returncode == 0 and rev_result.stdout.strip() == commit_sha:
                 logger.warning("Re-execution produced no new commits; branch is unchanged.")
-                execution_summary["status"] = "failed"
-                execution_summary["error"] = (
+                code_generation_summary["status"] = "failed"
+                code_generation_summary["error"] = (
                     "Re-execution produced no new commits. "
                     "The branch is unchanged — review comments may not have been addressed."
                 )
                 return {
-                    "execution_summary": execution_summary,
+                    "code_generation_summary": code_generation_summary,
                     "failed_node": "generate_code",
                 }
         except Exception:
@@ -187,12 +187,12 @@ def push_and_create_pr(
         logger.info("Pushed %s", branch)
     except GitHubAuthError as e:
         logger.error("Failed to push branch: %s", e)
-        execution_summary["pr_url"] = ""
+        code_generation_summary["pr_url"] = ""
         # Downgrade status to "partial" (code was committed but push failed)
-        if execution_summary.get("status") == "success":
-            execution_summary["status"] = "partial"
+        if code_generation_summary.get("status") == "success":
+            code_generation_summary["status"] = "partial"
         return {
-            "execution_summary": execution_summary,
+            "code_generation_summary": code_generation_summary,
             "failed_node": None,
         }
 
@@ -235,15 +235,15 @@ def push_and_create_pr(
             )
             logger.info("Created PR: %s", pr_url)
 
-        execution_summary["pr_url"] = pr_url
+        code_generation_summary["pr_url"] = pr_url
     except GitHubAuthError as e:
         logger.error("Failed to create/update PR: %s", e)
-        execution_summary["pr_url"] = ""
+        code_generation_summary["pr_url"] = ""
         # Downgrade status to "partial" (code was committed and pushed)
-        if execution_summary.get("status") == "success":
-            execution_summary["status"] = "partial"
+        if code_generation_summary.get("status") == "success":
+            code_generation_summary["status"] = "partial"
 
     return {
-        "execution_summary": execution_summary,
+        "code_generation_summary": code_generation_summary,
         "failed_node": None,
     }

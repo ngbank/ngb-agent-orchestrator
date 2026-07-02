@@ -11,7 +11,7 @@ Tests cover:
 import pytest
 
 from orchestrator.work_planner.utilities import (
-    format_execution_summary_comment,
+    format_code_generation_summary_comment,
     format_work_plan_comment,
 )
 
@@ -247,7 +247,7 @@ def test_unknown_status_handling():
     assert "IN_PROGRESS" in comment
 
 
-def test_execution_summary_success():
+def test_code_generation_summary_success():
     """Test formatting successful execution summary."""
     summary = {
         "ticket_key": "AOS-46",
@@ -260,9 +260,9 @@ def test_execution_summary_success():
         "status": "success",
     }
 
-    comment = format_execution_summary_comment(summary)
+    comment = format_code_generation_summary_comment(summary)
 
-    assert "# ✅ Execution Summary" in comment
+    assert "# ✅ Code Generation Summary" in comment
     assert "*Branch:* {code}feature/AOS-46+test{code}" in comment
     assert "*Status:* SUCCESS" in comment
     assert "*Build:* pass" in comment
@@ -276,7 +276,7 @@ def test_execution_summary_success():
     )
 
 
-def test_execution_summary_failed():
+def test_code_generation_summary_failed():
     """Test formatting failed execution summary with error."""
     summary = {
         "ticket_key": "AOS-47",
@@ -290,9 +290,9 @@ def test_execution_summary_failed():
         "error": "Tests failed with assertion error",
     }
 
-    comment = format_execution_summary_comment(summary)
+    comment = format_code_generation_summary_comment(summary)
 
-    assert "# ❌ Execution Summary" in comment
+    assert "# ❌ Code Generation Summary" in comment
     assert "*Status:* FAILED" in comment
     assert "*Build:* fail" in comment
     assert "*Tests:* fail" in comment
@@ -304,7 +304,7 @@ def test_execution_summary_failed():
     assert "*Pull Request:*" not in comment
 
 
-def test_execution_summary_partial():
+def test_code_generation_summary_partial():
     """Test formatting partial execution summary."""
     summary = {
         "ticket_key": "AOS-48",
@@ -317,9 +317,9 @@ def test_execution_summary_partial():
         "status": "partial",
     }
 
-    comment = format_execution_summary_comment(summary)
+    comment = format_code_generation_summary_comment(summary)
 
-    assert "# ⚠️ Execution Summary" in comment
+    assert "# ⚠️ Code Generation Summary" in comment
     assert "*Status:* PARTIAL" in comment
     assert "*Build:* pass" in comment
     assert "*Tests:* fail" in comment

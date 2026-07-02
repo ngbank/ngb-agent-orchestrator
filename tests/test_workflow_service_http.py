@@ -297,7 +297,7 @@ def _make_detail(
         updated_at="2026-06-22T00:00:00",
         pr_url=None,
         work_plan=None,
-        execution_summary=None,
+        code_generation_summary=None,
         clarification_history=[],
         pr_comments=None,
         usage_summary={},
@@ -729,7 +729,7 @@ def _expected_run_result(workflow_id: str = "wf-1") -> WorkflowRunResult:
         workflow_id=workflow_id,
         ticket_key="AOS-143",
         final_status=WorkflowStatus.PENDING_PR_APPROVAL,
-        execution_summary={"status": "success"},
+        code_generation_summary={"status": "success"},
         pr_url="https://example.test/pr/1",
     )
 

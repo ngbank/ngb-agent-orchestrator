@@ -106,7 +106,7 @@ def _handle_run(
 
         if result.final_status == WorkflowStatus.COMPLETED:
             click.echo("🎉 Workflow completed successfully")
-            common._post_execution_comment(ticket, result.execution_summary)
+            common._post_execution_comment(ticket, result.code_generation_summary)
             return
 
         # Graph paused at await_approval without raising GraphInterrupt

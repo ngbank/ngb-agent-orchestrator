@@ -6,7 +6,7 @@ from state.workflow_status import WorkflowStatus
 def _base_state(status="success", pr_url="https://github.com/ngbank/repo/pull/5", exec_error=None):
     return {
         "workflow_id": "wf-123",
-        "execution_summary": {
+        "code_generation_summary": {
             "status": status,
             "branch": "feature/AOS-120",
             "build": "pass",
@@ -26,7 +26,7 @@ def _run(state):
             return_value={},
         ),
         patch("orchestrator.code_generator.nodes.persist_results.update_usage_summary"),
-        patch("orchestrator.code_generator.nodes.persist_results.update_execution_summary"),
+        patch("orchestrator.code_generator.nodes.persist_results.update_code_generation_summary"),
         patch("orchestrator.code_generator.nodes.persist_results.update_status") as mock_status,
     ):
         result = persist_results(state)

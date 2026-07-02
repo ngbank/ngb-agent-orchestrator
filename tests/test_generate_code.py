@@ -24,14 +24,14 @@ def mock_goose_session():
 
 
 # ---------------------------------------------------------------------------
-# execution_failure_summary (shared helper)
+# code_generation_failure_summary (shared helper)
 # ---------------------------------------------------------------------------
 
 
-def test_execution_failure_summary_semantics():
-    from orchestrator.shared.repo_setup.nodes.common import execution_failure_summary
+def test_code_generation_failure_summary_semantics():
+    from orchestrator.shared.repo_setup.nodes.common import code_generation_failure_summary
 
-    summary = execution_failure_summary("AOS-63", "boom")
+    summary = code_generation_failure_summary("AOS-63", "boom")
 
     assert summary == {
         "ticket_key": "AOS-63",
@@ -145,7 +145,7 @@ def test_run_goose_passes_existing_branch_and_comments():
         "work_plan_path": "/tmp/workplan.json",
         "summary_path": "/tmp/summary.json",
         "reasoning_path": "/tmp/reasoning.txt",
-        "execution_summary": {"branch": "feature/AOS-92+test"},
+        "code_generation_summary": {"branch": "feature/AOS-92+test"},
         "pr_comments": "Fix typo in line 42",
     }
 
@@ -288,7 +288,7 @@ def test_persist_results_transitions_to_pending_pr_approval_on_success():
 
     state = {
         "workflow_id": "wf-123",
-        "execution_summary": {
+        "code_generation_summary": {
             "ticket_key": "AOS-92",
             "branch": "feature/AOS-92+test",
             "build": "pass",
@@ -305,7 +305,7 @@ def test_persist_results_transitions_to_pending_pr_approval_on_success():
         patch(
             "orchestrator.code_generator.nodes.persist_results.update_status"
         ) as mock_update_status,
-        patch("orchestrator.code_generator.nodes.persist_results.update_execution_summary"),
+        patch("orchestrator.code_generator.nodes.persist_results.update_code_generation_summary"),
         patch("orchestrator.code_generator.nodes.persist_results.update_usage_summary"),
         patch(
             "orchestrator.code_generator.nodes.persist_results.aggregate_token_usage",
@@ -327,7 +327,7 @@ def test_persist_results_transitions_to_failed_on_exec_error():
 
     state = {
         "workflow_id": "wf-123",
-        "execution_summary": {
+        "code_generation_summary": {
             "ticket_key": "AOS-92",
             "status": "failed",
             "error": "git clone failed",
@@ -345,7 +345,7 @@ def test_persist_results_transitions_to_failed_on_exec_error():
         patch(
             "orchestrator.code_generator.nodes.persist_results.update_status"
         ) as mock_update_status,
-        patch("orchestrator.code_generator.nodes.persist_results.update_execution_summary"),
+        patch("orchestrator.code_generator.nodes.persist_results.update_code_generation_summary"),
     ):
         result = persist_results(state)
 

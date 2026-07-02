@@ -403,7 +403,7 @@ class TestStart:
                     "workflow_id": wf_id,
                     "ticket_key": "AOS-22",
                     "approval_decision": "approved",
-                    "execution_summary": {"status": "success", "pr_url": "http://pr/1"},
+                    "code_generation_summary": {"status": "success", "pr_url": "http://pr/1"},
                 }
             )
         )
@@ -436,7 +436,7 @@ class TestResumeOperations:
                 values={
                     "workflow_id": wf_id,
                     "ticket_key": "AOS-30",
-                    "execution_summary": {
+                    "code_generation_summary": {
                         "status": "success",
                         "pr_url": "http://pr/30",
                     },
@@ -458,7 +458,7 @@ class TestResumeOperations:
                 values={
                     "workflow_id": wf_id,
                     "ticket_key": "AOS-31",
-                    "execution_summary": {"status": "error", "error": "build broke"},
+                    "code_generation_summary": {"status": "error", "error": "build broke"},
                 }
             )
         )
@@ -562,7 +562,7 @@ class TestRetry:
             values={
                 "workflow_id": wf_id,
                 "ticket_key": "AOS-41",
-                "execution_summary": {"status": "success", "pr_url": "http://pr/41"},
+                "code_generation_summary": {"status": "success", "pr_url": "http://pr/41"},
             }
         )
         graph = FakeGraph(state=initial, history=history, post_stream_state=post)

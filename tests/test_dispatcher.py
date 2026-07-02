@@ -423,7 +423,7 @@ class TestPostExecutionComment:
         """Test that pr_url from the execution summary is posted to JIRA and echoed."""
         from dispatcher.commands.common import _post_execution_comment
 
-        execution_summary = {
+        code_generation_summary = {
             "ticket_key": "AOS-42",
             "branch": "feature/AOS-42+branch-push-and-pr",
             "build": "pass",
@@ -436,7 +436,7 @@ class TestPostExecutionComment:
 
         with patch("dispatcher.commands.common.JiraClient") as mock_jira_class:
             mock_jira = mock_jira_class.return_value
-            _post_execution_comment("AOS-42", execution_summary)
+            _post_execution_comment("AOS-42", code_generation_summary)
             mock_jira.post_comment.assert_called_once()
             call_args = mock_jira.post_comment.call_args
             assert call_args[0][0] == "AOS-42"
@@ -451,7 +451,7 @@ class TestPostExecutionComment:
             mock_jira_class.assert_not_called()
 
     def test_skips_when_no_summary(self):
-        """Test that no JIRA call is made when execution_summary is None."""
+        """Test that no JIRA call is made when code_generation_summary is None."""
         from dispatcher.commands.common import _post_execution_comment
 
         with patch("dispatcher.commands.common.JiraClient") as mock_jira_class:
@@ -482,7 +482,7 @@ class TestPostExecutionComment:
                 return True
 
         fake = FakeCommentPoster()
-        execution_summary = {
+        code_generation_summary = {
             "ticket_key": "AOS-100",
             "branch": "feature/AOS-100",
             "build": "pass",
@@ -493,7 +493,7 @@ class TestPostExecutionComment:
             "status": "success",
         }
         with patch("dispatcher.commands.common.JiraClient") as mock_jira_class:
-            _post_execution_comment("AOS-100", execution_summary, comment_poster=fake)
+            _post_execution_comment("AOS-100", code_generation_summary, comment_poster=fake)
             mock_jira_class.assert_not_called()
 
         assert len(fake.calls) == 1
@@ -793,7 +793,7 @@ class TestHandleApproveFailedExecution:
             values={
                 "workflow_id": workflow_id,
                 "ticket_key": "TEST-123",
-                "execution_summary": failed_summary,
+                "code_generation_summary": failed_summary,
             }
         )
         service = _make_test_service(graph=mock_graph)
@@ -832,7 +832,7 @@ class TestHandleApproveFailedExecution:
             values={
                 "workflow_id": workflow_id,
                 "ticket_key": "TEST-123",
-                "execution_summary": success_summary,
+                "code_generation_summary": success_summary,
             }
         )
         service = _make_test_service(graph=mock_graph)
@@ -848,7 +848,7 @@ class TestHandleApproveFailedExecution:
         assert "awaiting PR approval" in result.output
 
     def test_approve_marks_failed_when_summary_absent(self, test_db, cli_runner):
-        """When execution_summary is missing entirely, status must be FAILED."""
+        """When code_generation_summary is missing entirely, status must be FAILED."""
         workflow_id = self._make_pending_workflow("TEST-123")
 
         mock_graph = Mock()
@@ -857,7 +857,7 @@ class TestHandleApproveFailedExecution:
             values={
                 "workflow_id": workflow_id,
                 "ticket_key": "TEST-123",
-                # no execution_summary key
+                # no code_generation_summary key
             }
         )
         service = _make_test_service(graph=mock_graph)
@@ -892,7 +892,7 @@ class TestHandleApproveFailedExecution:
             values={
                 "workflow_id": workflow_id,
                 "ticket_key": "TEST-123",
-                "execution_summary": partial_summary,
+                "code_generation_summary": partial_summary,
             }
         )
         service = _make_test_service(graph=mock_graph)
