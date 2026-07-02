@@ -26,6 +26,12 @@
 #   export ORCHESTRATOR_MODE=remote
 #   export ORCHESTRATOR_URL=http://localhost:8080
 #   # plus ORCHESTRATOR_TOKEN if ORCHESTRATOR_API_TOKEN is set in .env
+#
+# Prefer `docker compose` over raw `docker run --env-file .env`: unlike
+# Python's load_dotenv(), `docker run --env-file` does not strip quotes from
+# values (e.g. JIRA_URL="https://...") and passes them through literally,
+# breaking anything that parses them as URLs. Compose's env_file handling
+# does not have this problem.
 
 services:
   orchestrator:
@@ -42,6 +48,12 @@ services:
       ORCHESTRATOR_HOST: "0.0.0.0"
       ORCHESTRATOR_PORT: "8080"
       ORCHESTRATOR_LOG_LEVEL: "info"
+      # .env's GOOSE_MCP_PYTHON is a host-absolute path written by
+      # setup-env.sh (e.g. /Users/.../.venv/bin/python) for the host CLI.
+      # That path doesn't exist in the container, which breaks the
+      # generate_code recipe's stdio MCP extension. Override it here so the
+      # container falls back to its own `python` on PATH.
+      GOOSE_MCP_PYTHON: "python"
     volumes:
       - ${XDG_STATE_HOME:-$HOME/.local/state}/ngb-agent-orchestrator:/home/orchestrator/.local/state/ngb-agent-orchestrator
     restart: unless-stopped

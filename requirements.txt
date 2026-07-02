@@ -38,6 +38,10 @@ langgraph-checkpoint-sqlite>=3.1.0
 # needed to run `litellm --config ... --port ...` as a subprocess proxy server.
 litellm>=1.88.1
 litellm-proxy-extras==0.4.73
+# litellm's proxy startup lifespan unconditionally imports redis (as of
+# 1.90.2) even when no Redis cache is configured; not declared as a litellm
+# dependency outside the litellm[proxy] extras we deliberately avoid above.
+redis>=5.0.0
 fastapi>=0.136.3
 uvicorn>=0.49.0
 uvloop>=0.21.0; sys_platform != "win32"
