@@ -138,6 +138,15 @@ if $DO_DOCKER; then
             error "Docker daemon is not reachable. Start Docker Desktop and retry."
         fi
     fi
+    # orchestrator-server-ctl and docker-compose.yml both drive the container
+    # via `docker compose`. Docker Desktop bundles this as a built-in plugin,
+    # but Podman's docker-compatible CLI does not — it shells out to a
+    # separate `docker-compose` binary on PATH, which isn't installed by
+    # default. Check the actual capability (not just the binary) so this
+    # works regardless of which provider satisfies it.
+    if ! "$DOCKER_BIN" compose version &>/dev/null; then
+        error "'docker compose' is not available via ${DOCKER_BIN}. Install with: brew install docker-compose"
+    fi
 fi
 
 success "Prerequisites satisfied."

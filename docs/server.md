@@ -55,8 +55,7 @@ are doing right now.
 |---|---|---|
 | Quick debugging — want stdout in your face, will Ctrl-C when done | `orchestrator-server` | foreground; dies with terminal |
 | Hot reload while editing server code | `uvicorn orchestrator.server.app:app --reload` | foreground; dies with terminal |
-| Want it running in the background while you do other work | `orchestrator-server-ctl start` | detached; survives terminal close |
-| Want it isolated (different Python, persistent volumes, prod-like) | `docker compose up` | container; survives terminal close |
+| Want it running in the background, isolated, prod-like (recommended) | `orchestrator-server-ctl start` | container; survives terminal close |
 
 ### 1 — Foreground console script
 
@@ -80,39 +79,43 @@ uvicorn orchestrator.server.app:app --host 0.0.0.0 --port 8080 --reload
 Restarts the server on file changes — useful when editing
 `orchestrator/server/` itself.
 
-### 3 — Detached background process (recommended for local dev)
+### 3 — Container, via `orchestrator-server-ctl` (recommended for local dev)
 
 The repo ships a thin Bash wrapper at
-[`bin/orchestrator-server-ctl`](../bin/orchestrator-server-ctl) that
-runs the console script under `nohup` + `disown`, so the server
-survives the terminal that launched it (the spawned process is
-reparented to PID 1). `bin/` is placed on `$PATH` by `.envrc`, so any
-direnv-allowed shell can call the helper bare:
+[`bin/orchestrator-server-ctl`](../bin/orchestrator-server-ctl) around
+`docker compose` (see [Running with Docker](#running-with-docker) below
+for what's actually inside the image / compose file). `bin/` is placed
+on `$PATH` by `.envrc`, so any direnv-allowed shell can call the helper
+bare:
 
 ```bash
-orchestrator-server-ctl start          # start detached; ~5s readiness probe
-orchestrator-server-ctl status         # pid, bind, /healthz state
-orchestrator-server-ctl logs           # tail the server log
-orchestrator-server-ctl logs -f        # follow it
+orchestrator-server-ctl start          # docker compose up -d --build; ~10s readiness probe
+orchestrator-server-ctl start --no-build   # skip the rebuild, just (re)start the existing image
+orchestrator-server-ctl status         # container state + /healthz probe
+orchestrator-server-ctl logs           # tail container logs
+orchestrator-server-ctl logs -f        # follow them
 orchestrator-server-ctl restart
-orchestrator-server-ctl stop           # SIGTERM, then SIGKILL after 10s
+orchestrator-server-ctl stop           # docker compose down
 ```
 
-Runtime files live in `.run/` at the repo root (gitignored):
+The container survives the terminal that launched it for free — `docker
+compose up -d` hands it off to the Docker/Podman daemon, a separate
+long-running process tree from your shell. There's no PID file or
+`nohup`/`disown` involved; that's only needed for detaching *native*
+child processes, and a container was never a child of your shell to
+begin with.
 
-| File | Purpose |
-|---|---|
-| `.run/orchestrator-server.pid` | PID of the detached server |
-| `.run/orchestrator-server.log` | Combined stdout + stderr |
+Requires `docker compose` to be available (`docker compose version`
+succeeds). Docker Desktop bundles this out of the box; Podman's
+docker-compatible CLI does not and needs a separate `docker-compose`
+binary on `PATH` — `./setup-env.sh --docker` checks for this and tells
+you to `brew install docker-compose` if it's missing.
 
-The helper honours the same `ORCHESTRATOR_HOST` / `ORCHESTRATOR_PORT`
-env vars as `orchestrator-server` itself (probe target is rewritten to
-`127.0.0.1` when bound to `0.0.0.0`). Override `ORCHESTRATOR_RUN_DIR`
-to relocate the pid/log directory.
+### 4 — Container, via `docker compose` directly
 
-### 4 — Container
-
-See [Running with Docker](#running-with-docker) below.
+Same underlying mechanism as option 3, useful when you want raw compose
+output or flags `orchestrator-server-ctl` doesn't expose. See [Running
+with Docker](#running-with-docker) below.
 
 ### `orchestrator-server` vs `orchestrator-server-ctl`
 
@@ -121,12 +124,12 @@ They live at different layers:
 - **`orchestrator-server`** is the Python console script (registered by
     `pip install -e .` via [`pyproject.toml`](../pyproject.toml)) that
     invokes `orchestrator.server.app:run()` and boots uvicorn in the
-    **foreground**. This is the actual server binary.
-- **`orchestrator-server-ctl`** is a Bash lifecycle wrapper around it
-    (`start` / `stop` / `restart` / `status` / `logs`). It ultimately
-    spawns the same `orchestrator-server` binary — it just detaches the
-    process, tracks the PID, captures logs, and adds an idempotency
-    guard so a second `start` doesn't spawn a duplicate.
+    **foreground**. This is what actually runs inside the container
+    (it's the Dockerfile's `CMD`).
+- **`orchestrator-server-ctl`** is a Bash lifecycle wrapper
+    (`start` / `stop` / `restart` / `status` / `logs`) around `docker
+    compose`, which builds the image (containing `orchestrator-server`
+    as its entrypoint) and runs it as a container.
 
 Once running:
 
@@ -180,6 +183,16 @@ docker run --rm -p 8080:8080 \
     -v "${XDG_STATE_HOME:-$HOME/.local/state}/ngb-agent-orchestrator:/home/orchestrator/.local/state/ngb-agent-orchestrator" \
     ngb-orchestrator:dev
 ```
+
+> **Prefer `orchestrator-server-ctl` / `docker compose` over this.** Unlike
+> Python's `load_dotenv()` (and unlike Compose's own `env_file` handling),
+> `docker run --env-file` does not strip quotes from values — `JIRA_URL="https://..."`
+> in `.env` gets passed through *including the quote characters*, which
+> breaks anything that parses it as a URL. `docker-compose.yml` also sets
+> `GOOSE_MCP_PYTHON=python` to override `.env`'s host-absolute venv path
+> (which doesn't exist in the container); a bare `docker run` needs the
+> same override (`-e GOOSE_MCP_PYTHON=python`) or the `generate_code`
+> recipe's MCP extension will fail to start.
 
 ### Layout inside the image
 

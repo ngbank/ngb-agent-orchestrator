@@ -1,20 +1,26 @@
 #!/usr/bin/env bash
-# orchestrator-server-ctl — start / stop / inspect the local orchestrator
-# HTTP server as a detached background process.
+# orchestrator-server-ctl — start / stop / inspect the orchestrator HTTP
+# server running as a container (via `docker compose`, see docker-compose.yml).
 #
 # Usage:
-#   orchestrator-server-ctl start            # detach + return immediately
-#   orchestrator-server-ctl stop             # graceful SIGTERM, then SIGKILL
-#   orchestrator-server-ctl restart
-#   orchestrator-server-ctl status           # PID + /healthz probe
-#   orchestrator-server-ctl logs [-f]        # tail (or follow) the server log
+#   orchestrator-server-ctl start [--no-build]   # up -d (rebuilds by default)
+#   orchestrator-server-ctl stop                 # docker compose down
+#   orchestrator-server-ctl restart [--no-build]
+#   orchestrator-server-ctl status               # container state + /healthz probe
+#   orchestrator-server-ctl logs [-f]             # tail (or follow) container logs
 #
 # Lives at `bin/` and is put on $PATH by `.envrc` (via `PATH_add bin`), so
 # direnv-allowed shells can call it bare.
 #
-# The server is launched via the `orchestrator-server` console script
-# (provided by `pip install -e .`) and reads ORCHESTRATOR_HOST/PORT/etc
-# from the environment — see docs/server.md and docs/configuration.md.
+# The container survives terminal closure on its own — `docker compose up -d`
+# hands it off to the Docker/Podman daemon, which is a separate long-running
+# process tree from your shell. There is no nohup/PID-file dance needed here
+# (unlike a native background process), and none is used.
+#
+# Requires `docker compose` (or `podman compose` via an external
+# `docker-compose` provider on PATH — see setup-env.sh --docker, which checks
+# for this). Config (ports, volumes, env) lives in docker-compose.yml, not
+# in this script.
 
 set -euo pipefail
 
@@ -23,19 +29,14 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+COMPOSE_FILE="$REPO_ROOT/docker-compose.yml"
 
-RUN_DIR="${ORCHESTRATOR_RUN_DIR:-$REPO_ROOT/.run}"
-PID_FILE="$RUN_DIR/orchestrator-server.pid"
-LOG_FILE="$RUN_DIR/orchestrator-server.log"
+CONTAINER_NAME="ngb-orchestrator"
+SERVICE_NAME="orchestrator"
 
-HOST="${ORCHESTRATOR_HOST:-0.0.0.0}"
+# Host-side port from docker-compose.yml's `ports: - "8080:8080"` mapping.
 PORT="${ORCHESTRATOR_PORT:-8080}"
-# Hostname used for the /healthz probe — 0.0.0.0 isn't routable on macOS.
-PROBE_HOST="$HOST"
-if [[ "$PROBE_HOST" == "0.0.0.0" || -z "$PROBE_HOST" ]]; then
-    PROBE_HOST="127.0.0.1"
-fi
-HEALTH_URL="http://$PROBE_HOST:$PORT/healthz"
+HEALTH_URL="http://127.0.0.1:$PORT/healthz"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -43,140 +44,122 @@ HEALTH_URL="http://$PROBE_HOST:$PORT/healthz"
 log()  { printf '[orch-ctl] %s\n' "$*" >&2; }
 die()  { log "ERROR: $*"; exit 1; }
 
-ensure_run_dir() { mkdir -p "$RUN_DIR"; }
-
-# Echo the PID if the recorded process is alive; otherwise echo nothing.
-running_pid() {
-    [[ -f "$PID_FILE" ]] || return 0
-    local pid
-    pid="$(cat "$PID_FILE" 2>/dev/null || true)"
-    [[ -n "$pid" ]] || return 0
-    if kill -0 "$pid" 2>/dev/null; then
-        printf '%s' "$pid"
+# Prefer docker; fall back to podman (which ships a docker-compatible CLI on
+# macOS). Mirrors the detection in setup-env.sh --docker.
+resolve_docker_bin() {
+    if command -v docker &>/dev/null; then
+        echo "docker"
+    elif command -v podman &>/dev/null; then
+        echo "podman"
+    else
+        die "Neither 'docker' nor 'podman' is on PATH. Install Docker Desktop or Podman."
     fi
 }
 
-require_binary() {
-    command -v "$1" >/dev/null 2>&1 \
-        || die "$1 not found on PATH — run 'pip install -e .' inside .venv and re-allow direnv"
+DOCKER_BIN="$(resolve_docker_bin)"
+
+compose() {
+    "$DOCKER_BIN" compose -f "$COMPOSE_FILE" "$@"
+}
+
+require_compose() {
+    "$DOCKER_BIN" compose version &>/dev/null \
+        || die "'docker compose' is not available via $DOCKER_BIN. Install with: brew install docker-compose (see setup-env.sh --docker)"
+}
+
+# Echo the container's state (e.g. "running") or nothing if it doesn't exist.
+container_state() {
+    "$DOCKER_BIN" inspect -f '{{.State.Status}}' "$CONTAINER_NAME" 2>/dev/null || true
 }
 
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
 cmd_start() {
-    require_binary orchestrator-server
-    ensure_run_dir
+    require_compose
 
-    local pid
-    pid="$(running_pid)"
-    if [[ -n "$pid" ]]; then
-        log "already running (pid $pid) — $HEALTH_URL"
+    local build_args=(--build)
+    if [[ "${1:-}" == "--no-build" ]]; then
+        build_args=()
+    fi
+
+    local state
+    state="$(container_state)"
+    if [[ "$state" == "running" ]]; then
+        log "already running — $HEALTH_URL"
         return 0
     fi
 
-    # Stale pid file from a previous crash.
-    if [[ -f "$PID_FILE" ]]; then
-        log "removing stale pid file ($PID_FILE)"
-        rm -f "$PID_FILE"
-    fi
-
-    log "starting orchestrator-server on $HOST:$PORT (log: $LOG_FILE)"
-
-    # Detach: nohup keeps the child alive after the launching shell exits,
-    # `</dev/null` releases stdin, and `disown` removes it from the shell's
-    # job table so the child isn't sent SIGHUP on shell close.
-    nohup orchestrator-server >>"$LOG_FILE" 2>&1 </dev/null &
-    local child_pid=$!
-    disown "$child_pid" 2>/dev/null || true
-    echo "$child_pid" > "$PID_FILE"
+    log "starting $CONTAINER_NAME via docker compose (${build_args[*]:-no build})..."
+    compose up -d "${build_args[@]}" "$SERVICE_NAME"
 
     # Brief readiness probe (don't block forever — log the user's recourse).
     local i
-    for i in 1 2 3 4 5 6 7 8 9 10; do
-        if ! kill -0 "$child_pid" 2>/dev/null; then
-            rm -f "$PID_FILE"
-            die "process exited during startup — inspect $LOG_FILE"
+    for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+        state="$(container_state)"
+        if [[ "$state" != "running" ]]; then
+            die "container exited during startup (state: ${state:-unknown}) — inspect: $DOCKER_BIN logs $CONTAINER_NAME"
         fi
         if curl -fsS -o /dev/null -m 2 "$HEALTH_URL" 2>/dev/null; then
-            log "ready: $HEALTH_URL (pid $child_pid)"
+            log "ready: $HEALTH_URL"
             return 0
         fi
         sleep 0.5
     done
 
-    log "started (pid $child_pid) — healthcheck not green yet, see $LOG_FILE"
+    log "started — healthcheck not green yet, see: orchestrator-server-ctl logs"
 }
 
 cmd_stop() {
-    local pid
-    pid="$(running_pid)"
-    if [[ -z "$pid" ]]; then
-        [[ -f "$PID_FILE" ]] && rm -f "$PID_FILE"
+    require_compose
+
+    if [[ -z "$(container_state)" ]]; then
         log "not running"
         return 0
     fi
 
-    log "stopping pid $pid (SIGTERM)"
-    kill -TERM "$pid" 2>/dev/null || true
-
-    # Wait up to ~10s for graceful shutdown.
-    local i
-    for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
-        if ! kill -0 "$pid" 2>/dev/null; then
-            rm -f "$PID_FILE"
-            log "stopped"
-            return 0
-        fi
-        sleep 0.5
-    done
-
-    log "process still alive after 10s — sending SIGKILL"
-    kill -KILL "$pid" 2>/dev/null || true
-    rm -f "$PID_FILE"
+    log "stopping $CONTAINER_NAME (docker compose down)"
+    compose down
+    log "stopped"
 }
 
 cmd_restart() {
     cmd_stop
-    cmd_start
+    cmd_start "$@"
 }
 
 cmd_status() {
-    local pid
-    pid="$(running_pid)"
-    if [[ -z "$pid" ]]; then
-        if [[ -f "$PID_FILE" ]]; then
-            echo "status: stopped (stale pid file at $PID_FILE)"
-        else
-            echo "status: stopped"
-        fi
+    local state
+    state="$(container_state)"
+    if [[ -z "$state" ]]; then
+        echo "status: stopped (no container named $CONTAINER_NAME)"
         return 1
     fi
 
-    echo "status:  running"
-    echo "pid:     $pid"
-    echo "pidfile: $PID_FILE"
-    echo "logfile: $LOG_FILE"
-    echo "bind:    $HOST:$PORT"
+    echo "status:    $state"
+    echo "container: $CONTAINER_NAME"
+    echo "port:      $PORT"
 
-    if curl -fsS -o /dev/null -m 2 "$HEALTH_URL" 2>/dev/null; then
-        echo "health:  ok ($HEALTH_URL)"
-    else
-        echo "health:  unreachable ($HEALTH_URL) — server may still be starting"
+    if [[ "$state" == "running" ]]; then
+        if curl -fsS -o /dev/null -m 2 "$HEALTH_URL" 2>/dev/null; then
+            echo "health:    ok ($HEALTH_URL)"
+        else
+            echo "health:    unreachable ($HEALTH_URL) — container may still be starting"
+        fi
     fi
 }
 
 cmd_logs() {
-    [[ -f "$LOG_FILE" ]] || die "no log file at $LOG_FILE"
+    require_compose
     if [[ "${1:-}" == "-f" || "${1:-}" == "--follow" ]]; then
-        tail -n 200 -f "$LOG_FILE"
+        compose logs -f --tail 200 "$SERVICE_NAME"
     else
-        tail -n "${1:-100}" "$LOG_FILE"
+        compose logs --tail "${1:-100}" "$SERVICE_NAME"
     fi
 }
 
 usage() {
-    sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 # ---------------------------------------------------------------------------
