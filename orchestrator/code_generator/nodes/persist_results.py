@@ -27,8 +27,8 @@ def persist_results(state: PersistResultsInputState) -> PersistResultsOutputStat
     if workflow_id:
         if not exec_error:
             try:
-                usage = aggregate_token_usage(workflow_id, "execute")
-                update_usage_summary(workflow_id, "execute", usage)
+                usage = aggregate_token_usage(workflow_id, "generate_code")
+                update_usage_summary(workflow_id, "generate_code", usage)
             except Exception as exc:  # noqa: BLE001
                 click.echo(f"⚠️  Failed to store usage summary: {exc}", err=True)
 

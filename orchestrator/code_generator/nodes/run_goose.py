@@ -56,7 +56,7 @@ def run_goose(state: RunGooseInputState) -> dict:
 
     logger.info("=== goose run generate recipe ===")
     with goose_session(
-        workflow_id=workflow_id, stage="execute", ticket_key=ticket_key
+        workflow_id=workflow_id, stage="generate_code", ticket_key=ticket_key
     ) as goose_env:
         result = run_and_tee(
             [

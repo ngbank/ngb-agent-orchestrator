@@ -24,7 +24,7 @@ def build_clone_repo_node(mode: str):
             click.echo(f"❌ {error_msg}", err=True)
             return failure_update(state, error_msg, mode)
 
-        prefix = f"ngb-{'execute' if mode == 'code_generator' else 'plan'}-{workflow_id}-"
+        prefix = f"ngb-{'generate_code' if mode == 'code_generator' else 'plan'}-{workflow_id}-"
 
         try:
             logger.info("=== git clone %s ===", repo_url)
