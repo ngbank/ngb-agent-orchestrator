@@ -36,7 +36,7 @@ langgraph-checkpoint-sqlite>=3.1.0
 # Do NOT use litellm[proxy] extras: they pin rich==13.9.4 which conflicts with
 # textual>=8.2.7 (requires rich>=14.2.0). Instead, install only the packages
 # needed to run `litellm --config ... --port ...` as a subprocess proxy server.
-litellm>=1.88.1
+litellm>=1.90.2
 litellm-proxy-extras==0.4.73
 # litellm's proxy startup lifespan unconditionally imports redis (as of
 # 1.90.2) even when no Redis cache is configured; not declared as a litellm
