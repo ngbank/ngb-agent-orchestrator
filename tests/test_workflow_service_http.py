@@ -24,7 +24,7 @@ import httpx
 import pytest
 
 from orchestrator.server.app import create_app
-from orchestrator.server.auth import API_TOKEN_ENV
+from orchestrator.server.auth import ADMIN_ALLOW_UNAUTHENTICATED_ENV, API_TOKEN_ENV
 from orchestrator.workflow_service import (
     HttpWorkflowService,
     LocalWorkflowService,
@@ -335,8 +335,9 @@ def _build_http_service(
 
 @pytest.fixture
 def fake_service(monkeypatch) -> _FakeWorkflowService:
-    # Default: server auth disabled.
+    # Default: server auth disabled and no dev-mode admin escape hatch.
     monkeypatch.delenv(API_TOKEN_ENV, raising=False)
+    monkeypatch.delenv(ADMIN_ALLOW_UNAUTHENTICATED_ENV, raising=False)
     return _FakeWorkflowService()
 
 

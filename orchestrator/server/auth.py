@@ -11,6 +11,12 @@ hardening in a later epic.  Behaviour:
   tokens return ``401`` with a JSON error body.
 * The ``/healthz`` and OpenAPI endpoints are deliberately left open so
   load balancers and tooling can probe the service without credentials.
+* ``/admin/*`` endpoints follow a stricter posture: they refuse to serve
+  at all when ``ORCHESTRATOR_API_TOKEN`` is unset unless the operator
+  also sets ``ORCHESTRATOR_ALLOW_UNAUTHENTICATED_ADMIN`` to a truthy
+  value — a development-only escape hatch so the local CLI can invoke
+  destructive ops (``clear-db``, ``mark-interrupted``) without managing
+  a bearer token they don't otherwise need. See ``docs/server.md``.
 """
 
 from __future__ import annotations
@@ -21,6 +27,9 @@ from typing import Optional
 from fastapi import Header, HTTPException, status
 
 API_TOKEN_ENV = "ORCHESTRATOR_API_TOKEN"
+ADMIN_ALLOW_UNAUTHENTICATED_ENV = "ORCHESTRATOR_ALLOW_UNAUTHENTICATED_ADMIN"
+
+_TRUTHY = frozenset({"1", "true", "yes", "y", "on"})
 
 
 def _configured_token() -> Optional[str]:
@@ -38,6 +47,21 @@ def _configured_token() -> Optional[str]:
 def is_auth_enabled() -> bool:
     """Return True when ``ORCHESTRATOR_API_TOKEN`` is set to a non-empty value."""
     return _configured_token() is not None
+
+
+def is_admin_open_for_dev() -> bool:
+    """Return True when unauthenticated ``/admin/*`` access is enabled for dev.
+
+    Active only when ``ORCHESTRATOR_API_TOKEN`` is unset **and**
+    ``ORCHESTRATOR_ALLOW_UNAUTHENTICATED_ADMIN`` is set to a truthy value
+    (``1``, ``true``, ``yes``, ``y``, ``on``; case-insensitive). When
+    ``ORCHESTRATOR_API_TOKEN`` is configured, this flag is ignored and
+    the normal bearer-token gate applies.
+    """
+    if _configured_token() is not None:
+        return False
+    raw = os.environ.get(ADMIN_ALLOW_UNAUTHENTICATED_ENV, "").strip().lower()
+    return raw in _TRUTHY
 
 
 def require_bearer_token(authorization: Optional[str] = Header(default=None)) -> None:
@@ -70,19 +94,28 @@ def require_admin_token(authorization: Optional[str] = Header(default=None)) -> 
     This avoids exposing destructive operations on an open development
     server.
 
-    * ``ORCHESTRATOR_API_TOKEN`` unset → ``503 Service Unavailable`` with a
-      message instructing the operator to configure the token.
+    * ``ORCHESTRATOR_API_TOKEN`` unset **and**
+      ``ORCHESTRATOR_ALLOW_UNAUTHENTICATED_ADMIN`` truthy → request is
+      allowed anonymously (dev-only escape hatch; the server logs a
+      warning at startup so the operator sees the open posture).
+    * ``ORCHESTRATOR_API_TOKEN`` unset with no escape hatch →
+      ``503 Service Unavailable`` with a message instructing the
+      operator to configure the token.
     * Token configured + missing/wrong ``Authorization`` header → ``401``
       (same wire format as :func:`require_bearer_token`).
-    * Token configured + matching header → request proceeds.
+    * Token configured + matching header → request proceeds. The
+      escape-hatch env var is ignored when the token is configured.
     """
     expected = _configured_token()
     if expected is None:
+        if is_admin_open_for_dev():
+            return
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
                 f"Admin endpoints are disabled; set {API_TOKEN_ENV} on the "
-                "server to enable them."
+                f"server to enable them (or {ADMIN_ALLOW_UNAUTHENTICATED_ENV}"
+                "=1 for local dev)."
             ),
         )
 
