@@ -50,6 +50,13 @@ services:
       dockerfile: Dockerfile
     image: ngb-orchestrator:dev
     container_name: ngb-orchestrator
+    # Inject `tini` as PID 1 so Python's subprocesses (goose + litellm proxy
+    # and any grandchildren they orphan) get reaped and SIGCHLD is delivered
+    # properly. Without this, running as PID 1 wedges the anyio threadpool
+    # the moment a workflow subprocess starts, taking `/healthz` and every
+    # other route down with it. Podman used to inject an init for us; Docker
+    # Engine (which Colima runs) does not — you have to opt in.
+    init: true
     ports:
       - "8080:8080"
     env_file:
