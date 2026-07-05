@@ -551,6 +551,25 @@ curl -N "http://localhost:8080/workflows/$WF_ID/logs?stage=workflow&after_offset
 
 `-N` disables curl's output buffering so frames render immediately.
 
+#### Event-loop safety
+
+Both SSE endpoints are FastAPI `async def` handlers, but every underlying
+`WorkflowService` method (`get`, `read_logs`, `stream_events`) is
+synchronous — the same protocol is used by `LocalWorkflowService`
+(direct SQLite + filesystem access) and `HttpWorkflowService` (blocking
+`httpx` calls). Calling those methods directly from the async handler
+would block the FastAPI event loop for the duration of each call and
+cause `/healthz` — plus every other route — to time out for as long as
+the stream is being polled.
+
+To avoid that, the SSE handlers offload every sync service call via
+`asyncio.to_thread(...)` so it runs on the anyio worker pool. Similarly,
+`LocalWorkflowService.read_logs` seeks to `after_offset` and reads only
+the new bytes since the last poll rather than re-reading the whole file
+into memory on every tick. Regression guards for both invariants live in
+`tests/test_sse_handlers.py` and
+`tests/test_workflow_service_local.py::TestReadLogs`.
+
 ---
 
 ## Auth stub

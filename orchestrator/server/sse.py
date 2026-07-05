@@ -77,13 +77,19 @@ async def stream_events_sse(
     ``EVENT_POLL_INTERVAL_S`` for new data and emits a heartbeat every
     ``HEARTBEAT_INTERVAL_S`` of idle time so proxies do not close the
     connection.
+
+    ``WorkflowService`` is a synchronous API; every call into it happens on
+    a worker thread via :func:`asyncio.to_thread` so the FastAPI event loop
+    stays free to service ``/healthz`` and other endpoints while the stream
+    is being consumed.
     """
     last_seq = max(0, after_seq)
     idle_elapsed = 0.0
 
     while True:
         emitted_any = False
-        for event in service.stream_events(workflow_id, after_seq=last_seq):
+        events = await asyncio.to_thread(_drain_events, service, workflow_id, last_seq)
+        for event in events:
             payload = {
                 "seq": event.seq,
                 "kind": event.kind,
@@ -95,12 +101,13 @@ async def stream_events_sse(
             idle_elapsed = 0.0
             yield _sse_frame(str(event.seq), json.dumps(payload))
 
-        detail = service.get(workflow_id)
+        detail = await asyncio.to_thread(service.get, workflow_id)
         if detail is not None and detail.status.is_terminal():
             # One last drain after the terminal transition in case the service
             # produced trailing events between the loop above and the status
             # check.
-            for event in service.stream_events(workflow_id, after_seq=last_seq):
+            events = await asyncio.to_thread(_drain_events, service, workflow_id, last_seq)
+            for event in events:
                 payload = {
                     "seq": event.seq,
                     "kind": event.kind,
@@ -128,6 +135,18 @@ async def stream_events_sse(
             idle_elapsed += EVENT_POLL_INTERVAL_S
 
 
+def _drain_events(service: WorkflowService, workflow_id: str, after_seq: int) -> list:
+    """Materialise the ``stream_events`` iterator on the calling thread.
+
+    ``WorkflowService.stream_events`` returns a synchronous iterator that
+    performs I/O (SQLite reads, langgraph state history walks) as it is
+    consumed.  When called from an async context that iteration must happen
+    on a worker thread; wrapping it in a helper keeps the ``to_thread``
+    call sites concise.
+    """
+    return list(service.stream_events(workflow_id, after_seq=after_seq))
+
+
 async def stream_logs_sse(
     service: WorkflowService,
     workflow_id: str,
@@ -143,6 +162,11 @@ async def stream_logs_sse(
     ``Last-Event-ID``) to resume after reconnect.
 
     When ``stage`` is ``None`` the canonical ``"workflow"`` stream is followed.
+
+    ``WorkflowService`` is a synchronous API; every call into it happens on
+    a worker thread via :func:`asyncio.to_thread` so the FastAPI event loop
+    stays free to service ``/healthz`` and other endpoints while the stream
+    is being consumed.
     """
     offsets: Dict[str, int] = {}
     if stage is not None:
@@ -154,7 +178,9 @@ async def stream_logs_sse(
     while True:
         emitted_any = False
         for st, offset in list(offsets.items()):
-            chunks = service.read_logs(workflow_id, stage=st, after_offset=offset)
+            chunks = await asyncio.to_thread(
+                service.read_logs, workflow_id, stage=st, after_offset=offset
+            )
             for chunk in chunks:
                 content_bytes = chunk.content.encode("utf-8")
                 end_offset = chunk.offset + len(content_bytes)
@@ -169,12 +195,14 @@ async def stream_logs_sse(
                 idle_elapsed = 0.0
                 yield _sse_frame(str(end_offset), json.dumps(payload))
 
-        detail = service.get(workflow_id)
+        detail = await asyncio.to_thread(service.get, workflow_id)
         if detail is not None and detail.status.is_terminal():
             # Drain once more to capture any bytes flushed between the loop
             # above and the terminal-status read.
             for st, offset in list(offsets.items()):
-                chunks = service.read_logs(workflow_id, stage=st, after_offset=offset)
+                chunks = await asyncio.to_thread(
+                    service.read_logs, workflow_id, stage=st, after_offset=offset
+                )
                 for chunk in chunks:
                     content_bytes = chunk.content.encode("utf-8")
                     end_offset = chunk.offset + len(content_bytes)

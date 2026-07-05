@@ -193,18 +193,34 @@ class LocalWorkflowService:
             return []
 
         path = workflow_logs_dir(workflow_id, ensure_dir=False) / WORKFLOW_LOG_FILENAME
-        if not path.exists():
+        try:
+            stat_result = path.stat()
+        except FileNotFoundError:
             return []
 
-        raw = path.read_bytes()
-        size = len(raw)
+        size = stat_result.st_size
         start = max(0, min(after_offset, size))
         if start >= size and after_offset > 0:
             # Caller is already caught up — skip emitting an empty chunk so
             # they can distinguish "no new bytes" from "no log file yet".
             return []
 
-        content_bytes = raw[start:]
+        if size == 0:
+            # File exists but has no bytes yet. Preserve the historical
+            # contract of returning one empty chunk so callers can tell the
+            # log file has been created.
+            content_bytes = b""
+        else:
+            # Read only the new bytes since ``after_offset``. A previous
+            # implementation did ``path.read_bytes()`` and sliced in memory,
+            # which is O(N) I/O per poll and — combined with sync calls from
+            # the SSE handler — could starve the FastAPI event loop on slow
+            # filesystems.
+            with path.open("rb") as fh:
+                if start:
+                    fh.seek(start)
+                content_bytes = fh.read(size - start)
+
         try:
             content = content_bytes.decode("utf-8")
         except UnicodeDecodeError:

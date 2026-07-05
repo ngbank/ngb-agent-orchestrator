@@ -233,6 +233,65 @@ class TestReadLogs:
         assert chunks[0].content == "workflow output here"
         assert Path(chunks[0].path) == workflow_log
 
+    def test_incremental_read_does_not_reread_entire_file(self, temp_db, repo, monkeypatch):
+        """``read_logs`` with ``after_offset > 0`` must seek instead of
+        reading the whole file into memory and slicing.
+
+        Regression guard: the previous implementation did
+        ``path.read_bytes()`` on every poll, which combined with the SSE
+        handler's sync calls could starve the FastAPI event loop on slow
+        filesystems.
+        """
+        wf_id = repo.create_workflow(ticket_key="AOS-8")
+        workflow_log = workflow_logs_dir(wf_id) / "workflow.log"
+        payload = "0123456789" * 100  # 1_000 bytes
+        workflow_log.write_text(payload, encoding="utf-8")
+
+        original_read_bytes = Path.read_bytes
+
+        def _fail_read_bytes(self: Path) -> bytes:
+            if self == workflow_log:
+                raise AssertionError(
+                    "read_logs must not call Path.read_bytes on the "
+                    "workflow log — it should seek to after_offset "
+                    "and read only new bytes."
+                )
+            return original_read_bytes(self)
+
+        monkeypatch.setattr(Path, "read_bytes", _fail_read_bytes)
+
+        svc = _make_service(repo, FakeGraph())
+        chunks = svc.read_logs(wf_id, after_offset=990)
+        assert len(chunks) == 1
+        assert chunks[0].offset == 990
+        assert chunks[0].content == payload[990:]
+
+    def test_returns_empty_chunk_when_file_exists_but_empty(self, temp_db, repo):
+        """Preserve the historical contract: a zero-byte log with
+        ``after_offset=0`` returns one empty chunk so callers can
+        distinguish 'log created, no output yet' from 'no log file'."""
+        wf_id = repo.create_workflow(ticket_key="AOS-9")
+        workflow_log = workflow_logs_dir(wf_id) / "workflow.log"
+        workflow_log.write_bytes(b"")
+
+        svc = _make_service(repo, FakeGraph())
+        chunks = svc.read_logs(wf_id)
+        assert len(chunks) == 1
+        assert chunks[0].content == ""
+        assert chunks[0].offset == 0
+
+    def test_returns_empty_list_when_caller_caught_up(self, temp_db, repo):
+        """When ``after_offset >= size`` and the caller has already read
+        past the current end of the file, ``read_logs`` returns ``[]``
+        rather than an empty chunk."""
+        wf_id = repo.create_workflow(ticket_key="AOS-10")
+        workflow_log = workflow_logs_dir(wf_id) / "workflow.log"
+        workflow_log.write_text("hello", encoding="utf-8")
+
+        svc = _make_service(repo, FakeGraph())
+        assert svc.read_logs(wf_id, after_offset=5) == []
+        assert svc.read_logs(wf_id, after_offset=100) == []
+
 
 # ---------------------------------------------------------------------------
 # History & stream_events
