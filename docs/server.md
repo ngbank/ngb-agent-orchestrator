@@ -99,17 +99,21 @@ orchestrator-server-ctl stop           # docker compose down
 ```
 
 The container survives the terminal that launched it for free — `docker
-compose up -d` hands it off to the Docker/Podman daemon, a separate
+compose up -d` hands it off to the Docker Engine daemon, a separate
 long-running process tree from your shell. There's no PID file or
 `nohup`/`disown` involved; that's only needed for detaching *native*
 child processes, and a container was never a child of your shell to
 begin with.
 
 Requires `docker compose` to be available (`docker compose version`
-succeeds). Docker Desktop bundles this out of the box; Podman's
-docker-compatible CLI does not and needs a separate `docker-compose`
-binary on `PATH` — `./setup-env.sh --docker` checks for this and tells
-you to `brew install docker-compose` if it's missing.
+succeeds). The org standardises on **Docker Engine** across Windows and
+macOS — on macOS that means [Colima](https://github.com/abiosoft/colima)
+(Docker Engine can't run natively on macOS, and Docker Desktop / Podman
+are not supported paths). See
+[Container runtime](#container-runtime) below for setup, including the
+`docker-compose` plugin wire-up and corporate TLS trust.
+`./setup-env.sh --docker` checks that `docker compose` resolves and
+prints a fix hint if it doesn't.
 
 ### 4 — Container, via `docker compose` directly
 
@@ -155,8 +159,63 @@ where the in-container code resolves its XDG default. No `DB_PATH` or
 `LOGS_DIR` overrides are needed.
 
 > **Linux note:** the container runs as UID 1001. Files created under the
-> bind-mounted directory inherit that ownership. On macOS / Podman this is
+> bind-mounted directory inherit that ownership. On macOS / Colima this is
 > remapped automatically by the VM's user namespace.
+
+### Container runtime
+
+The org standardises on **Docker Engine** across Windows and macOS.
+
+- **Windows:** Docker Engine via WSL2 (org-managed provisioning).
+- **Linux:** native Docker Engine (`apt install docker-ce` or equivalent).
+- **macOS:** Docker Engine can't run natively — use
+    [Colima](https://github.com/abiosoft/colima), which runs Docker
+    Engine inside a lightweight Linux VM (Apple Virtualization framework).
+    Docker Desktop, Podman, and OrbStack are **not** supported paths.
+
+#### macOS setup with Colima
+
+```bash
+# Install runtime + CLI + compose plugin
+brew install colima docker docker-compose docker-buildx docker-credential-helper
+
+# Wire brew's compose/buildx binaries into Docker's plugin dir so
+# `docker compose` (subcommand) resolves — not just `docker-compose`
+mkdir -p ~/.docker/cli-plugins
+ln -sf /opt/homebrew/opt/docker-compose/lib/docker/cli-plugins/docker-compose ~/.docker/cli-plugins/docker-compose
+ln -sf /opt/homebrew/opt/docker-buildx/bin/docker-buildx ~/.docker/cli-plugins/docker-buildx
+
+# Start the VM (adjust CPU/RAM/disk to taste)
+colima start --cpu 4 --memory 8 --disk 60 --vm-type vz --mount-type virtiofs
+
+# Point Docker CLI at Colima's context
+export DOCKER_CONTEXT=colima            # persist this in ~/.zshrc
+
+# Verify
+docker compose version
+docker run --rm hello-world
+```
+
+Auto-start on login (optional): `brew services start colima`.
+
+Colima registers itself as a Docker context (`docker context ls`), so
+the CLI, `orchestrator-server-ctl`, and `docker-compose.yml` all talk to
+the same daemon without extra config.
+
+> **Corporate TLS (Zscaler / MITM proxy):** if `docker pull` fails with
+> `x509: certificate signed by unknown authority`, the VM doesn't trust
+> the corp root CA. Export the CA from the macOS System keychain
+> (`security find-certificate -a -c "Zscaler" -p /Library/Keychains/System.keychain`),
+> drop the PEM under `$HOME` so it's visible through the virtiofs mount,
+> then inside the VM: `sudo cp <cert>.pem /usr/local/share/ca-certificates/<cert>.crt && sudo update-ca-certificates && sudo systemctl restart docker`.
+> Repeat after `colima delete` — the cert lives inside the VM, not on
+> the host.
+
+> **Stale plugin symlinks:** if you previously used OrbStack or Docker
+> Desktop, `~/.docker/cli-plugins/` may contain broken symlinks to
+> `/Applications/OrbStack.app/...`. `docker compose` will report
+> `unknown command: docker compose` even after installing the plugin.
+> Delete the stale entries and re-run the `ln -sf` commands above.
 
 ### Quick start with compose
 

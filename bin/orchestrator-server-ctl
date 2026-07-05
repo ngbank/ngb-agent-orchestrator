@@ -72,6 +72,43 @@ container_state() {
     "$DOCKER_BIN" inspect -f '{{.State.Status}}' "$CONTAINER_NAME" 2>/dev/null || true
 }
 
+# Fail fast if something other than our container already listens on $PORT.
+# Callers must ensure our container is NOT running before invoking this —
+# cmd_start does this via the container_state check above.
+#
+# Motivation: on macOS + Colima, Lima's hostagent silently gives up on port
+# forwarding when the host port is already bound. If a stray native
+# `orchestrator-server` was left running from an earlier session, the
+# container comes up "healthy" but all dispatcher/TUI requests to
+# localhost:$PORT hit the stray process (often hung) instead. Detecting
+# the collision here surfaces the real problem instead of a timeout an
+# hour later. See AOS-*/docs/server.md#container-runtime for the postmortem.
+check_port_free() {
+    # `lsof` is present on macOS by default and on most Linux dev images;
+    # degrade to a no-op if it's missing rather than blocking startup.
+    command -v lsof &>/dev/null || return 0
+
+    local listener
+    # `lsof` exits 1 when nothing matches — swallow that so `set -e`/`pipefail`
+    # don't abort the whole script when the port is (correctly) free.
+    listener="$( { lsof -nP -iTCP:"$PORT" -sTCP:LISTEN 2>/dev/null || true; } \
+                | awk 'NR==2 {print $2 "|" $1; exit}')"
+    [[ -n "$listener" ]] || return 0
+
+    local pid="${listener%%|*}"
+    local cmd="${listener##*|}"
+    local full_cmd
+    full_cmd="$(ps -o command= -p "$pid" 2>/dev/null || echo '?')"
+
+    die "port $PORT is already bound by PID $pid ($cmd) — not our container.
+    full command: $full_cmd
+    remediate:    kill $pid   (or: kill -9 $pid if it ignores SIGTERM)
+    then retry:   orchestrator-server-ctl start
+    common cause: a stray 'orchestrator-server' foreground process left running
+                  from an earlier session. On Colima the container would come
+                  up healthy but dispatcher traffic would still hit the stray."
+}
+
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
@@ -89,6 +126,9 @@ cmd_start() {
         log "already running — $HEALTH_URL"
         return 0
     fi
+
+    # Container isn't running, so nothing legitimate should own $PORT.
+    check_port_free
 
     log "starting $CONTAINER_NAME via docker compose (${build_args[*]:-no build})..."
     compose up -d "${build_args[@]}" "$SERVICE_NAME"

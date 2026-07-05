@@ -65,6 +65,7 @@ See [docs/architecture.md](docs/architecture.md) for a full sequence diagram and
 - Azure CLI (`az`) authenticated with `az login` (or equivalent workload identity on server)
 - A JIRA account on `mirandags.atlassian.net`
 - Azure Key Vault containing runtime secrets for JIRA, GitHub App, and provider API keys
+- (Only if running the containerised orchestrator server) A **Docker Engine**–compatible runtime providing `docker compose`. The org standardises on Docker Engine across Windows and macOS — on macOS use [Colima](https://github.com/abiosoft/colima), not Docker Desktop or Podman. See [docs/server.md](docs/server.md#container-runtime) for setup.
 
 ### Installation
 
