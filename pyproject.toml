@@ -19,6 +19,7 @@ include = ["dispatcher*", "orchestrator*", "otel*", "state*", "mcp_server*"]
 "orchestrator.work_planner.recipes" = ["*.yaml"]
 "orchestrator.work_planner.schemas" = ["*.json"]
 "orchestrator.code_generator.recipes" = ["*.yaml"]
+"state.migrations" = ["*.sql"]
 
 [tool.black]
 line-length = 100

@@ -148,18 +148,36 @@ Once running:
 The repo ships a multi-stage `Dockerfile` (Python 3.12-slim, non-root
 `orchestrator` user, default `CMD ["orchestrator-server"]`,
 `HEALTHCHECK` against `/healthz`) and a `docker-compose.yml` that
-bind-mounts the host's XDG state directory into the container so the
-local CLI and the containerised server share one SQLite DB and one
-per-workflow logs tree.
+bind-mounts the host's XDG state directory into the container for logs and
+overlays a Docker-managed named volume on the `db/` subdirectory for the
+SQLite database.
 
 The host directory is `${XDG_STATE_HOME:-$HOME/.local/state}/ngb-agent-orchestrator`.
 It is mounted into the container at
 `/home/orchestrator/.local/state/ngb-agent-orchestrator`, which is exactly
-where the in-container code resolves its XDG default. No `DB_PATH` or
-`LOGS_DIR` overrides are needed.
+where the in-container code resolves its XDG default. Per-workflow logs
+appear on the host under `logs/<workflow_id>/`.
+
+> **Why a named volume for the DB?** SQLite's file-locking and fsync
+> semantics are not reliable over macOS bind mounts (Colima virtiofs,
+> Docker Desktop gRPC-FUSE) and produce `disk I/O error` /
+> `database disk image is malformed` under load. The named volume lives
+> on the VM's ext4 filesystem and behaves like a native disk. The host
+> CLI does not need direct DB access because the dispatcher talks to the
+> server over HTTP (`ORCHESTRATOR_MODE=remote`); to inspect the DB, use
+> `docker cp` to pull `local.db` out of the container.
+
+> **Consequence for macOS users:** the local-mode CLI
+> (`ORCHESTRATOR_MODE` unset) writes to a *separate* host-side DB at
+> `~/.local/state/ngb-agent-orchestrator/db/local.db` and will not see
+> workflows created by the containerised server (and vice versa). While
+> the container is running, always drive it via `ORCHESTRATOR_MODE=remote`
+> so the CLI, TUI, and server all share the container's DB over HTTP.
+> The two DBs were never truly safe to share across the host↔VM boundary
+> — the previous shared-file layout worked until it silently corrupted.
 
 > **Linux note:** the container runs as UID 1001. Files created under the
-> bind-mounted directory inherit that ownership. On macOS / Colima this is
+> bind-mounted logs directory inherit that ownership. On macOS / Colima this is
 > remapped automatically by the VM's user namespace.
 
 ### Container runtime
@@ -240,6 +258,7 @@ docker build -t ngb-orchestrator:dev .
 docker run --rm -p 8080:8080 \
     --env-file .env \
     -v "${XDG_STATE_HOME:-$HOME/.local/state}/ngb-agent-orchestrator:/home/orchestrator/.local/state/ngb-agent-orchestrator" \
+    -v orchestrator-db:/home/orchestrator/.local/state/ngb-agent-orchestrator/db \
     ngb-orchestrator:dev
 ```
 
@@ -257,8 +276,8 @@ docker run --rm -p 8080:8080 \
 
 | Path | Purpose |
 |---|---|
-| `/home/orchestrator/.local/state/ngb-agent-orchestrator/db/local.db` | SQLite DB — bind-mount the host XDG state dir here to persist runs and share state with the host CLI |
-| `/home/orchestrator/.local/state/ngb-agent-orchestrator/logs/<workflow_id>/` | Per-workflow `workflow.log`, token usage, and `otel.jsonl` |
+| `/home/orchestrator/.local/state/ngb-agent-orchestrator/db/local.db` | SQLite DB — backed by a Docker named volume (`orchestrator-db`) to keep SQLite off the macOS bind-mount virtiofs/gRPC-FUSE layer |
+| `/home/orchestrator/.local/state/ngb-agent-orchestrator/logs/<workflow_id>/` | Per-workflow `workflow.log`, token usage, and `otel.jsonl` — bind-mounted to the host XDG state dir |
 | `/app/config/` | Read-only config baked into the image (recipes and the WorkPlan schema ship inside the installed `orchestrator` package) |
 | `/usr/local/bin/orchestrator-server` | Console script (the default `CMD`) |
 

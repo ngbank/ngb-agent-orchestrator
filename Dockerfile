@@ -98,7 +98,14 @@ os.symlink('/app/config', os.path.join(site.getsitepackages()[0], 'config'))"
 # Pre-create the XDG state dir under the orchestrator user's $HOME so a host
 # bind-mount lands on an owned, writable directory. The orchestrator resolves
 # DB + logs to ~/.local/state/ngb-agent-orchestrator by default.
-RUN mkdir -p /home/orchestrator/.local/state/ngb-agent-orchestrator \
+#
+# We also pre-create the `db/` subdirectory: docker-compose mounts a named
+# volume there (see docker-compose.yml for why). On first mount of an empty
+# named volume, Docker copies the image's content + ownership at the mount
+# target into the volume. Without this pre-created directory the volume would
+# be created as root-owned and the non-root `orchestrator` user could not
+# write to it.
+RUN mkdir -p /home/orchestrator/.local/state/ngb-agent-orchestrator/db \
     && chown -R orchestrator:orchestrator /app /home/orchestrator/.local
 
 USER orchestrator

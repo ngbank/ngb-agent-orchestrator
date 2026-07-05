@@ -10,17 +10,27 @@
 #   curl http://localhost:8080/healthz
 #
 # State layout:
-#   The host's XDG state dir is bind-mounted into the container, so the
-#   containerised server and the local CLI share one database and one logs
-#   tree by default:
+#   The host's XDG state dir is bind-mounted into the container so logs are
+#   accessible from the host (e.g. `tail -f`):
 #
 #     ${XDG_STATE_HOME:-$HOME/.local/state}/ngb-agent-orchestrator/
-#     ├── db/local.db
 #     └── logs/<workflow_id>/...
 #
+#   The SQLite DB lives in a Docker-managed *named volume* mounted over the
+#   `db/` subdirectory. Reason: SQLite's file-locking and fsync semantics are
+#   not reliable over macOS bind mounts (Colima virtiofs, Docker Desktop
+#   gRPC-FUSE) and cause `disk I/O error` / `database disk image is malformed`
+#   under load. Named volumes live on the VM's ext4 filesystem and behave
+#   like a native disk. Host CLI access to the DB is not needed because the
+#   dispatcher talks to the server over HTTP (ORCHESTRATOR_MODE=remote).
+#
+#   To inspect the DB from the host:
+#     docker cp ngb-orchestrator:/home/orchestrator/.local/state/ngb-agent-orchestrator/db/local.db /tmp/local.db
+#     sqlite3 /tmp/local.db
+#
 #   Note: on Linux the container runs as UID 1001 (the `orchestrator` user);
-#   bind-mounted files inherit that ownership. On macOS / Podman this is
-#   transparently remapped by the VM's user namespace.
+#   bind-mounted files inherit that ownership. On macOS this is transparently
+#   remapped by the VM's user namespace.
 #
 # To point the dispatcher at this server:
 #   export ORCHESTRATOR_MODE=remote
@@ -55,5 +65,12 @@ services:
       # container falls back to its own `python` on PATH.
       GOOSE_MCP_PYTHON: "python"
     volumes:
+      # Bind mount for logs so `tail -f` from the host works.
       - ${XDG_STATE_HOME:-$HOME/.local/state}/ngb-agent-orchestrator:/home/orchestrator/.local/state/ngb-agent-orchestrator
+      # Named volume overlaid on the `db/` subdirectory. See the file header
+      # for why the DB cannot live on the bind mount.
+      - orchestrator-db:/home/orchestrator/.local/state/ngb-agent-orchestrator/db
     restart: unless-stopped
+
+volumes:
+  orchestrator-db:
