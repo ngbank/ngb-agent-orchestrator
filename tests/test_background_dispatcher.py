@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 import threading
 import time
 
@@ -10,6 +13,11 @@ import pytest
 from orchestrator.server.background import (
     BackgroundDispatcher,
     SyncBackgroundDispatcher,
+)
+from orchestrator.subprocess_registry import (
+    SUBPROCESS_REGISTRY,
+    get_current_workflow_id,
+    set_current_workflow_id,
 )
 
 # ---------------------------------------------------------------------------
@@ -209,3 +217,193 @@ def test_sync_dispatcher_rejects_re_entrant_submission() -> None:
 
     assert dispatcher.submit("wf-1", outer) is True
     assert observed == [False]
+
+
+# ---------------------------------------------------------------------------
+# Thread-local workflow id + cancel
+# ---------------------------------------------------------------------------
+
+
+def _spawn_tracked_sleep(seconds: int = 60) -> subprocess.Popen:
+    """Spawn ``sleep`` in its own process group, mimicking utils.py Popens."""
+    return subprocess.Popen(
+        [sys.executable, "-c", f"import time; time.sleep({seconds})"],
+        start_new_session=True,
+    )
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:  # pragma: no cover - would only fire cross-user
+        return True
+    return True
+
+
+@pytest.fixture(autouse=True)
+def _clear_registry():
+    """Ensure the process-wide singleton starts each test empty."""
+    # Snapshot for defensive cleanup; tests should not leak.
+    yield
+    SUBPROCESS_REGISTRY.terminate_all(grace_s=1.0)
+
+
+def test_worker_thread_sets_and_clears_current_workflow_id() -> None:
+    dispatcher = BackgroundDispatcher(max_workers=1)
+    observed: dict[str, object] = {}
+    done = threading.Event()
+
+    def task() -> None:
+        observed["inside"] = get_current_workflow_id()
+        done.set()
+
+    try:
+        assert dispatcher.submit("wf-tls", task) is True
+        assert done.wait(timeout=2.0)
+        assert observed["inside"] == "wf-tls"
+    finally:
+        dispatcher.shutdown(wait=True)
+    # Calling thread's TLS was not clobbered by the worker.
+    assert get_current_workflow_id() is None
+
+
+def test_thread_local_workflow_id_isolation() -> None:
+    dispatcher = BackgroundDispatcher(max_workers=2)
+    seen: dict[str, object] = {}
+    barrier = threading.Barrier(2)
+    done = threading.Event()
+
+    def task(name: str) -> None:
+        # Ensure both workers are inside their TLS scope simultaneously.
+        barrier.wait(timeout=2.0)
+        seen[name] = get_current_workflow_id()
+        if len(seen) == 2:
+            done.set()
+
+    try:
+        assert dispatcher.submit("wf-a", task, "a") is True
+        assert dispatcher.submit("wf-b", task, "b") is True
+        assert done.wait(timeout=2.0)
+        assert seen == {"a": "wf-a", "b": "wf-b"}
+    finally:
+        dispatcher.shutdown(wait=True)
+
+
+def test_cancel_terminates_registered_subprocess() -> None:
+    dispatcher = BackgroundDispatcher(max_workers=1)
+    proc = _spawn_tracked_sleep(30)
+    try:
+        SUBPROCESS_REGISTRY.register("wf-c", proc)
+        assert _pid_alive(proc.pid)
+        dispatcher.cancel("wf-c")
+        # SIGTERM to process group; grace is up to 5s but python sleep exits fast.
+        assert proc.wait(timeout=5.0) != 0
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+        dispatcher.shutdown(wait=True)
+
+
+def test_cancel_terminates_process_group() -> None:
+    """A parent that forks a child should have both killed via killpg."""
+    dispatcher = BackgroundDispatcher(max_workers=1)
+    # Parent starts a background python sleep and prints its pid, then waits.
+    script = (
+        "import os, subprocess, sys, time;"
+        "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']);"
+        "sys.stdout.write(str(p.pid) + '\\n'); sys.stdout.flush();"
+        "p.wait()"
+    )
+    proc = subprocess.Popen(
+        [sys.executable, "-c", script],
+        stdout=subprocess.PIPE,
+        start_new_session=True,
+    )
+    try:
+        assert proc.stdout is not None
+        child_pid_line = proc.stdout.readline().strip()
+        assert child_pid_line, "parent did not report child pid"
+        child_pid = int(child_pid_line)
+        assert _pid_alive(child_pid)
+        SUBPROCESS_REGISTRY.register("wf-pg", proc)
+        dispatcher.cancel("wf-pg")
+        assert proc.wait(timeout=5.0) != 0
+        # Give the OS a beat to reap the child.
+        deadline = time.monotonic() + 3.0
+        while _pid_alive(child_pid) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert not _pid_alive(child_pid), f"child pid {child_pid} survived cancel"
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+        dispatcher.shutdown(wait=True)
+
+
+def test_cancel_is_no_op_when_nothing_registered() -> None:
+    dispatcher = BackgroundDispatcher(max_workers=1)
+    try:
+        # Must not raise.
+        dispatcher.cancel("unknown-workflow")
+    finally:
+        dispatcher.shutdown(wait=True)
+
+
+def test_multiple_subprocesses_per_workflow_all_killed() -> None:
+    dispatcher = BackgroundDispatcher(max_workers=1)
+    procs = [_spawn_tracked_sleep(30) for _ in range(3)]
+    try:
+        for proc in procs:
+            SUBPROCESS_REGISTRY.register("wf-multi", proc)
+        dispatcher.cancel("wf-multi")
+        for proc in procs:
+            assert proc.wait(timeout=5.0) != 0
+    finally:
+        for proc in procs:
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait()
+        dispatcher.shutdown(wait=True)
+
+
+def test_shutdown_terminates_all_registered_subprocesses() -> None:
+    dispatcher = BackgroundDispatcher(max_workers=1)
+    proc_a = _spawn_tracked_sleep(30)
+    proc_b = _spawn_tracked_sleep(30)
+    SUBPROCESS_REGISTRY.register("wf-x", proc_a)
+    SUBPROCESS_REGISTRY.register("wf-y", proc_b)
+    try:
+        dispatcher.shutdown(wait=True)
+        assert proc_a.wait(timeout=5.0) != 0
+        assert proc_b.wait(timeout=5.0) != 0
+    finally:
+        for proc in (proc_a, proc_b):
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait()
+
+
+def test_sync_dispatcher_cancel_is_no_op() -> None:
+    dispatcher = SyncBackgroundDispatcher()
+    # Even with a stray registration, SyncBackgroundDispatcher.cancel must
+    # not touch subprocesses -- the inline test double owns no children.
+    proc = _spawn_tracked_sleep(5)
+    try:
+        SUBPROCESS_REGISTRY.register("wf-sync", proc)
+        dispatcher.cancel("wf-sync")
+        assert _pid_alive(proc.pid), "SyncBackgroundDispatcher.cancel must not kill subprocesses"
+    finally:
+        SUBPROCESS_REGISTRY.terminate("wf-sync", grace_s=1.0)
+
+
+def test_set_current_workflow_id_helper_round_trips() -> None:
+    assert get_current_workflow_id() is None
+    set_current_workflow_id("wf-manual")
+    try:
+        assert get_current_workflow_id() == "wf-manual"
+    finally:
+        set_current_workflow_id(None)
+    assert get_current_workflow_id() is None

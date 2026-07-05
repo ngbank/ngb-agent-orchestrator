@@ -163,6 +163,23 @@ operations are never exposed by an unauthenticated dev server. OpenAPI
 is exposed at `/openapi.json` and Swagger UI at `/docs`. See
 [docs/server.md](server.md) for the run story.
 
+### `orchestrator/subprocess_registry.py`
+
+Process-wide registry that tracks the live child subprocesses spawned by
+a background workflow (the LiteLLM proxy started in `goose_session` and
+the Goose CLI invocation started in `run_and_tee`). Every subprocess is
+spawned with `start_new_session=True`, so it owns its own process group;
+the registry maps `workflow_id -> list[Popen]` and knows how to send
+`SIGTERM` (then, after a 5-second grace period, `SIGKILL`) to each
+process group via `os.killpg`. The `BackgroundDispatcher` sets a
+thread-local `current_workflow_id` before invoking the graph drive so
+the `Popen` call sites can register themselves without an explicit
+workflow-id parameter. Termination is triggered from three paths:
+`POST /workflows/{id}/cancel`, `POST /admin/workflows/{id}/mark-interrupted`
+(which the dispatcher CLI calls on Ctrl-C), and the FastAPI lifespan
+shutdown hook (so `docker stop` / SIGTERM / server Ctrl-C all reap
+children cleanly).
+
 ### `graph/`
 
 LangGraph state machine. Two levels:

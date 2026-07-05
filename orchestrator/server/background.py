@@ -24,6 +24,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Callable, Dict, Optional
 
 from orchestrator.logging_setup import attach_workflow_file_handler, detach_workflow_file_handler
+from orchestrator.subprocess_registry import SUBPROCESS_REGISTRY, set_current_workflow_id
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,9 @@ class BackgroundDispatcherProtocol:
         raise NotImplementedError
 
     def is_in_flight(self, workflow_id: str) -> bool:  # pragma: no cover - abstract
+        raise NotImplementedError
+
+    def cancel(self, workflow_id: str) -> None:  # pragma: no cover - abstract
         raise NotImplementedError
 
     def shutdown(self, *, wait: bool = False) -> None:  # pragma: no cover - abstract
@@ -112,18 +116,38 @@ class BackgroundDispatcher(BackgroundDispatcherProtocol):
             future = self._in_flight.get(workflow_id)
             return future is not None and not future.done()
 
+    def cancel(self, workflow_id: str) -> None:
+        """Terminate any live subprocesses registered for ``workflow_id``.
+
+        Called by the ``/cancel`` and ``/admin/mark-interrupted`` routes
+        after the DB row has been marked terminal.  Safe to call when no
+        subprocesses are registered (e.g. cancel arrives before the
+        worker thread reaches its first ``Popen``).
+        """
+        terminated = SUBPROCESS_REGISTRY.terminate(workflow_id)
+        if terminated:
+            logger.info(
+                "Cancelled workflow %s: terminated %d subprocess(es)",
+                workflow_id,
+                terminated,
+            )
+
     def shutdown(self, *, wait: bool = False) -> None:
         """Refuse new submissions and tear down the executor.
 
         ``wait=False`` is the production default — graphs may run for
-        minutes and blocking shutdown would stall systemd / uvicorn.  The
-        executor's worker threads keep running until they finish on their
-        own; long-running graph drives are not cancellable by design (the
-        Goose subprocess + LiteLLM proxy + langgraph stream do not respect
-        thread interruption).
+        minutes and blocking shutdown would stall systemd / uvicorn.  Any
+        live subprocesses registered under
+        :data:`orchestrator.subprocess_registry.SUBPROCESS_REGISTRY` are
+        terminated (SIGTERM with a short grace, then SIGKILL) before the
+        executor is torn down; this piggybacks on the FastAPI lifespan
+        hook so ``docker stop`` / Ctrl-C / SIGTERM all clean up children.
+        The executor's worker threads then exit naturally once their
+        subprocesses have died.
         """
         with self._lock:
             self._shutdown = True
+        SUBPROCESS_REGISTRY.terminate_all()
         self._executor.shutdown(wait=wait, cancel_futures=True)
 
     # -- internals ------------------------------------------------------
@@ -137,6 +161,7 @@ class BackgroundDispatcher(BackgroundDispatcherProtocol):
         on_failure: Optional[Callable[[BaseException], None]],
     ) -> Any:
         handler = attach_workflow_file_handler(workflow_id)
+        set_current_workflow_id(workflow_id)
         try:
             return fn(*args, **kwargs)
         except BaseException as exc:  # noqa: BLE001 - we re-raise after notifying
@@ -148,6 +173,7 @@ class BackgroundDispatcher(BackgroundDispatcherProtocol):
                     logger.exception("on_failure handler for workflow %s raised", workflow_id)
             raise
         finally:
+            set_current_workflow_id(None)
             detach_workflow_file_handler(handler)
 
     def _cleanup(self, workflow_id: str, future: Future[Any]) -> None:
@@ -209,6 +235,10 @@ class SyncBackgroundDispatcher(BackgroundDispatcherProtocol):
 
     def is_in_flight(self, workflow_id: str) -> bool:
         return workflow_id in self._running
+
+    def cancel(self, workflow_id: str) -> None:
+        # Inline dispatcher has no long-running subprocesses to kill.
+        return None
 
     def shutdown(self, *, wait: bool = False) -> None:
         # Nothing to tear down — execution is inline.

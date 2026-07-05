@@ -597,6 +597,52 @@ def test_cancel_workflow_409_when_terminal(
     assert fake_service.cancel_calls == []
 
 
+class _SpyDispatcher(SyncBackgroundDispatcher):
+    """SyncBackgroundDispatcher that records cancel() invocations."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.cancel_calls: List[str] = []
+
+    def cancel(self, workflow_id: str) -> None:
+        self.cancel_calls.append(workflow_id)
+
+
+def test_cancel_workflow_invokes_dispatcher_cancel(
+    fake_service: FakeWorkflowService,
+) -> None:
+    fake_service.seed(_make_detail("wf-1"))
+    dispatcher = _SpyDispatcher()
+    app = create_app(service=fake_service, background_dispatcher=dispatcher)
+    with TestClient(app) as spy_client:
+        response = spy_client.post("/workflows/wf-1/cancel")
+    assert response.status_code == 204
+    assert dispatcher.cancel_calls == ["wf-1"]
+
+
+def test_cancel_workflow_does_not_cancel_on_404(
+    fake_service: FakeWorkflowService,
+) -> None:
+    dispatcher = _SpyDispatcher()
+    app = create_app(service=fake_service, background_dispatcher=dispatcher)
+    with TestClient(app) as spy_client:
+        response = spy_client.post("/workflows/nope/cancel")
+    assert response.status_code == 404
+    assert dispatcher.cancel_calls == []
+
+
+def test_cancel_workflow_does_not_cancel_on_409_terminal(
+    fake_service: FakeWorkflowService,
+) -> None:
+    fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.COMPLETED))
+    dispatcher = _SpyDispatcher()
+    app = create_app(service=fake_service, background_dispatcher=dispatcher)
+    with TestClient(app) as spy_client:
+        response = spy_client.post("/workflows/wf-1/cancel")
+    assert response.status_code == 409
+    assert dispatcher.cancel_calls == []
+
+
 # ---------------------------------------------------------------------------
 # Auth stub
 # ---------------------------------------------------------------------------
@@ -1290,6 +1336,22 @@ def test_admin_mark_interrupted_503_when_admin_disabled(
     response = client.post("/admin/workflows/wf-1/mark-interrupted")
     assert response.status_code == 503
     assert fake_service.mark_interrupted_calls == []
+
+
+def test_admin_mark_interrupted_invokes_dispatcher_cancel(
+    monkeypatch, fake_service: FakeWorkflowService
+) -> None:
+    monkeypatch.setenv(API_TOKEN_ENV, "admin-token")
+    fake_service.seed(_make_detail("wf-1"))
+    dispatcher = _SpyDispatcher()
+    app = create_app(service=fake_service, background_dispatcher=dispatcher)
+    with TestClient(app) as authed_client:
+        response = authed_client.post(
+            "/admin/workflows/wf-1/mark-interrupted",
+            headers={"Authorization": "Bearer admin-token"},
+        )
+    assert response.status_code == 204
+    assert dispatcher.cancel_calls == ["wf-1"]
 
 
 # ---------------------------------------------------------------------------

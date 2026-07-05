@@ -419,6 +419,15 @@ Returns:
 - `404 Not Found` when the workflow id does not exist
 - `409 Conflict` when the workflow is already terminal
 
+After the DB row is marked `cancelled` the route also signals the
+background dispatcher to terminate the workflow's child subprocesses
+(LiteLLM proxy + Goose CLI). SIGTERM is sent to each process group with
+a 5 second grace period, followed by SIGKILL for any survivors. The
+same subprocess-termination hook fires from
+`POST /admin/workflows/{id}/mark-interrupted` (which the dispatcher CLI
+calls on Ctrl-C) and from the FastAPI lifespan shutdown, so
+`docker stop` / SIGTERM / server Ctrl-C all reap children cleanly.
+
 ### Approval / clarification / retry
 
 All four routes are fire-and-forget and return a `WorkflowRunResponse`

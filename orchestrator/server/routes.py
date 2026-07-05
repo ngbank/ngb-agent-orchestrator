@@ -185,6 +185,7 @@ def cancel_workflow(
     workflow_id: str,
     body: Optional[CancelWorkflowRequest] = None,
     service: WorkflowService = Depends(get_service),
+    dispatcher: BackgroundDispatcherProtocol = Depends(get_background_dispatcher),
 ) -> Response:
     detail = service.get(workflow_id)
     if detail is None:
@@ -201,6 +202,7 @@ def cancel_workflow(
         )
     payload = body if body is not None else CancelWorkflowRequest.model_validate({})
     service.cancel(workflow_id, reason=payload.reason, actor=payload.actor)
+    dispatcher.cancel(workflow_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -658,6 +660,7 @@ def mark_interrupted(
     workflow_id: str,
     body: Optional[MarkInterruptedRequest] = None,
     service: WorkflowService = Depends(get_service),
+    dispatcher: BackgroundDispatcherProtocol = Depends(get_background_dispatcher),
 ) -> Response:
     _require_workflow(service, workflow_id)
     payload = body if body is not None else MarkInterruptedRequest.model_validate({})
@@ -666,4 +669,5 @@ def mark_interrupted(
         failed_node=payload.failed_node,
         actor=payload.actor,
     )
+    dispatcher.cancel(workflow_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
