@@ -14,7 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from orchestrator.server.app import create_app
-from orchestrator.server.auth import API_TOKEN_ENV
+from orchestrator.server.auth import ADMIN_ALLOW_UNAUTHENTICATED_ENV, API_TOKEN_ENV
 from orchestrator.server.background import SyncBackgroundDispatcher
 from orchestrator.workflow_service.dtos import (
     WorkflowAuditEntry,
@@ -365,6 +365,7 @@ def client(
 ) -> TestClient:
     # Default: auth disabled.  Tests that exercise auth opt in via monkeypatch.
     monkeypatch.delenv(API_TOKEN_ENV, raising=False)
+    monkeypatch.delenv(ADMIN_ALLOW_UNAUTHENTICATED_ENV, raising=False)
     app = create_app(service=fake_service, background_dispatcher=sync_dispatcher)
     return TestClient(app)
 
@@ -1289,6 +1290,73 @@ def test_admin_mark_interrupted_503_when_admin_disabled(
     response = client.post("/admin/workflows/wf-1/mark-interrupted")
     assert response.status_code == 503
     assert fake_service.mark_interrupted_calls == []
+
+
+# ---------------------------------------------------------------------------
+# Admin escape hatch — ORCHESTRATOR_ALLOW_UNAUTHENTICATED_ADMIN (AOS-197)
+# ---------------------------------------------------------------------------
+
+
+def test_admin_clear_db_allowed_anon_when_escape_hatch_enabled(
+    monkeypatch, fake_service: FakeWorkflowService
+) -> None:
+    """Escape hatch: no API token + flag truthy → admin accepts anon requests."""
+    monkeypatch.delenv(API_TOKEN_ENV, raising=False)
+    monkeypatch.setenv(ADMIN_ALLOW_UNAUTHENTICATED_ENV, "1")
+    fake_service.clear_db_result = (3, 5)
+    app = create_app(service=fake_service)
+    with TestClient(app) as anon_client:
+        response = anon_client.post("/admin/clear-db")
+        assert response.status_code == 200
+        assert response.json() == {"workflows": 3, "checkpoints": 5}
+        assert len(fake_service.clear_db_calls) == 1
+
+
+def test_admin_mark_interrupted_allowed_anon_when_escape_hatch_enabled(
+    monkeypatch, fake_service: FakeWorkflowService
+) -> None:
+    monkeypatch.delenv(API_TOKEN_ENV, raising=False)
+    monkeypatch.setenv(ADMIN_ALLOW_UNAUTHENTICATED_ENV, "true")
+    fake_service.seed(_make_detail("wf-1"))
+    app = create_app(service=fake_service)
+    with TestClient(app) as anon_client:
+        response = anon_client.post("/admin/workflows/wf-1/mark-interrupted")
+        assert response.status_code == 204
+        assert fake_service.mark_interrupted_calls == [
+            {"workflow_id": "wf-1", "failed_node": None, "actor": "api"}
+        ]
+
+
+@pytest.mark.parametrize("falsy", ["", "0", "false", "no", "off", " "])
+def test_admin_still_503_when_escape_hatch_falsy(
+    monkeypatch, fake_service: FakeWorkflowService, falsy: str
+) -> None:
+    """Falsy escape-hatch values must not unlock admin."""
+    monkeypatch.delenv(API_TOKEN_ENV, raising=False)
+    monkeypatch.setenv(ADMIN_ALLOW_UNAUTHENTICATED_ENV, falsy)
+    app = create_app(service=fake_service)
+    with TestClient(app) as anon_client:
+        response = anon_client.post("/admin/clear-db")
+        assert response.status_code == 503
+        assert fake_service.clear_db_calls == []
+
+
+def test_admin_escape_hatch_ignored_when_api_token_set(
+    monkeypatch, fake_service: FakeWorkflowService
+) -> None:
+    """When API_TOKEN is set, the escape hatch is ignored — bearer still required."""
+    monkeypatch.setenv(API_TOKEN_ENV, "admin-token")
+    monkeypatch.setenv(ADMIN_ALLOW_UNAUTHENTICATED_ENV, "1")
+    app = create_app(service=fake_service)
+    with TestClient(app) as gated_client:
+        # Anonymous request rejected with 401 (not 200 via escape hatch).
+        response = gated_client.post("/admin/clear-db")
+        assert response.status_code == 401
+        # Bearer token still works.
+        response = gated_client.post(
+            "/admin/clear-db", headers={"Authorization": "Bearer admin-token"}
+        )
+        assert response.status_code == 200
 
 
 def test_openapi_schema_exposes_new_routes(client: TestClient) -> None:

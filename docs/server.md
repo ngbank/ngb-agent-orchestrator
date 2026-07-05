@@ -572,17 +572,26 @@ balancers and tooling can probe the service without credentials.
 posture than the rest of the API. They are destructive enough that an
 open development server must never expose them:
 
-| `ORCHESTRATOR_API_TOKEN` | Behaviour for `/admin/*` |
-|---|---|
-| unset / empty | All admin routes return `503 Service Unavailable` — admin is **disabled**, not just unauthenticated |
-| set, request has no/wrong `Authorization` header | `401 Unauthorized` |
-| set, request carries matching `Bearer <token>` | Request proceeds |
+| `ORCHESTRATOR_API_TOKEN` | `ORCHESTRATOR_ALLOW_UNAUTHENTICATED_ADMIN` | Behaviour for `/admin/*` |
+|---|---|---|
+| unset / empty | unset / falsy | `503 Service Unavailable` — admin is **disabled**, not just unauthenticated |
+| unset / empty | truthy (`1`, `true`, `yes`, `y`, `on`; case-insensitive) | Request proceeds anonymously — **development-only escape hatch**; server logs a loud warning at startup |
+| set, request has no/wrong `Authorization` header | anything (flag ignored) | `401 Unauthorized` |
+| set, request carries matching `Bearer <token>` | anything (flag ignored) | Request proceeds |
 
 In production, set `ORCHESTRATOR_API_TOKEN` to a value known only to
-trusted operators. The dispatcher reads the same value from
-`ORCHESTRATOR_API_TOKEN` (see
+trusted operators and leave `ORCHESTRATOR_ALLOW_UNAUTHENTICATED_ADMIN`
+unset. The dispatcher reads the token from `ORCHESTRATOR_TOKEN` (see
 [docs/configuration.md](configuration.md#dispatcher--orchestrator-transport))
 when running in `ORCHESTRATOR_MODE=remote`.
+
+For local development against a containerised server, add
+`ORCHESTRATOR_ALLOW_UNAUTHENTICATED_ADMIN=1` to your `.env` — this lets
+the host CLI run destructive commands (`dispatcher --clear-db`,
+`--mark-interrupted`) without having to manage a shared bearer token
+you don't otherwise need. The escape hatch is ignored the moment a
+real token is configured, so promoting the same image to a staging or
+production environment automatically re-locks admin.
 
 ---
 

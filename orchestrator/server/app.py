@@ -28,7 +28,12 @@ from fastapi import FastAPI
 
 from orchestrator.workflow_service import WorkflowService
 
-from .auth import API_TOKEN_ENV, is_auth_enabled
+from .auth import (
+    ADMIN_ALLOW_UNAUTHENTICATED_ENV,
+    API_TOKEN_ENV,
+    is_admin_open_for_dev,
+    is_auth_enabled,
+)
 from .background import BackgroundDispatcher, BackgroundDispatcherProtocol
 from .deps import get_background_dispatcher, get_service
 from .routes import admin_router, health_router, workflow_router
@@ -117,6 +122,14 @@ def create_app(
         logger.warning(
             "%s is unset — orchestrator HTTP server running with auth DISABLED. "
             "Set the env var to enforce bearer-token auth.",
+            API_TOKEN_ENV,
+        )
+
+    if is_admin_open_for_dev():
+        logger.warning(
+            "%s is truthy with %s unset — /admin/* endpoints are OPEN to any "
+            "caller. Development use only; do not enable in production.",
+            ADMIN_ALLOW_UNAUTHENTICATED_ENV,
             API_TOKEN_ENV,
         )
 
