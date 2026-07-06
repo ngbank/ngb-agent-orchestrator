@@ -44,7 +44,7 @@ Use `goose run --recipe orchestrator/work_planner/recipes/plan.yaml --explain` t
 **What it does**:
 1. Fetches the ticket with `acli jira workitem view {ticket_key}`
 2. Explores the repository structure (README, directory listing, relevant files)
-3. Generates a WorkPlan JSON with LLM (azure-gpt4, temperature 0.3)
+3. Generates a WorkPlan JSON with LLM (model set by `GOOSE_MODEL`, temperature 0.3)
 4. Validates the JSON against `orchestrator/work_planner/schemas/work_plan_v1.json`
 5. Writes the validated JSON to `output_path`
 
@@ -160,8 +160,6 @@ extensions:
     bundled: true
 
 settings:
-  goose_provider: "openai"
-  goose_model: "azure-gpt4"
   temperature: 0.3
   max_turns: 50
 
@@ -169,3 +167,5 @@ prompt: |
   Instructions here...
   Reference parameters with {{ param_name }}.
 ```
+
+The model is chosen by the `GOOSE_MODEL` environment variable, not the recipe — recipes stay portable across model backends.

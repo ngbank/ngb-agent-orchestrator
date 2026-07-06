@@ -160,7 +160,7 @@ class TestProxyYamlReferencesBootstrap:
     def test_generated_yaml_pins_request_timeout(self, monkeypatch):
         """A stalled upstream stream must be aborted well before the plan-phase
         5-minute ceiling. The proxy's `request_timeout` bounds any single LLM
-        call so a runaway Kimi-K2.6 reasoning loop cannot burn ~10 min per try.
+        call so a runaway model reasoning loop cannot burn ~10 min per try.
         """
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
         from orchestrator.utils import _litellm_config_yaml

@@ -229,7 +229,7 @@ def test_generate_plan_empty_json(log_tmp):
 def test_plan_recipe_bounds_runaway_streams():
     """Plan recipe caps retries at 1 and requires non-empty output.
 
-    A stalled Kimi stream can burn ~10 min per attempt while leaving a 0-byte
+    A stalled LLM stream can burn ~10 min per attempt while leaving a 0-byte
     output file behind. To bound worst-case runtime:
 
     - `retry.max_retries` MUST be 1 (higher values silently triple the burn).

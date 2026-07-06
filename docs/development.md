@@ -222,15 +222,18 @@ goose --version
 
 If still not found, reinstall Goose following the [official instructions](https://github.com/block/goose).
 
-### LiteLLM proxy not running
+### Running a LiteLLM proxy for interactive debugging
+
+The dispatcher does **not** need a standalone proxy — `orchestrator.utils.goose_session` spins one up per workflow and tears it down on exit. You only need this when probing the proxy directly (e.g. `curl` against `/chat/completions` to reproduce a provider issue).
 
 ```bash
 # In a separate terminal:
-source venv/bin/activate
-litellm --config config/litellm.yaml --port 4000
+source .venv/bin/activate
+GOOSE_MODEL=azure/gpt-4.1 bin/litellm-dev            # port 4000
+GOOSE_MODEL=azure/gpt-4.1 LITELLM_PORT=4100 bin/litellm-dev
 ```
 
-All Goose recipe invocations require the proxy to be running.
+The wrapper generates the same YAML the dispatcher uses at runtime (`orchestrator.utils._litellm_config_yaml`), so its behaviour is identical to the in-process proxy.
 
 ### Pre-commit hook failures after pulling
 

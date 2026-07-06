@@ -255,9 +255,10 @@ prompt: |
   ```
 
 retry:
-  # A stalled Kimi stream can burn ~10 min before failing. Retries multiply that
-  # cost with no observed benefit (message history is reset on retry), so cap at
-  # 1 attempt to bound worst-case runtime.
+  # A stalled LLM stream can burn ~10 min before failing (any model that gets
+  # stuck emitting tokens without closing the response triggers this). Retries
+  # multiply that cost with no observed benefit (message history is reset on
+  # retry), so cap at 1 attempt to bound worst-case runtime.
   max_retries: 1
   timeout_seconds: 30
   checks:
