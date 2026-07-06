@@ -219,3 +219,47 @@ def test_generate_plan_empty_json(log_tmp):
     assert "error" in result
     assert "empty" in result["error"]
     assert "work_plan_data" not in result
+
+
+# ---------------------------------------------------------------------------
+# Recipe retry configuration
+# ---------------------------------------------------------------------------
+
+
+def test_plan_recipe_bounds_runaway_streams():
+    """Plan recipe caps retries at 1 and requires non-empty output.
+
+    A stalled LLM stream can burn ~10 min per attempt while leaving a 0-byte
+    output file behind. To bound worst-case runtime:
+
+    - `retry.max_retries` MUST be 1 (higher values silently triple the burn).
+    - `retry.checks[0]` MUST use `test -s` (non-empty), not `test -f` (exists),
+      so an aborted stream fails on the first check with a clear signal rather
+      than masking as a JSON-decode error on check[1].
+
+    The recipe is checked as text (rather than parsed YAML) to avoid adding a
+    yaml dependency to the test module — the fields are simple scalars whose
+    presence in the file is the meaningful assertion.
+    """
+    from pathlib import Path
+
+    recipe_path = (
+        Path(__file__).resolve().parent.parent
+        / "orchestrator"
+        / "work_planner"
+        / "recipes"
+        / "plan.yaml"
+    )
+    recipe_text = recipe_path.read_text()
+
+    assert (
+        "max_retries: 1" in recipe_text
+    ), "plan recipe max_retries must be 1 to bound runaway-stream cost"
+    assert (
+        "max_retries: 3" not in recipe_text
+    ), "plan recipe must not regress to max_retries: 3 (~30 min burn on stalls)"
+
+    assert 'command: "test -s {{ output_path }}"' in recipe_text, (
+        "first check must use `test -s` (non-empty), not `test -f` (exists), "
+        "so a 0-byte output from an aborted stream fails clearly"
+    )

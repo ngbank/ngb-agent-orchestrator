@@ -220,9 +220,9 @@ JSON Schema contract for WorkPlan documents. Validated by `dispatcher/work_plan_
 | `concerns` | array | Identified risks or open questions for a reviewer (may be empty) |
 | `status` | `"pass"` \| `"concerns"` \| `"blocked"` | Planner confidence |
 
-### `config/litellm.yaml`
+### LiteLLM proxy (per-workflow, in-process)
 
-LiteLLM proxy configuration. Maps model names (e.g. `azure-gpt4`) to provider API endpoints. Goose points at this proxy instead of a provider directly, so the model backend can be swapped without changing recipes. See [docs/configuration.md](configuration.md).
+`orchestrator.utils.goose_session` starts an ephemeral LiteLLM proxy for each workflow, configured on the fly by `_litellm_config_yaml(GOOSE_MODEL)`. The proxy exposes an OpenAI-compatible endpoint on a free localhost port that Goose talks to via `OPENAI_BASE_URL`; it is torn down when the workflow exits. There is no persistent proxy process or checked-in proxy config. See [docs/configuration.md](configuration.md); `bin/litellm-dev` runs the same generator standalone for interactive debugging.
 
 ---
 

@@ -156,3 +156,14 @@ class TestProxyYamlReferencesBootstrap:
         # litellm.callbacks, preserving the OtelLiteLLMCallback registered by
         # the bootstrap module during import.
         assert "callbacks:\n    - otel.litellm_proxy_setup.proxy_handler_instance" in yaml
+
+    def test_generated_yaml_pins_request_timeout(self, monkeypatch):
+        """A stalled upstream stream must be aborted well before the plan-phase
+        5-minute ceiling. The proxy's `request_timeout` bounds any single LLM
+        call so a runaway model reasoning loop cannot burn ~10 min per try.
+        """
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        from orchestrator.utils import _litellm_config_yaml
+
+        yaml = _litellm_config_yaml("openai/gpt-4o")
+        assert "request_timeout: 240" in yaml
