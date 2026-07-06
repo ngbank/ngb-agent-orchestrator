@@ -125,9 +125,15 @@ def test_uncaught_exception_invokes_on_failure_and_cleans_up() -> None:
             boom,
             on_failure=lambda exc: captured.append(exc),
         )
-        assert _wait_until(lambda: not dispatcher.is_in_flight("wf-x"))
+        # ``shutdown(wait=True)`` joins the worker threads, which guarantees
+        # the future has been finalised and its done-callback (``_cleanup``)
+        # has run.  This avoids racing ThreadPoolExecutor worker-thread
+        # startup latency, which under suite load can exceed a polling
+        # timeout even though ``boom`` itself is instant.
+        dispatcher.shutdown(wait=True)
         assert len(captured) == 1
         assert isinstance(captured[0], RuntimeError)
+        assert not dispatcher.is_in_flight("wf-x")
     finally:
         dispatcher.shutdown(wait=True)
 
@@ -144,7 +150,10 @@ def test_on_failure_handler_exceptions_are_swallowed() -> None:
 
         # Should not crash the worker thread or the test process.
         dispatcher.submit("wf-y", boom, on_failure=bad_handler)
-        assert _wait_until(lambda: not dispatcher.is_in_flight("wf-y"))
+        # See note above: ``shutdown(wait=True)`` is the deterministic
+        # barrier for worker completion + done-callback execution.
+        dispatcher.shutdown(wait=True)
+        assert not dispatcher.is_in_flight("wf-y")
     finally:
         dispatcher.shutdown(wait=True)
 
