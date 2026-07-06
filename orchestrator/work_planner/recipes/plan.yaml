@@ -255,11 +255,18 @@ prompt: |
   ```
 
 retry:
-  max_retries: 3
+  # A stalled Kimi stream can burn ~10 min before failing. Retries multiply that
+  # cost with no observed benefit (message history is reset on retry), so cap at
+  # 1 attempt to bound worst-case runtime.
+  max_retries: 1
   timeout_seconds: 30
   checks:
+    # `test -s` (non-empty) rather than `test -f` (exists): Goose creates the
+    # output file before the stream completes, so an aborted stream leaves a
+    # 0-byte file. Requiring non-empty surfaces the real failure on check[0]
+    # instead of masking it as a JSON-decode error on check[1].
     - type: shell
-      command: "test -f {{ output_path }}"
+      command: "test -s {{ output_path }}"
     - type: shell
       command: "python3 -c 'import json, sys; sys.path.insert(0, \"dispatcher\"); from work_plan_validator import validate_work_plan; validate_work_plan(json.load(open(\"{{ output_path }}\")))' && echo '✅ Validation passed'"
   on_failure: "echo '❌ Validation failed - retrying with fixes...'"

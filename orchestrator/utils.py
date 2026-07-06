@@ -180,6 +180,11 @@ def _litellm_config_yaml(model_string: str) -> str:
         "\n"
         "litellm_settings:\n"
         "  drop_params: true\n"
+        # Cap any single LLM call at 4 minutes. Healthy calls complete in
+        # seconds; this only trips on runaway streams (e.g. Kimi-K2.6 spinning
+        # on reasoning tokens during the plan recipe). Bounds worst-case
+        # latency well under the plan-phase 5-minute ceiling.
+        "  request_timeout: 240\n"
         # Routed through otel.litellm_proxy_setup so the proxy subprocess
         # installs the dispatcher's LocalJsonFileExporter and emits
         # ``llm.call`` spans into LOGS_DIR/<workflow_id>/otel.jsonl.

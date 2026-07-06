@@ -45,8 +45,13 @@ Use `goose run --recipe orchestrator/work_planner/recipes/plan.yaml --explain` t
 1. Fetches the ticket with `acli jira workitem view {ticket_key}`
 2. Explores the repository structure (README, directory listing, relevant files)
 3. Generates a WorkPlan JSON with LLM (azure-gpt4, temperature 0.3)
-4. Validates the JSON against `orchestrator/work_planner/schemas/work_plan_v1.json` — retries up to 3 times on failure
+4. Validates the JSON against `orchestrator/work_planner/schemas/work_plan_v1.json`
 5. Writes the validated JSON to `output_path`
+
+**Retry policy** (`retry:` block in the recipe):
+- `max_retries: 1` — a stalled LLM stream can burn ~10 min per attempt; higher values silently triple the cost with no observed benefit (message history is reset on retry), so retries are capped at one.
+- `checks[0]: test -s {{ output_path }}` — the first check requires a *non-empty* file (not just existing). Goose creates the output file before the stream completes, so an aborted stream leaves a 0-byte file; requiring non-empty surfaces the real failure on check[0] instead of masking it as a JSON-decode error on check[1].
+- `checks[1]` — validates the JSON against the WorkPlan schema.
 
 **WorkPlan status values**:
 - `pass` — clear scope, ready to implement
