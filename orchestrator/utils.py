@@ -15,6 +15,10 @@ from pathlib import Path
 from typing import IO, List, Optional
 
 from orchestrator.paths import logs_base_dir, proxy_sessions_dir, workflow_logs_dir
+from orchestrator.subprocess_registry import (
+    SUBPROCESS_REGISTRY,
+    get_current_workflow_id,
+)
 
 
 def _get_actor() -> str:
@@ -282,7 +286,13 @@ def goose_session(
             stdout=proxy_log_fh,
             stderr=subprocess.STDOUT,
             env=proxy_env,
+            start_new_session=True,
         )
+        # Register with the workflow id from the calling thread (set by
+        # BackgroundDispatcher._run) so cancel can terminate this process.
+        _tracked_wf_id = get_current_workflow_id() or workflow_id
+        if _tracked_wf_id:
+            SUBPROCESS_REGISTRY.register(_tracked_wf_id, proc)
         try:
             try:
                 _wait_for_proxy(port, proc=proc)
@@ -306,12 +316,16 @@ def goose_session(
             env["NGB_ORCHESTRATOR_ROOT"] = str(repo_root)
             yield env
         finally:
-            proc.terminate()
             try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait()
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+            finally:
+                if _tracked_wf_id:
+                    SUBPROCESS_REGISTRY.unregister(_tracked_wf_id, proc)
     finally:
         if proxy_log_fh is not None:
             proxy_log_fh.close()
@@ -375,18 +389,26 @@ def run_and_tee(
             with tracer.start_as_current_span("goose.run", attributes=attributes) as span:
                 kwargs.setdefault("stdout", subprocess.PIPE)
                 kwargs.setdefault("stderr", subprocess.STDOUT)
+                kwargs.setdefault("start_new_session", True)
                 process = subprocess.Popen(cmd, **kwargs)
-                stdout_lines = 0
-                if process.stdout is not None:
-                    for raw_line in process.stdout:
-                        line = (
-                            raw_line.decode(errors="replace")
-                            if isinstance(raw_line, bytes)
-                            else raw_line
-                        )
-                        subprocess_logger.info("%s", line.rstrip("\n"))
-                        stdout_lines += 1
-                process.wait()
+                _tracked_wf_id = get_current_workflow_id()
+                if _tracked_wf_id:
+                    SUBPROCESS_REGISTRY.register(_tracked_wf_id, process)
+                try:
+                    stdout_lines = 0
+                    if process.stdout is not None:
+                        for raw_line in process.stdout:
+                            line = (
+                                raw_line.decode(errors="replace")
+                                if isinstance(raw_line, bytes)
+                                else raw_line
+                            )
+                            subprocess_logger.info("%s", line.rstrip("\n"))
+                            stdout_lines += 1
+                    process.wait()
+                finally:
+                    if _tracked_wf_id:
+                        SUBPROCESS_REGISTRY.unregister(_tracked_wf_id, process)
                 span.set_attribute("process.exit_code", process.returncode)
                 span.set_attribute("goose.stdout_lines", stdout_lines)
                 if process.returncode != 0:
@@ -402,13 +424,21 @@ def run_and_tee(
 
     kwargs.setdefault("stdout", subprocess.PIPE)
     kwargs.setdefault("stderr", subprocess.STDOUT)
+    kwargs.setdefault("start_new_session", True)
 
     process = subprocess.Popen(cmd, **kwargs)
-    assert process.stdout is not None
+    _tracked_wf_id = get_current_workflow_id()
+    if _tracked_wf_id:
+        SUBPROCESS_REGISTRY.register(_tracked_wf_id, process)
+    try:
+        assert process.stdout is not None
 
-    for raw_line in process.stdout:
-        line = raw_line.decode(errors="replace") if isinstance(raw_line, bytes) else raw_line
-        subprocess_logger.info("%s", line.rstrip("\n"))
+        for raw_line in process.stdout:
+            line = raw_line.decode(errors="replace") if isinstance(raw_line, bytes) else raw_line
+            subprocess_logger.info("%s", line.rstrip("\n"))
 
-    process.wait()
+        process.wait()
+    finally:
+        if _tracked_wf_id:
+            SUBPROCESS_REGISTRY.unregister(_tracked_wf_id, process)
     return subprocess.CompletedProcess(cmd, process.returncode)

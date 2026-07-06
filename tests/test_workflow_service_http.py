@@ -1132,14 +1132,16 @@ def parity_pair(temp_db):
 
     from fastapi.testclient import TestClient
 
+    from orchestrator.server.background import SyncBackgroundDispatcher
+
     local = LocalWorkflowService(repository=repo, graph_factory=lambda: _NoopGraph())
-    app = create_app(service=local)
-    client = TestClient(app, base_url="http://testserver")
-    http = build_http_workflow_service(base_url="http://testserver", client=client)
-    try:
-        yield local, http, repo
-    finally:
-        http.close()
+    app = create_app(service=local, background_dispatcher=SyncBackgroundDispatcher())
+    with TestClient(app, base_url="http://testserver") as client:
+        http = build_http_workflow_service(base_url="http://testserver", client=client)
+        try:
+            yield local, http, repo
+        finally:
+            http.close()
 
 
 class TestParity:
