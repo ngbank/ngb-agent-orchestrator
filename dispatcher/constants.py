@@ -7,7 +7,7 @@ STATUS_DISPLAY = {
     "pending_workplan_clarification": ("💬", "pending_workplan_clarification"),
     "pending_approval": ("⏸️ ", "pending_approval"),
     "pending_pr_approval": ("🔍", "pending_pr_approval"),
-    "pr_commented": ("💬", "pr_commented"),
+    "pr_commented": ("📝", "pr_commented"),
     "approved": ("✅", "approved"),
     "rejected": ("🚫", "rejected"),
     "completed": ("🎉", "completed"),
