@@ -234,6 +234,98 @@ class TestFactoryEnvSelection:
 
 
 # ---------------------------------------------------------------------------
+# Goose version-drift warning (local mode only)
+# ---------------------------------------------------------------------------
+
+
+class TestGooseVersionDrift:
+    """Cover the pure comparison helper and the local-mode logging hook."""
+
+    def test_matching_versions_return_none(self) -> None:
+        from orchestrator.workflow_service.factory import check_goose_version_drift
+
+        assert check_goose_version_drift("1.33.1", "1.33.1") is None
+
+    def test_whitespace_normalized_before_compare(self) -> None:
+        from orchestrator.workflow_service.factory import check_goose_version_drift
+
+        # `.goose-version` typically has a trailing newline; `goose --version`
+        # prints a leading space. Both must be normalized before compare.
+        assert check_goose_version_drift("1.33.1\n", " 1.33.1") is None
+
+    def test_mismatch_returns_diagnostic(self) -> None:
+        from orchestrator.workflow_service.factory import check_goose_version_drift
+
+        msg = check_goose_version_drift("1.33.1", "1.41.0")
+        assert msg is not None
+        assert "1.33.1" in msg and "1.41.0" in msg
+        assert "setup-env.sh" in msg  # tells the user how to fix it
+
+    def test_missing_expected_is_silent(self) -> None:
+        from orchestrator.workflow_service.factory import check_goose_version_drift
+
+        assert check_goose_version_drift(None, "1.33.1") is None
+        assert check_goose_version_drift("", "1.33.1") is None
+        assert check_goose_version_drift("   \n", "1.33.1") is None
+
+    def test_missing_actual_is_silent(self) -> None:
+        from orchestrator.workflow_service.factory import check_goose_version_drift
+
+        # A missing `goose` binary surfaces a clearer error at recipe run
+        # time; the drift check itself should not spam warnings for it.
+        assert check_goose_version_drift("1.33.1", None) is None
+        assert check_goose_version_drift("1.33.1", "") is None
+
+    def test_local_mode_logs_warning_on_drift(self, monkeypatch, caplog) -> None:
+        from orchestrator.workflow_service import factory
+
+        monkeypatch.setenv(MODE_ENV, MODE_LOCAL)
+        monkeypatch.setattr(factory, "_read_goose_version_file", lambda: "1.33.1\n")
+        monkeypatch.setattr(factory, "_read_installed_goose_version", lambda: " 1.41.0")
+
+        with caplog.at_level("WARNING", logger=factory.__name__):
+            svc = build_workflow_service_from_env()
+
+        assert isinstance(svc, LocalWorkflowService)
+        assert any("goose CLI version drift" in record.getMessage() for record in caplog.records)
+
+    def test_local_mode_silent_when_versions_match(self, monkeypatch, caplog) -> None:
+        from orchestrator.workflow_service import factory
+
+        monkeypatch.setenv(MODE_ENV, MODE_LOCAL)
+        monkeypatch.setattr(factory, "_read_goose_version_file", lambda: "1.33.1\n")
+        monkeypatch.setattr(factory, "_read_installed_goose_version", lambda: " 1.33.1")
+
+        with caplog.at_level("WARNING", logger=factory.__name__):
+            svc = build_workflow_service_from_env()
+
+        assert isinstance(svc, LocalWorkflowService)
+        assert not any(
+            "goose CLI version drift" in record.getMessage() for record in caplog.records
+        )
+
+    def test_remote_mode_skips_check(self, monkeypatch, caplog) -> None:
+        """Remote mode uses the container's pinned goose — host drift is irrelevant."""
+        from orchestrator.workflow_service import factory
+
+        monkeypatch.setenv(MODE_ENV, MODE_REMOTE)
+        monkeypatch.setenv(URL_ENV, "http://orchestrator.test:8080")
+
+        def _boom() -> str:
+            raise AssertionError("drift check must not run in remote mode")
+
+        monkeypatch.setattr(factory, "_read_goose_version_file", _boom)
+        monkeypatch.setattr(factory, "_read_installed_goose_version", _boom)
+
+        with caplog.at_level("WARNING", logger=factory.__name__):
+            svc = build_workflow_service_from_env()
+        try:
+            assert isinstance(svc, HttpWorkflowService)
+        finally:
+            svc.close()  # type: ignore[attr-defined]
+
+
+# ---------------------------------------------------------------------------
 # Dispatcher CLI end-to-end via HttpWorkflowService
 # ---------------------------------------------------------------------------
 
