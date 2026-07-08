@@ -214,7 +214,11 @@ if $DO_DEPS; then
     "$VENV_DIR/bin/pip" install --quiet -e .
 
     info "Installing pre-commit hooks..."
-    "$VENV_DIR/bin/pre-commit" install
+    "$VENV_DIR/bin/pre-commit" install \
+        --hook-type pre-commit \
+        --hook-type post-checkout \
+        --hook-type post-merge \
+        --hook-type post-rewrite
     success "Virtual environment ready."
 fi
 
