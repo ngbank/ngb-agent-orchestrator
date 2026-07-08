@@ -26,6 +26,7 @@ from typing import AsyncIterator, Optional
 
 from fastapi import FastAPI
 
+from orchestrator.logging_setup import setup_logging
 from orchestrator.workflow_service import WorkflowService
 
 from .auth import (
@@ -74,6 +75,14 @@ def create_app(
     :class:`BackgroundDispatcher` (worker pool sized via
     ``ORCHESTRATOR_BACKGROUND_WORKERS``) and shuts it down on app teardown.
     """
+    # Configure Python's root logger before wiring anything up. Without
+    # this, root stays at the WARNING default and every ``subprocess.goose
+    # - INFO`` record (and everything else the per-workflow
+    # ``WorkflowFileHandler`` depends on) is dropped at the logger-level
+    # filter — leaving ``workflow.log`` empty and the TUI's live tail pane
+    # blank in remote mode. The CLI entry point calls this from
+    # ``dispatcher/run.py``; the server never did until now.
+    setup_logging()
 
     @asynccontextmanager
     async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
