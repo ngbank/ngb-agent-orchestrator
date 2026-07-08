@@ -4,7 +4,7 @@
 # Sets up the local development environment for ngb-agent-orchestrator.
 #
 # Stages (all run by default; pass flags to run specific stages only):
-#   --python   Install Python 3.13.x via pyenv and pin .python-version
+#   --python   Ensure the pinned Python from .python-version is available via pyenv (install if missing)
 #   --deps     Create/update the .venv and install pip dependencies
 #   --goose    Install the pinned Goose CLI version (from .goose-version) to ~/.local/bin
 #   --env      Generate .env from .env.example and sync secrets from Azure Key Vault
@@ -20,7 +20,7 @@
 #   ./setup-env.sh                   # run all stages (including --docker)
 #   ./setup-env.sh --clean           # wipe and rebuild everything
 #   ./setup-env.sh --deps            # reinstall dependencies only
-#   ./setup-env.sh --python --deps   # reinstall Python + deps, skip .env
+#   ./setup-env.sh --python --deps   # ensure/install pinned Python + install deps, skip .env
 #   ./setup-env.sh --env             # keep existing .env values where present, fill missing from Key Vault
 #   ./setup-env.sh --env --env-overwrite  # re-pull and overwrite all managed values from Key Vault
 #   ./setup-env.sh --env --env-keep       # explicit keep mode (same as default)
@@ -99,6 +99,18 @@ if $DO_CLEAN; then
 fi
 
 VENV_DIR="$(pwd)/.venv"
+REQUIRED_PYTHON_VERSION=""
+
+if [[ -f .python-version ]]; then
+    REQUIRED_PYTHON_VERSION="$(tr -d '[:space:]' < .python-version)"
+fi
+
+[[ -n "$REQUIRED_PYTHON_VERSION" ]] \
+    || error ".python-version is missing or empty. Commit the required Python version and retry."
+
+if [[ ! "$REQUIRED_PYTHON_VERSION" =~ ^${PYTHON_MAJOR}\.[0-9]+$ ]]; then
+    error ".python-version must pin Python ${PYTHON_MAJOR}.x (found: ${REQUIRED_PYTHON_VERSION})."
+fi
 
 # ---------------------------------------------------------------------------
 # Clean (runs before all other stages)
@@ -174,29 +186,34 @@ success "Prerequisites satisfied."
 # Stage: python
 # ---------------------------------------------------------------------------
 if $DO_PYTHON; then
-    info "Checking for Python ${PYTHON_MAJOR}.x..."
+    info "Checking for pinned Python ${REQUIRED_PYTHON_VERSION}..."
 
-    INSTALLED_VERSION=$(pyenv versions --bare 2>/dev/null | grep -E "^${PYTHON_MAJOR}\.[0-9]+$" | sort -t. -k3 -n | tail -1 || true)
+    INSTALLED_VERSION=$(pyenv versions --bare 2>/dev/null | grep -Fx "$REQUIRED_PYTHON_VERSION" || true)
 
     if [[ -z "$INSTALLED_VERSION" ]]; then
-        info "No Python ${PYTHON_MAJOR}.x found. Resolving latest available version..."
-        LATEST_VERSION=$(pyenv install --list 2>/dev/null | grep -E "^\s+${PYTHON_MAJOR}\.[0-9]+$" | tr -d ' ' | sort -t. -k3 -n | tail -1 || true)
-        [[ -z "$LATEST_VERSION" ]] \
-            && error "No Python ${PYTHON_MAJOR}.x available in pyenv. Run 'pyenv update' and retry."
-        info "Installing Python ${LATEST_VERSION} (this may take a few minutes)..."
-        pyenv install "$LATEST_VERSION"
-        INSTALLED_VERSION="$LATEST_VERSION"
+        info "Pinned Python ${REQUIRED_PYTHON_VERSION} is not installed. Installing via pyenv..."
+        pyenv install "$REQUIRED_PYTHON_VERSION"
+        install_rc=$?
+
+        if [[ $install_rc -ne 0 ]]; then
+            error "Could not install pinned Python ${REQUIRED_PYTHON_VERSION}. Install/update pyenv definitions and retry:\n  brew update && brew upgrade pyenv\n  pyenv install ${REQUIRED_PYTHON_VERSION}"
+        fi
     fi
 
-    success "Using Python ${INSTALLED_VERSION}."
-    pyenv local "$INSTALLED_VERSION"
+    pyenv local "$REQUIRED_PYTHON_VERSION"
+    local_rc=$?
+
+    if [[ $local_rc -ne 0 ]]; then
+        error "Failed to set local pyenv version to ${REQUIRED_PYTHON_VERSION}."
+    fi
+
+    success "Using pinned Python ${REQUIRED_PYTHON_VERSION}."
 fi
 
 # Resolve the absolute path to the pyenv-managed python binary.
-# We do this outside the --python stage so --deps alone also benefits
-# (pyenv local may already be set from a previous run).
+# We do this outside the --python stage so --deps alone also benefits.
 PYTHON_BIN="$(pyenv which python 2>/dev/null || true)"
-[[ -z "$PYTHON_BIN" ]] && error "Cannot resolve python binary via pyenv. Run with --python first."
+[[ -z "$PYTHON_BIN" ]] && error "Cannot resolve python via pyenv. Run with --python first."
 
 # ---------------------------------------------------------------------------
 # Stage: deps
