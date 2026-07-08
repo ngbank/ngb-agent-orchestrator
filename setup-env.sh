@@ -219,6 +219,21 @@ if $DO_DEPS; then
 fi
 
 # ---------------------------------------------------------------------------
+# Guard: refresh editable install on every invocation
+# ---------------------------------------------------------------------------
+# Editable installs bind top-level package names in a generated finder module
+# at install time. If pyproject.toml's `[tool.setuptools.packages.find]`
+# include list changes without a reinstall, entry-point scripts like
+# `dispatcher-tui` (whose sys.path[0] is venv/bin, not the repo root) fail
+# with ModuleNotFoundError on the new or renamed packages. Refreshing on
+# every setup-env.sh run — regardless of --deps — is a no-op when nothing
+# has changed and self-heals drift otherwise. See AOS-205.
+if [[ -x "$VENV_DIR/bin/pip" ]] && ! $DO_DEPS; then
+    "$VENV_DIR/bin/pip" install --quiet -e . \
+        || error "Editable install refresh failed."
+fi
+
+# ---------------------------------------------------------------------------
 # Stage: goose
 # ---------------------------------------------------------------------------
 # Install the pinned goose CLI version to ~/.local/bin. This must match the
