@@ -173,8 +173,7 @@ prompt: |
   python3 << 'EOF'
   import json
   import sys
-  sys.path.insert(0, 'dispatcher')
-  from work_plan_validator import validate_work_plan
+  from orchestrator.work_planner.utilities import validate_work_plan
 
   with open('/tmp/workplan_temp.json', 'r') as f:
       data = json.load(f)
@@ -269,5 +268,5 @@ retry:
     - type: shell
       command: "test -s {{ output_path }}"
     - type: shell
-      command: "python3 -c 'import json, sys; sys.path.insert(0, \"dispatcher\"); from work_plan_validator import validate_work_plan; validate_work_plan(json.load(open(\"{{ output_path }}\")))' && echo '✅ Validation passed'"
+      command: "python3 -c 'import json; from orchestrator.work_planner.utilities import validate_work_plan; validate_work_plan(json.load(open(\"{{ output_path }}\")))' && echo '✅ Validation passed'"
   on_failure: "echo '❌ Validation failed - retrying with fixes...'"
