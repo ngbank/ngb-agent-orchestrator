@@ -61,7 +61,7 @@ extensions:
   - type: stdio
     name: agent-harness
     display_name: Agent Harness
-    cmd: "{{ GOOSE_MCP_PYTHON | default('python') }}"
+    cmd: "{{ GOOSE_MCP_PYTHON }}"
     args:
       - "-m"
       - "mcp_server.server"
