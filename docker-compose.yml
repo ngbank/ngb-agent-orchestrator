@@ -48,6 +48,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Optional override for the pinned goose CLI version. Default (empty)
+        # falls back to the version in `.goose-version`. See AOS-205.
+        GOOSE_VERSION: "${GOOSE_VERSION:-}"
     image: ngb-orchestrator:dev
     container_name: ngb-orchestrator
     # Inject `tini` as PID 1 so Python's subprocesses (goose + litellm proxy

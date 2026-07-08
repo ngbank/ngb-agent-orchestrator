@@ -6,9 +6,15 @@
 # Stages (all run by default; pass flags to run specific stages only):
 #   --python   Install Python 3.13.x via pyenv and pin .python-version
 #   --deps     Create/update the .venv and install pip dependencies
+#   --goose    Install the pinned Goose CLI version (from .goose-version) to ~/.local/bin
 #   --env      Generate .env from .env.example and sync secrets from Azure Key Vault
 #   --docker   Build the orchestrator-server container image (ngb-orchestrator:dev)
 #   --clean    Remove .venv/ (and legacy venv/) and .env, then run all stages from scratch
+#
+# Modifier flags:
+#   --goose-force  When installing goose, overwrite an existing binary even if its
+#                  version does not match .goose-version. Without this, --goose
+#                  aborts if a wrong version is already on PATH.
 #
 # Examples:
 #   ./setup-env.sh                   # run all stages (including --docker)
@@ -52,14 +58,17 @@ usage() {
 # ---------------------------------------------------------------------------
 DO_PYTHON=false
 DO_DEPS=false
+DO_GOOSE=false
 DO_ENV=false
 DO_DOCKER=false
 DO_CLEAN=false
 ENV_SYNC_MODE="keep"
+GOOSE_FORCE=false
 
 if [[ $# -eq 0 ]]; then
     DO_PYTHON=true
     DO_DEPS=true
+    DO_GOOSE=true
     DO_ENV=true
     DO_DOCKER=true
 else
@@ -67,13 +76,15 @@ else
         case "$arg" in
             --python) DO_PYTHON=true ;;
             --deps)   DO_DEPS=true ;;
+            --goose)  DO_GOOSE=true ;;
+            --goose-force) DO_GOOSE=true; GOOSE_FORCE=true ;;
             --env)    DO_ENV=true ;;
             --env-keep) DO_ENV=true; ENV_SYNC_MODE="keep" ;;
             --env-overwrite) DO_ENV=true; ENV_SYNC_MODE="overwrite" ;;
             --docker) DO_DOCKER=true ;;
             --clean)  DO_CLEAN=true ;;
             --help|-h) usage ;;
-            *) error "Unknown flag: $arg. Valid flags: --python, --deps, --env, --env-keep, --env-overwrite, --docker, --clean" ;;
+            *) error "Unknown flag: $arg. Valid flags: --python, --deps, --goose, --goose-force, --env, --env-keep, --env-overwrite, --docker, --clean" ;;
         esac
     done
 fi
@@ -82,6 +93,7 @@ fi
 if $DO_CLEAN; then
     DO_PYTHON=true
     DO_DEPS=true
+    DO_GOOSE=true
     DO_ENV=true
     DO_DOCKER=true
 fi
@@ -118,6 +130,13 @@ fi
 if $DO_PYTHON; then
     command -v pyenv &>/dev/null \
         || error "'pyenv' is not installed or not on PATH. Install from: https://github.com/pyenv/pyenv#installation"
+fi
+
+if $DO_GOOSE; then
+    command -v curl &>/dev/null \
+        || error "'curl' is not installed or not on PATH. Install curl before running --goose."
+    [[ -f .goose-version ]] \
+        || error ".goose-version file is missing. It must exist at the repo root and contain the pinned goose version (e.g. 1.33.1)."
 fi
 
 if $DO_DOCKER; then
@@ -195,8 +214,70 @@ if $DO_DEPS; then
     "$VENV_DIR/bin/pip" install --quiet -e .
 
     info "Installing pre-commit hooks..."
-    "$VENV_DIR/bin/pre-commit" install
+    "$VENV_DIR/bin/pre-commit" install \
+        --hook-type pre-commit \
+        --hook-type post-checkout \
+        --hook-type post-merge \
+        --hook-type post-rewrite
     success "Virtual environment ready."
+fi
+
+# ---------------------------------------------------------------------------
+# Guard: refresh editable install on every invocation
+# ---------------------------------------------------------------------------
+# Editable installs bind top-level package names in a generated finder module
+# at install time. If pyproject.toml's `[tool.setuptools.packages.find]`
+# include list changes without a reinstall, entry-point scripts like
+# `dispatcher-tui` (whose sys.path[0] is venv/bin, not the repo root) fail
+# with ModuleNotFoundError on the new or renamed packages. Refreshing on
+# every setup-env.sh run — regardless of --deps — is a no-op when nothing
+# has changed and self-heals drift otherwise. See AOS-205.
+if [[ -x "$VENV_DIR/bin/pip" ]] && ! $DO_DEPS; then
+    "$VENV_DIR/bin/pip" install --quiet -e . \
+        || error "Editable install refresh failed."
+fi
+
+# ---------------------------------------------------------------------------
+# Stage: goose
+# ---------------------------------------------------------------------------
+# Install the pinned goose CLI version to ~/.local/bin. This must match the
+# version installed inside the container (both read from .goose-version) so
+# that ORCHESTRATOR_MODE=local and ORCHESTRATOR_MODE=remote run identical
+# tooling. See AOS-205.
+if $DO_GOOSE; then
+    GOOSE_VERSION_PINNED="$(tr -d '[:space:]' < .goose-version)"
+    [[ -n "$GOOSE_VERSION_PINNED" ]] \
+        || error ".goose-version is empty. Populate it with the pinned version (e.g. 1.33.1)."
+
+    GOOSE_BIN_DIR="${HOME}/.local/bin"
+    GOOSE_BIN="${GOOSE_BIN_DIR}/goose"
+
+    installed_version=""
+    if command -v goose &>/dev/null; then
+        # `goose --version` prints " <version>" (leading space). Normalize.
+        installed_version="$(goose --version 2>/dev/null | tr -d '[:space:]' || true)"
+    fi
+
+    if [[ "$installed_version" == "$GOOSE_VERSION_PINNED" ]]; then
+        success "Goose ${GOOSE_VERSION_PINNED} already installed."
+    else
+        if [[ -n "$installed_version" ]] && ! $GOOSE_FORCE; then
+            error "Goose ${installed_version} is already on PATH but .goose-version pins ${GOOSE_VERSION_PINNED}. Rerun with --goose-force to overwrite (or uninstall the existing binary first)."
+        fi
+        info "Installing goose ${GOOSE_VERSION_PINNED} to ${GOOSE_BIN_DIR}..."
+        mkdir -p "$GOOSE_BIN_DIR"
+        CONFIGURE=false GOOSE_BIN_DIR="$GOOSE_BIN_DIR" \
+            curl -fsSL "https://github.com/aaif-goose/goose/releases/download/v${GOOSE_VERSION_PINNED}/download_cli.sh" | bash \
+            || error "Goose installer failed. Check the URL and your network connection."
+        actual="$("$GOOSE_BIN" --version 2>/dev/null | tr -d '[:space:]' || true)"
+        [[ "$actual" == "$GOOSE_VERSION_PINNED" ]] \
+            || error "Goose install verification failed: expected ${GOOSE_VERSION_PINNED}, got ${actual:-<none>}."
+        success "Goose ${GOOSE_VERSION_PINNED} installed at ${GOOSE_BIN}."
+        case ":${PATH}:" in
+            *:"${GOOSE_BIN_DIR}":*) ;;
+            *) info "Note: ${GOOSE_BIN_DIR} is not on your PATH. Add it to your shell profile to run 'goose' directly." ;;
+        esac
+    fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -413,6 +494,7 @@ echo "================================================================"
 echo " Done!"
 $DO_PYTHON && echo " Python:  $(pyenv version-name 2>/dev/null || echo 'n/a')"
 $DO_DEPS   && echo " Venv:    ${VENV_DIR}"
+$DO_GOOSE  && echo " Goose:   $(goose --version 2>/dev/null | tr -d '[:space:]' || echo 'n/a') (pinned: $(cat .goose-version 2>/dev/null || echo 'n/a'))"
 $DO_ENV    && echo " .env:    $(pwd)/.env"
 $DO_DOCKER && echo " Image:   ${DOCKER_IMAGE_TAG} (built with ${DOCKER_BIN:-docker})"
 echo "================================================================"

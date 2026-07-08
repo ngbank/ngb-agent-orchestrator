@@ -1,3 +1,10 @@
+# Restrict every hook to the pre-commit stage by default, so that the new
+# post-checkout / post-merge / post-rewrite hook types (used only by the
+# drift-guard hook below) don't accidentally trigger the full lint+test suite
+# on every branch switch or `git pull`. Individual hooks can opt in to other
+# stages with an explicit `stages:` field.
+default_stages: [pre-commit]
+
 repos:
   # ── General file hygiene ──────────────────────────────────────────────────
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -66,6 +73,27 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+
+  # ── Editable install drift guard ──────────────────────────────────────────
+  # Editable installs bind top-level package names in a generated finder module
+  # at install time. When pyproject.toml's [tool.setuptools.packages.find]
+  # include list changes on branch checkout / pull / rebase, entry-point
+  # scripts like `dispatcher-tui` (whose sys.path[0] is venv/bin, not the repo
+  # root) will fail with ModuleNotFoundError until the editable install is
+  # refreshed. This hook auto-runs `pip install -e .` whenever pyproject.toml
+  # differs between the previous and new refs, so the drift never surfaces to
+  # the developer. See AOS-205. Installed via `pre-commit install --hook-type
+  # post-checkout --hook-type post-merge --hook-type post-rewrite` (handled
+  # automatically by setup-env.sh).
+  - repo: local
+    hooks:
+      - id: refresh-editable-install
+        name: refresh editable install (pyproject.toml drift guard)
+        entry: .venv/bin/pip install --quiet -e .
+        language: system
+        pass_filenames: false
+        stages: [post-checkout, post-merge, post-rewrite]
+        files: ^pyproject\.toml$
 
   # ── Tests ─────────────────────────────────────────────────────────────────
   - repo: local

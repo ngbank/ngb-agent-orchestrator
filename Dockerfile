@@ -68,12 +68,26 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # graph nodes, which clone the target repo and shell out to `goose run --recipe
 # ...`. Goose is installed via the project's official prebuilt-binary script
 # (no cargo/rust build needed in the image).
+#
+# The version is pinned via .goose-version (single source of truth shared with
+# the host installer in setup-env.sh) rather than the moving `stable` tag,
+# because upstream releases have shipped regressions that trigger degenerate
+# reasoning loops with some models. See AOS-205 for the incident that motivated
+# this pin. Override at build time with `--build-arg GOOSE_VERSION=<x.y.z>`.
+ARG GOOSE_VERSION=
+COPY .goose-version /tmp/.goose-version
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates bzip2 git \
+    && apt-get install -y --no-install-recommends curl ca-certificates bzip2 git libgomp1 \
     && rm -rf /var/lib/apt/lists/* \
+    && GOOSE_VERSION="${GOOSE_VERSION:-$(cat /tmp/.goose-version)}" \
     && export CONFIGURE=false GOOSE_BIN_DIR=/usr/local/bin \
-    && curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | bash \
-    && goose --version
+    && curl -fsSL "https://github.com/aaif-goose/goose/releases/download/v${GOOSE_VERSION}/download_cli.sh" | bash \
+    && installed="$(goose --version | tr -d ' ')" \
+    && if [ "${installed}" != "${GOOSE_VERSION}" ]; then \
+         echo "goose version mismatch: expected ${GOOSE_VERSION}, got ${installed}" >&2; \
+         exit 1; \
+       fi \
+    && rm /tmp/.goose-version
 
 # Non-root user.
 RUN groupadd --system --gid 1001 orchestrator \

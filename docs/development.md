@@ -196,6 +196,38 @@ ngb-agent-orchestrator/
 
 ---
 
+## Upgrading the Goose CLI
+
+The pinned goose CLI version lives in [.goose-version](../.goose-version) at the repo root — a bare version string (e.g. `1.33.1`, no `v` prefix). It is the single source of truth read by three consumers:
+
+| Consumer | How it uses `.goose-version` |
+| --- | --- |
+| [Dockerfile](../Dockerfile) | Build-time `ARG GOOSE_VERSION` — the container's goose is installed from the pinned release and verified. Build fails if versions do not match. |
+| [setup-env.sh](../setup-env.sh) | Host-mode `--goose` stage installs the pinned version to `~/.local/bin/goose`. Aborts on drift unless `--goose-force` is passed. |
+| Local-mode runtime (`orchestrator.workflow_service.factory`) | On every dispatcher startup in `ORCHESTRATOR_MODE=local`, compares host `goose --version` against the pin and logs a warning on drift. |
+
+### Bump procedure
+
+```bash
+# 1. Update the pin
+echo "1.34.0" > .goose-version
+
+# 2. Reinstall on host (setup-env.sh will detect drift and refuse without --goose-force)
+./setup-env.sh --goose-force
+
+# 3. Rebuild container so remote mode picks it up
+docker compose build orchestrator
+docker compose up -d --force-recreate orchestrator
+
+# 4. Smoke test both modes with a real ticket
+ORCHESTRATOR_MODE=local  .venv/bin/python -m dispatcher.run --ticket <TICKET>
+ORCHESTRATOR_MODE=remote .venv/bin/python -m dispatcher.run --ticket <TICKET>
+```
+
+Commit `.goose-version` in the same change that documents the upgrade — see AOS-205 for the motivating incident (goose 1.41.0 from the unpinned `stable` tag triggered a Kimi-K2.6 reasoning loop that never resolved).
+
+---
+
 ## Troubleshooting
 
 ### Virtual environment not activated
@@ -216,11 +248,12 @@ You should see `(venv)` in your prompt.
 ### Goose command not found
 
 ```bash
+./setup-env.sh --goose        # installs the pinned version to ~/.local/bin/goose
 export PATH="$HOME/.local/bin:$PATH"
 goose --version
 ```
 
-If still not found, reinstall Goose following the [official instructions](https://github.com/block/goose).
+If a wrong version is already on `PATH`, rerun with `./setup-env.sh --goose-force`. See [Upgrading the Goose CLI](#upgrading-the-goose-cli) for the drift-prevention design.
 
 ### Running a LiteLLM proxy for interactive debugging
 
