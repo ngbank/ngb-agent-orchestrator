@@ -1435,3 +1435,28 @@ def test_openapi_schema_exposes_new_routes(client: TestClient) -> None:
     assert "/workflows/{workflow_id}/audit-log" in paths
     assert "/admin/clear-db" in paths
     assert "/admin/workflows/{workflow_id}/mark-interrupted" in paths
+
+
+def test_create_app_configures_root_logger_for_workflow_file_handler(
+    fake_service: FakeWorkflowService,
+) -> None:
+    """Regression: without ``setup_logging()`` the server's root logger stays
+    at WARNING (Python default), which drops the ``subprocess.goose - INFO``
+    records the per-workflow ``WorkflowFileHandler`` was designed to capture
+    — leaving ``workflow.log`` empty and the TUI's live tail pane blank in
+    remote mode.
+    """
+    import logging
+
+    root = logging.getLogger()
+    original_level = root.level
+    try:
+        # Simulate a pristine interpreter where setup_logging() hasn't run.
+        root.setLevel(logging.WARNING)
+        create_app(service=fake_service)
+        assert root.level <= logging.INFO, (
+            f"Root logger level {root.level} would drop INFO records — "
+            "workflow.log will be empty in the container."
+        )
+    finally:
+        root.setLevel(original_level)

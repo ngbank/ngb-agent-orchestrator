@@ -82,6 +82,13 @@ def setup_logging() -> None:
         format=LOG_FORMAT,
         datefmt=LOG_DATEFMT,
     )
+    # ``basicConfig`` is a no-op when the root logger already has handlers
+    # (uvicorn / caplog / anything imported earlier will trip this), which
+    # silently leaves root at its WARNING default and drops every
+    # ``subprocess.goose - INFO`` record before it can reach the per-workflow
+    # ``WorkflowFileHandler``. Set the level unconditionally so the intended
+    # LOG_LEVEL always wins.
+    logging.getLogger().setLevel(log_level)
 
     # Log the setup
     logger = logging.getLogger("ngb_orchestrator")
