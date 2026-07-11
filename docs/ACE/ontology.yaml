@@ -1,0 +1,240 @@
+version: 1.0
+name: EQB Ontology Blueprint
+description: Canonical semantic model for banking domains, entities, and relationships
+date: 2026-04
+
+domains:
+
+  Identity:
+    description: User Identity, authentication, and interaction context. Party legal entities and regulatory system of record.
+
+  Product:
+    description: Product definitions and feature composition
+
+  FinancialAccount:
+    description: Ledger-backed financial instruments and configuration
+
+  Transaction:
+    description: Atomic money movement and financial events
+
+  Social:
+    description: Non-legal groupings and shared access constructs
+
+  Incentives:
+    description: Promotions, rewards, and growth mechanisms
+
+
+entities:
+
+  # ----------------------------
+  # DIGITAL IDENTITY
+  # ----------------------------
+
+  User:
+    domain: Identity
+    description: Authenticated system-level identity
+    attributes: ## core entity attributes
+      user_id: string
+      authentication_method: string
+      status: string
+    relationships:
+      - name: authenticates_as
+        target: BankingProfile
+        cardinality: "1:N"
+
+  BankingProfile:
+    domain: Identity
+    description: Contextual role a User operates under
+    attributes: ## core entity attributes
+      profile_id: string
+      profile_type: string
+    relationships:
+      - name: represents
+        target: Party
+        cardinality: "N:1"
+      - name: eligible_for
+        target: PromoOffer
+        cardinality: "N:M"
+
+  # ----------------------------
+  # LEGAL IDENTITY
+  # ----------------------------
+
+  Party:
+    domain: Identity
+    description: Legal entity recognized by the bank
+    attributes: ## core entity attributes
+      party_id: string
+      party_type: enum[individual, business, trust, estate]
+      legal_name: string
+    relationships:
+      - name: member_of
+        target: PartyGroup
+        cardinality: "N:M"
+      - name: owns_account
+        target: FinancialAccount
+        cardinality: "1:N"
+      - name: beneficiary_of
+        target: FinancialAccount
+        cardinality: "N:M"
+
+  # ----------------------------
+  # Social Banking
+  # ----------------------------
+  PartyGroup:
+    domain: Social
+    description: Non-legal grouping of Parties for shared access
+    attributes: ## core entity attributes
+      group_id: string
+      group_type: string
+    constraints:
+      no_legal_personhood: true
+      cannot_own_accounts: true
+    relationships:
+      - name: includes_member
+        target: Party
+        cardinality: "1:N"
+      - name: associated_with_account
+        target: FinancialAccount
+        cardinality: "N:M"
+
+  # ----------------------------
+  # PRODUCT
+  # ----------------------------
+
+  Product:
+    domain: Product
+    description: Abstract definition of a bank offering
+    attributes:   ## core entity attributes
+      product_id: string
+      name: string
+      category: string
+    relationships:
+      - name: has_feature
+        target: ProductFeature
+        cardinality: "1:N"
+      - name: fulfilled_by
+        target: FinancialAccount
+        cardinality: "1:N"
+
+  ProductFeature:
+    domain: Product
+    description: Defines product capabilities and characteristics
+    attributes:  ## core entity attributes
+      feature_id: string
+      feature_type: string
+    relationships:
+      - name: part_of_product
+        target: Product
+        cardinality: "N:1"
+
+  # ----------------------------
+  # FINANCIAL ACCOUNT
+  # ----------------------------
+
+  FinancialAccount:
+    domain: FinancialAccount
+    description: Ledgered financial instrument
+    attributes:
+      account_id: string
+      account_type: string
+      currency: string
+    relationships:
+      - name: owned_by
+        target: Party
+        cardinality: "N:1"
+      - name: fulfills_product
+        target: Product
+        cardinality: "N:1"
+      - name: has_feature
+        target: FinancialAccountFeature
+        cardinality: "1:N"
+      - name: has_transaction
+        target: FinancialAccountTransaction
+        cardinality: "1:N"
+
+  FinancialAccountFeature:
+    domain: FinancialAccount
+    description: Operational and regulatory characteristics of an account
+    attributes:
+      feature_id: string
+      feature_type: string
+    relationships:
+      - name: applies_to
+        target: FinancialAccount
+        cardinality: "N:1"
+      - name: triggers_transaction
+        target: FinancialAccountTransaction
+        cardinality: "1:N"
+      - name: linked_reward_program
+        target: RewardProgram
+        cardinality: "0..1"
+
+  # ----------------------------
+  # TRANSACTIONS
+  # ----------------------------
+
+  FinancialAccountTransaction:
+    domain: Transaction
+    description: Atomic financial movement record
+    attributes:
+      transaction_id: string
+      transaction_type: string
+      amount: decimal
+      currency: string
+      transaction_date: datetime
+    relationships:
+      - name: affects_account
+        target: FinancialAccount
+        cardinality: "N:1"
+      - name: triggered_by_feature
+        target: FinancialAccountFeature
+        cardinality: "0..1"
+      - name: generates_reward
+        target: RewardTransaction
+        cardinality: "0..1"
+
+  # ----------------------------
+  # Incentives
+  # ----------------------------
+
+  PromoOffer:
+    domain: Incentives
+    description: An offerend incentive of customer value based on specific actions or critieria
+    attributes:
+      promo_id: string
+      promo_type: string
+    relationships:
+      - name: triggers
+        target: FinancialAccountTransaction
+        cardinality: "1:N"
+      - name: applies_to
+        target: RewardTransactions
+        cardinality: "0..N"
+      - name: applies_to
+        target: FinancialAccountFeatures
+        cardinality: "0..1"
+
+  RewardTransactions:
+    domain: Incentives
+    description: Transactional event where a reward is earned or refunded
+    attributes:
+      reward_transaction_id: string
+      transaction_type: string
+      amount: numeric
+      transaction_date: datetime
+    relationships:
+      - name: applies_to
+        target: RewardProgram
+        cardinality: "1..N"
+
+  RewardProgram:
+    domain: Incentives
+    description: The value system that defines how the incentives works
+    attributes:
+      reward_program_id: string
+      program_type: string
+    relationships:
+      - name: linked_to
+        target: FinancialAccountFeature
+        cardinality: "1..0"
