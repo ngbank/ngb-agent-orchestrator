@@ -123,16 +123,16 @@ The promoted item's confidence becomes `min(initial_confidence + 0.20, 1.0)`. Th
 
 ## Migration plan
 
-The existing migration sequence ends at `010_pr_loop.sql`. New migrations in order:
+The existing migration sequence ends at `011_rename_execution_summary.sql`. New migrations in order:
 
 | File | Change | Notes |
 |---|---|---|
-| `011_context_extracted_at.sql` | `ALTER TABLE workflows ADD COLUMN context_extracted_at TEXT` | Prerequisite for offline job and deduplication |
-| `012_rejection_reason.sql` | `ALTER TABLE workflows ADD COLUMN rejection_reason TEXT` | Moves rejection reason from audit_log to first-class field |
-| `013_context_items.sql` | Creates `context_items` and `context_items_staged` with indexes | Main context store |
-| `014_pr_comments_json.sql` | Declarative only — no data transform | Marks the column as expecting JSON format going forward |
+| `012_context_extracted_at.sql` | `ALTER TABLE workflows ADD COLUMN context_extracted_at TEXT` | Prerequisite for offline job and deduplication |
+| `013_rejection_reason.sql` | `ALTER TABLE workflows ADD COLUMN rejection_reason TEXT` | Moves rejection reason from audit_log to first-class field |
+| `014_context_items.sql` | Creates `context_items` and `context_items_staged` with indexes | Main context store |
+| `015_pr_comments_json.sql` | Declarative only — no data transform | Marks the column as expecting JSON format going forward |
 
-**On migration 014:** The learning pipeline handles the format transition by checking whether `pr_comments` parses as valid JSON. If it does not, the workflow is skipped and deferred until a separate one-time backfill script transforms old rows. The schema migration declares intent; the data migration transforms the rows; the pipeline only processes rows that meet the new contract. This avoids dual-format handling entirely and keeps the classifier unambiguous.
+**On migration 015:** The learning pipeline handles the format transition by checking whether `pr_comments` parses as valid JSON. If it does not, the workflow is skipped and deferred until a separate one-time backfill script transforms old rows. The schema migration declares intent; the data migration transforms the rows; the pipeline only processes rows that meet the new contract. This avoids dual-format handling entirely and keeps the classifier unambiguous.
 
 **Indexes for `context_items`:**
 

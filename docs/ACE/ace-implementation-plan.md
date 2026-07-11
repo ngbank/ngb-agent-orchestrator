@@ -90,10 +90,10 @@ trace reader and shares only the `state/` migration/DB layer.
 | # | Type | Ticket | Notes |
 |---|------|--------|-------|
 | 1.1 | chore | Scaffold `ace` package and packaging entries | Empty modules, pyproject scripts, packages.find; CI/pyright green |
-| 1.2 | feat | Migration 011: `workflows.context_extracted_at` | Idempotency marker for the mining job |
-| 1.3 | feat | Migration 012: `workflows.rejection_reason` + write path | Write alongside status change in `update_status()`; removes the audit_log JOIN |
-| 1.4 | feat | Migration 013: `context_items` + `context_items_staged` + indexes | Schema exactly per topic 11, incl. the 5 indexes |
-| 1.5 | feat | `pr_comments` JSON refactor (migration 014) + one-time backfill script | Do BEFORE first extraction pass so the reader is single-format (topic 07 ordering note) |
+| 1.2 | feat | Migration 012: `workflows.context_extracted_at` | Idempotency marker for the mining job |
+| 1.3 | feat | Migration 013: `workflows.rejection_reason` + write path | Write alongside status change in `update_status()`; removes the audit_log JOIN |
+| 1.4 | feat | Migration 014: `context_items` + `context_items_staged` + indexes | Schema exactly per topic 11, incl. the 5 indexes |
+| 1.5 | feat | `pr_comments` JSON refactor (migration 015) + one-time backfill script | Do BEFORE first extraction pass so the reader is single-format (topic 07 ordering note) |
 | 1.6 | feat | Domain models + `ContextItemRepository` with tests | CRUD, staged ops (promote/reject with timestamps), provenance append, confidence update |
 
 **Exit criteria:** migrations apply cleanly to a copy of `state/local.db`; repository round-trips
@@ -107,7 +107,7 @@ Nothing reaches runtime. This is Phase 1 shadow learning.
 
 | # | Type | Ticket | Notes |
 |---|------|--------|-------|
-| 2.1 | feat | Trace reader: extraction query + `TraceBundle` model | The topic-07 query, minus the audit_log JOIN (uses 012 column); filters `context_extracted_at IS NULL` |
+| 2.1 | feat | Trace reader: extraction query + `TraceBundle` model | The topic-07 query, minus the audit_log JOIN (uses 013 column); filters `context_extracted_at IS NULL` |
 | 2.2 | feat | Rule-based evaluator with tests | Encode the topic-09 triage table verbatim; verdicts: proceed / skip / flag |
 | 2.3 | feat | Reflector: LLM candidate extraction | Candidate schema from topic 09; prompt enforces generalisability (no ticket keys/branches); structured output validation |
 | 2.4 | feat | Curator: staging writes with create/merge/contradict | Keyword-similarity matching (no embeddings yet); quality gate reformulates/discards run-specific facts; ALL output goes to staging |
@@ -210,7 +210,7 @@ you review them against the canonical model and approve or reject; approvals ame
 | # | Type | Ticket | Notes |
 |---|------|--------|-------|
 | 7.1 | feat | Ontology schema module: parser, validator, models | Load `ontology.yaml` into typed models (Domain, Entity, Relationship, cardinality); validate referential integrity (every target exists); round-trip serialization preserving comments/ordering. Also fixes existing inconsistencies surfaced by validation (e.g. `RewardTransactions` vs `RewardTransaction` naming, `1..0` cardinality) |
-| 7.2 | feat | Migration 015: `ontology_candidates` table | Candidate = source_entity, relationship_name, target_entity, cardinality, rationale, kind (`new_relationship` / `modified_relationship` / `new_entity_hint`), provenance JSON (same evidence-event shape as context items), status (`proposed` / `approved` / `rejected`), reviewed_by/at, review_notes. Never hard-deleted |
+| 7.2 | feat | Migration 016: `ontology_candidates` table | Candidate = source_entity, relationship_name, target_entity, cardinality, rationale, kind (`new_relationship` / `modified_relationship` / `new_entity_hint`), provenance JSON (same evidence-event shape as context items), status (`proposed` / `approved` / `rejected`), reviewed_by/at, review_notes. Never hard-deleted |
 | 7.3 | feat | Ontology miner pipeline | LLM pass over TraceBundles (reuses 2.1 reader + 2.5 runner pattern, separate `ontology_extracted_at` marker): given the canonical ontology + trace, propose relationships evidenced in the work but absent from canon; dedupe against canon AND existing candidates; all output → `ontology_candidates` as `proposed` |
 | 7.4 | feat | `ace ontology` CLI commands | `mine`, `list`, `show` (candidate + evidence + affected canon slice), `approve`, `reject` with `--notes`; approval records reviewer identity |
 | 7.5 | feat | TUI ontology review screen | New screen in `ace-tui`: candidate queue; detail view renders the candidate as a diff against the current canonical entity definition; approve/reject modals with notes |
