@@ -250,6 +250,162 @@ def test_migration_idempotency(test_db):
     assert workflow["ticket_key"] == "AOS-44"
 
 
+def test_context_items_table_schema(test_db):
+    """context_items has the columns from the ACE data model doc."""
+    conn = get_connection()
+    try:
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(context_items)")}
+    finally:
+        conn.close()
+
+    assert columns == {
+        "id",
+        "pattern_type",
+        "scope",
+        "scope_value",
+        "description",
+        "confidence",
+        "occurrence_count",
+        "last_validated",
+        "created_at",
+        "updated_at",
+        "status",
+        "provenance",
+    }
+
+
+def test_context_items_staged_table_schema(test_db):
+    """context_items_staged has context_items' columns plus review/promotion fields."""
+    conn = get_connection()
+    try:
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(context_items_staged)")}
+    finally:
+        conn.close()
+
+    assert columns == {
+        "id",
+        "pattern_type",
+        "scope",
+        "scope_value",
+        "description",
+        "confidence",
+        "occurrence_count",
+        "last_validated",
+        "created_at",
+        "updated_at",
+        "status",
+        "provenance",
+        "review_notes",
+        "promoted_at",
+        "rejected_at",
+    }
+
+
+def test_context_items_indexes_exist(test_db):
+    """All 5 context_items indexes from the migration are present."""
+    conn = get_connection()
+    try:
+        indexes = {
+            row["name"]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'context_items'"
+            )
+            if not row["name"].startswith("sqlite_autoindex_")
+        }
+    finally:
+        conn.close()
+
+    assert indexes == {
+        "idx_context_items_pattern_type",
+        "idx_context_items_scope",
+        "idx_context_items_confidence",
+        "idx_context_items_status",
+        "idx_context_items_last_validated",
+    }
+
+
+def test_context_items_insert_and_query(test_db):
+    """A row can be inserted into context_items and read back."""
+    conn = get_connection()
+    try:
+        conn.execute(
+            """
+            INSERT INTO context_items (
+                id, pattern_type, scope, scope_value, description,
+                confidence, occurrence_count, last_validated,
+                created_at, updated_at, status, provenance
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "item-1",
+                "approach",
+                "file_pattern",
+                "state/migrations/**",
+                "Use additive migrations, never in-place ALTER for SQLite.",
+                0.75,
+                2,
+                "2026-05-15T14:32:00Z",
+                "2026-05-15T14:32:00Z",
+                "2026-05-15T14:32:00Z",
+                "active",
+                "[]",
+            ),
+        )
+        conn.commit()
+
+        row = conn.execute("SELECT * FROM context_items WHERE id = ?", ("item-1",)).fetchone()
+    finally:
+        conn.close()
+
+    assert row["pattern_type"] == "approach"
+    assert row["confidence"] == 0.75
+    assert row["status"] == "active"
+
+
+def test_context_items_staged_insert_and_query(test_db):
+    """A row can be inserted into context_items_staged and read back."""
+    conn = get_connection()
+    try:
+        conn.execute(
+            """
+            INSERT INTO context_items_staged (
+                id, pattern_type, scope, scope_value, description,
+                confidence, occurrence_count, last_validated,
+                created_at, updated_at, status, provenance,
+                review_notes, promoted_at, rejected_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "staged-1",
+                "concern",
+                "codebase_wide",
+                None,
+                "Reviewer flagged missing test coverage on state transitions.",
+                0.5,
+                1,
+                "2026-06-01T00:00:00Z",
+                "2026-06-01T00:00:00Z",
+                "2026-06-01T00:00:00Z",
+                "staged",
+                "[]",
+                None,
+                None,
+                None,
+            ),
+        )
+        conn.commit()
+
+        row = conn.execute(
+            "SELECT * FROM context_items_staged WHERE id = ?", ("staged-1",)
+        ).fetchone()
+    finally:
+        conn.close()
+
+    assert row["status"] == "staged"
+    assert row["promoted_at"] is None
+    assert row["rejected_at"] is None
+
+
 def test_workflow_not_found(test_db):
     """Test behavior when workflow doesn't exist."""
     workflow = state_store.get_workflow("non-existent-id")
