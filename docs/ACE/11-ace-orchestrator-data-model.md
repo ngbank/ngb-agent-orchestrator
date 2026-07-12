@@ -127,7 +127,7 @@ The existing migration sequence ends at `011_rename_execution_summary.sql`. New 
 
 | File | Change | Notes |
 |---|---|---|
-| `012_context_extracted_at.sql` | `ALTER TABLE workflows ADD COLUMN context_extracted_at TEXT` | Prerequisite for offline job and deduplication |
+| `012_context_extraction_log.sql` | Creates ACE-owned `context_extraction_log(workflow_id PK, extracted_at)` | Idempotency ledger for the mining job; anti-join keeps ACE writes out of `workflows` |
 | `013_rejection_reason.sql` | `ALTER TABLE workflows ADD COLUMN rejection_reason TEXT` | Moves rejection reason from audit_log to first-class field |
 | `014_context_items.sql` | Creates `context_items` and `context_items_staged` with indexes | Main context store |
 | `015_pr_comments_json.sql` | Declarative only — no data transform | Marks the column as expecting JSON format going forward |

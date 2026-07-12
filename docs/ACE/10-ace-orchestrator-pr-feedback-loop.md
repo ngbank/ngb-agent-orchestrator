@@ -87,7 +87,7 @@ run_learning_pipeline:
   2. evaluator(workflow, classified_feedback)
   3. reflector(workflow, classified_feedback)  ← receives pre-typed feedback
   4. curator(candidates)
-  5. mark context_extracted_at
+  5. insert context_extraction_log row
 ```
 
 The Evaluator benefits from pre-classified feedback: it can short-circuit to `proceed` immediately if any `Correction` or `Omission` items are present, without parsing raw text. The Reflector generates cleaner candidates because the feedback type guides what kind of context item to produce.
