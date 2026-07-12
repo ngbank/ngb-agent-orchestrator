@@ -90,7 +90,7 @@ trace reader and shares only the `state/` migration/DB layer.
 | # | Type | Ticket | Notes |
 |---|------|--------|-------|
 | 1.1 | chore | Scaffold `ace` package and packaging entries | Empty modules, pyproject scripts, packages.find; CI/pyright green |
-| 1.2 | feat | Migration 012: `workflows.context_extracted_at` | Idempotency marker for the mining job |
+| 1.2 | feat | Migration 012: `context_extraction_log` table | ACE-owned idempotency ledger for the mining job; keeps ACE writes out of `workflows` |
 | 1.3 | feat | Migration 013: `workflows.rejection_reason` + write path | Write alongside status change in `update_status()`; removes the audit_log JOIN |
 | 1.4 | feat | Migration 014: `context_items` + `context_items_staged` + indexes | Schema exactly per topic 11, incl. the 5 indexes |
 | 1.5 | feat | `pr_comments` JSON refactor (migration 015) + one-time backfill script | Do BEFORE first extraction pass so the reader is single-format (topic 07 ordering note) |
@@ -107,11 +107,11 @@ Nothing reaches runtime. This is Phase 1 shadow learning.
 
 | # | Type | Ticket | Notes |
 |---|------|--------|-------|
-| 2.1 | feat | Trace reader: extraction query + `TraceBundle` model | The topic-07 query, minus the audit_log JOIN (uses 013 column); filters `context_extracted_at IS NULL` |
+| 2.1 | feat | Trace reader: extraction query + `TraceBundle` model | The topic-07 query, minus the audit_log JOIN (uses 013 column); anti-joins `context_extraction_log` for eligibility |
 | 2.2 | feat | Rule-based evaluator with tests | Encode the topic-09 triage table verbatim; verdicts: proceed / skip / flag |
 | 2.3 | feat | Reflector: LLM candidate extraction | Candidate schema from topic 09; prompt enforces generalisability (no ticket keys/branches); structured output validation |
 | 2.4 | feat | Curator: staging writes with create/merge/contradict | Keyword-similarity matching (no embeddings yet); quality gate reformulates/discards run-specific facts; ALL output goes to staging |
-| 2.5 | feat | Offline mining runner | Batch over eligible workflows, per-row try/except, `learning_pipeline_failed` audit action, sets `context_extracted_at` on success; `--limit`, `--dry-run`, `--workflow-id` flags |
+| 2.5 | feat | Offline mining runner | Batch over eligible workflows, per-row try/except, `learning_pipeline_failed` audit action, inserts `context_extraction_log` row on success; `--limit`, `--dry-run`, `--workflow-id` flags |
 | 2.6 | chore | First historical extraction pass + calibration notes | Run against real DB; record item counts, dedup pressure, confidence distribution in a findings doc — this calibrates thresholds for Epic 5 |
 
 **Exit criteria:** full historical pass completes idempotently (second run processes 0 rows);

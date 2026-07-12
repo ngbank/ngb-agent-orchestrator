@@ -36,7 +36,7 @@ There are two valid trigger points, and you'll likely use both.
 
 In practice: start with the offline job for the historical extraction pass. Add the post-completion hook to the live graph once the pipeline is validated.
 
-**Avoiding double-processing:** Add a `context_extracted_at` column to `workflows` (nullable). The offline job filters `WHERE context_extracted_at IS NULL`. The live hook sets it after completion.
+**Avoiding double-processing:** An ACE-owned `context_extraction_log` table (migration 012) records `(workflow_id, extracted_at)` for every mined workflow. The offline job anti-joins against it (`WHERE NOT EXISTS (SELECT 1 FROM context_extraction_log l WHERE l.workflow_id = w.id)`); the live hook inserts a row after completion. The ledger deliberately lives outside `workflows`: ACE never writes to orchestrator tables, orchestrator table rebuilds (the migration-010 pattern) don't need to carry ACE state, and the ledger is already shaped like a consumer offset if completion signals later move to an event-driven system.
 
 ---
 
@@ -137,7 +137,7 @@ This is why the failure-path Curator is a distinct prompt from the success-path 
 
 The learning pipeline must never break the workflow completion path. The workflow `COMPLETED` or `FAILED` status is set by `persist_results` / `await_pr_approval` before the pipeline node runs. A pipeline failure therefore cannot corrupt the workflow record.
 
-Safe pattern: wrap the entire pipeline in a try/except, log failures to `audit_log` with action `learning_pipeline_failed`, and continue. The offline job retries unprocessed rows (`context_extracted_at IS NULL`) on its next run.
+Safe pattern: wrap the entire pipeline in a try/except, log failures to `audit_log` with action `learning_pipeline_failed`, and continue. The offline job retries unprocessed rows (no `context_extraction_log` entry) on its next run.
 
 ---
 
