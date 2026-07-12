@@ -235,6 +235,10 @@ class SQLiteWorkflowRepository:
     ) -> None:
         """Update workflow status and optionally PR URL.
 
+        When *status* is REJECTED, *reason* is also written to the
+        `rejection_reason` column, alongside the audit log entry, so callers
+        can read it without a JOIN on audit_log (ACE Epic 1, ticket 1.3).
+
         The workflow status update and corresponding audit log entry are written
         atomically in a single transaction. If either fails, both are rolled back.
         """
@@ -244,24 +248,19 @@ class SQLiteWorkflowRepository:
             # Start explicit transaction
             conn.execute("BEGIN IMMEDIATE")
             try:
+                set_clauses = ["status = ?", "updated_at = ?"]
+                params: list = [status.value, now]
                 if pr_url:
-                    conn.execute(
-                        """
-                        UPDATE workflows
-                        SET status = ?, pr_url = ?, updated_at = ?
-                        WHERE id = ?
-                        """,
-                        (status.value, pr_url, now, workflow_id),
-                    )
-                else:
-                    conn.execute(
-                        """
-                        UPDATE workflows
-                        SET status = ?, updated_at = ?
-                        WHERE id = ?
-                        """,
-                        (status.value, now, workflow_id),
-                    )
+                    set_clauses.append("pr_url = ?")
+                    params.append(pr_url)
+                if status == WorkflowStatus.REJECTED:
+                    set_clauses.append("rejection_reason = ?")
+                    params.append(reason)
+                params.append(workflow_id)
+                conn.execute(
+                    f"UPDATE workflows SET {', '.join(set_clauses)} WHERE id = ?",
+                    params,
+                )
                 _create_audit_log(
                     conn,
                     workflow_id=workflow_id,

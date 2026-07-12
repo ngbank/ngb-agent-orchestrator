@@ -115,6 +115,37 @@ def test_update_status_with_pr_url(test_db):
     assert workflow["pr_url"] == "https://github.com/org/repo/pull/123"
 
 
+def test_update_status_rejected_writes_rejection_reason(test_db):
+    """Rejecting a workflow persists the reason to the rejection_reason column."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-62")
+
+    state_store.update_status(
+        workflow_id=workflow_id,
+        status=WorkflowStatus.REJECTED,
+        actor="developer",
+        reason="scope too broad",
+    )
+
+    workflow = state_store.get_workflow(workflow_id)
+    assert workflow["status"] == WorkflowStatus.REJECTED
+    assert workflow["rejection_reason"] == "scope too broad"
+
+
+def test_update_status_non_rejected_leaves_rejection_reason_null(test_db):
+    """Non-rejection status updates must not populate rejection_reason."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-63")
+
+    state_store.update_status(
+        workflow_id=workflow_id,
+        status=WorkflowStatus.IN_PROGRESS,
+        actor="test_user",
+        reason="Started work",
+    )
+
+    workflow = state_store.get_workflow(workflow_id)
+    assert workflow["rejection_reason"] is None
+
+
 def test_update_status_creates_audit_log(test_db):
     """Test that status updates create audit log entries."""
     workflow_id = state_store.create_workflow(ticket_key="AOS-39")
