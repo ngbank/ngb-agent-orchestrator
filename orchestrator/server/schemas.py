@@ -189,7 +189,7 @@ class WorkflowDetailResponse(BaseModel):
     work_plan: Optional[Dict[str, Any]] = None
     code_generation_summary: Optional[Dict[str, Any]] = None
     clarification_history: List[Dict[str, Any]] = Field(default_factory=list)
-    pr_comments: Optional[str] = None
+    pr_comments: List[Dict[str, Any]] = Field(default_factory=list)
     usage_summary: Dict[str, Any] = Field(default_factory=dict)
     retry_count: int = 0
 
@@ -205,7 +205,7 @@ class WorkflowDetailResponse(BaseModel):
             work_plan=detail.work_plan,
             code_generation_summary=detail.code_generation_summary,
             clarification_history=list(detail.clarification_history),
-            pr_comments=detail.pr_comments,
+            pr_comments=list(detail.pr_comments),
             usage_summary=dict(detail.usage_summary),
             retry_count=detail.retry_count,
         )

@@ -181,7 +181,7 @@ def _make_detail(
         work_plan=None,
         code_generation_summary=None,
         clarification_history=[],
-        pr_comments=None,
+        pr_comments=[],
         usage_summary={},
         retry_count=0,
     )

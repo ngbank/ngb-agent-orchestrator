@@ -1,0 +1,14 @@
+-- Migration 015: Normalize workflows.pr_comments toward the structured JSON format.
+-- pr_comments moves from append-only separator-delimited text to a JSON array of
+-- round entries (round, comments, actor, timestamp), parallel to clarification_history
+-- (migration 008). The column stays TEXT — no DDL change is needed, only a write-path
+-- format change; see docs/ACE/07-ace-orchestrator-current-state.md.
+-- This migration only normalizes rows that never received PR comments (NULL) to the
+-- canonical empty array, matching context_items.provenance's '[]' default (migration 014).
+-- Existing free-text rows are converted by the separate one-time backfill script
+-- (scripts/backfill_pr_comments_json.py), which needs Python string parsing and
+-- audit_log actor recovery that plain SQL can't do — see
+-- docs/ACE/10-ace-orchestrator-pr-feedback-loop.md.
+-- Idempotency is handled by the migration runner (schema_migrations tracking table),
+-- so this file runs exactly once.
+UPDATE workflows SET pr_comments = '[]' WHERE pr_comments IS NULL;

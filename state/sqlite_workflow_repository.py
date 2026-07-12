@@ -51,6 +51,11 @@ class SQLiteWorkflowRepository:
                     )
                 except (json.JSONDecodeError, TypeError):
                     workflow["clarification_history"] = []
+            if workflow.get("pr_comments"):
+                try:
+                    workflow["pr_comments"] = json.loads(workflow["pr_comments"])
+                except (json.JSONDecodeError, TypeError):
+                    workflow["pr_comments"] = []
             if workflow.get("code_generation_summary"):
                 try:
                     workflow["code_generation_summary"] = json.loads(
@@ -89,6 +94,11 @@ class SQLiteWorkflowRepository:
                         )
                     except (json.JSONDecodeError, TypeError):
                         workflow["clarification_history"] = []
+                if workflow.get("pr_comments"):
+                    try:
+                        workflow["pr_comments"] = json.loads(workflow["pr_comments"])
+                    except (json.JSONDecodeError, TypeError):
+                        workflow["pr_comments"] = []
                 workflow["status"] = WorkflowStatus(workflow["status"])
                 workflows.append(workflow)
             return workflows
@@ -138,6 +148,11 @@ class SQLiteWorkflowRepository:
                         wf["clarification_history"] = json.loads(wf["clarification_history"])
                     except (json.JSONDecodeError, TypeError):
                         wf["clarification_history"] = []
+                if wf.get("pr_comments"):
+                    try:
+                        wf["pr_comments"] = json.loads(wf["pr_comments"])
+                    except (json.JSONDecodeError, TypeError):
+                        wf["pr_comments"] = []
                 wf["status"] = WorkflowStatus(wf["status"])
                 result.append(wf)
             return result
@@ -435,10 +450,12 @@ class SQLiteWorkflowRepository:
         comments: str,
         actor: str = "system",
     ) -> None:
-        """Append PR review comments to *workflow_id*, preserving previous rounds.
+        """Append a PR review round entry to *workflow_id*'s pr_comments JSON array.
 
-        The PR comments update and corresponding audit log entry are written
-        atomically in a single transaction. If either fails, both are rolled back.
+        Stored as a JSON array of round entries (round, comments, actor, timestamp),
+        parallel to clarification_history. The PR comments update and corresponding
+        audit log entry are written atomically in a single transaction. If either
+        fails, both are rolled back.
         """
         now = datetime.now(UTC).isoformat()
 
@@ -455,9 +472,23 @@ class SQLiteWorkflowRepository:
                     conn.rollback()
                     return
 
-                existing = row["pr_comments"] or ""
-                separator = f"\n\n--- Review round {now} ---\n"
-                updated = (existing + separator + comments).strip()
+                rounds: List[Dict] = []
+                if row["pr_comments"]:
+                    try:
+                        rounds = json.loads(row["pr_comments"])
+                        if not isinstance(rounds, list):
+                            rounds = []
+                    except (json.JSONDecodeError, TypeError):
+                        rounds = []
+
+                rounds.append(
+                    {
+                        "round": len(rounds) + 1,
+                        "comments": comments,
+                        "actor": actor,
+                        "timestamp": now,
+                    }
+                )
 
                 conn.execute(
                     """
@@ -465,14 +496,14 @@ class SQLiteWorkflowRepository:
                     SET pr_comments = ?, updated_at = ?
                     WHERE id = ?
                     """,
-                    (updated, now, workflow_id),
+                    (json.dumps(rounds), now, workflow_id),
                 )
                 _create_audit_log(
                     conn,
                     workflow_id=workflow_id,
                     actor=actor,
                     action="pr_comments_updated",
-                    reason="PR review comments appended",
+                    reason=f"PR review round {len(rounds)} appended",
                 )
                 # Commit both operations atomically
                 conn.commit()
