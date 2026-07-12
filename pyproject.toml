@@ -11,9 +11,11 @@ requires-python = ">=3.12"
 dispatcher = "dispatcher.run:run"
 dispatcher-tui = "dispatcher.tui.app:run_tui"
 orchestrator-server = "orchestrator.server.app:run"
+ace = "ace.cli.run:run"
+ace-tui = "ace.tui.app:run_tui"
 
 [tool.setuptools.packages.find]
-include = ["dispatcher*", "orchestrator*", "otel*", "state*", "mcp_server*"]
+include = ["dispatcher*", "orchestrator*", "otel*", "state*", "mcp_server*", "ace*"]
 
 [tool.setuptools.package-data]
 "orchestrator.work_planner.recipes" = ["*.yaml"]
@@ -59,7 +61,7 @@ python_functions = ["test_*"]
 asyncio_mode = "auto"
 
 [tool.coverage.run]
-source = ["dispatcher", "orchestrator", "otel", "state"]
+source = ["dispatcher", "orchestrator", "otel", "state", "ace"]
 omit = ["tests/*", "venv/*"]
 
 [tool.coverage.report]

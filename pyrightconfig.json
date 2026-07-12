@@ -4,7 +4,8 @@
     "orchestrator",
     "otel",
     "state",
-    "mcp_server"
+    "mcp_server",
+    "ace"
   ],
   "exclude": [
     "venv",
