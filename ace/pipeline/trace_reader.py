@@ -103,6 +103,42 @@ def fetch_eligible_traces(*, limit: Optional[int] = None) -> list[TraceBundle]:
     return bundles
 
 
+def fetch_trace_by_id(workflow_id: str) -> Optional[TraceBundle]:
+    """Return a :class:`TraceBundle` for a specific *workflow_id*, or ``None``.
+
+    Unlike :func:`fetch_eligible_traces` this bypasses the
+    ``context_extraction_log`` anti-join, so it can be used to re-mine a
+    workflow that was already processed (e.g. after a pipeline failure).
+    Returns ``None`` if the workflow does not exist or has a non-terminal
+    status.
+    """
+    placeholders = ",".join("?" * len(_ELIGIBLE_STATUSES))
+    query = f"""
+        SELECT
+            w.id,
+            w.ticket_key,
+            w.status,
+            w.created_at,
+            w.work_plan,
+            w.code_generation_summary,
+            w.clarification_history,
+            w.pr_comments,
+            w.rejection_reason
+        FROM workflows w
+        WHERE w.id = ?
+          AND w.status IN ({placeholders})
+    """
+    conn = get_connection()
+    try:
+        row = conn.execute(query, [workflow_id, *_ELIGIBLE_STATUSES]).fetchone()
+    finally:
+        conn.close()
+
+    if row is None:
+        return None
+    return _row_to_trace_bundle(row)
+
+
 def _row_to_trace_bundle(row: sqlite3.Row) -> Optional[TraceBundle]:
     """Build a :class:`TraceBundle` from a query row, or ``None`` to skip it.
 
