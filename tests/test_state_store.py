@@ -271,6 +271,9 @@ def test_context_items_table_schema(test_db):
         "updated_at",
         "status",
         "provenance",
+        "project",
+        "repo",
+        "platform",
     }
 
 
@@ -298,6 +301,9 @@ def test_context_items_staged_table_schema(test_db):
         "review_notes",
         "promoted_at",
         "rejected_at",
+        "project",
+        "repo",
+        "platform",
     }
 
 
@@ -321,6 +327,7 @@ def test_context_items_indexes_exist(test_db):
         "idx_context_items_confidence",
         "idx_context_items_status",
         "idx_context_items_last_validated",
+        "idx_context_items_applicability",
     }
 
 

@@ -27,11 +27,16 @@ CREATE TABLE context_items (
     created_at       TEXT NOT NULL,
     updated_at       TEXT NOT NULL,
     status           TEXT NOT NULL DEFAULT 'active', -- 'active'|'staged'|'deprecated'|'conflicted'
-    provenance       TEXT NOT NULL DEFAULT '[]'      -- JSON array of evidence links (see below)
+    provenance       TEXT NOT NULL DEFAULT '[]',     -- JSON array of evidence links (see below)
+    project          TEXT,                       -- applicability: project short-name (typically JIRA project key), or NULL = all
+    repo             TEXT,                       -- applicability: repo short name, or NULL = all
+    platform         TEXT                        -- applicability: runtime tag (python|dotnet|jvm|...), or NULL = all
 );
 ```
 
 **`pattern_type` and `scope`/`scope_value`** drive retrieval filtering. A `codebase_wide` item with `pattern_type = 'approach'` is a candidate for every workflow. A `file_pattern` item with `scope_value = 'state/migrations/**'` is only a candidate when `files_likely_affected` overlaps with that pattern.
+
+**Applicability dimensions (`project`, `repo`, `platform`)** are orthogonal to `scope` and added by migration 016 (AOS-268). They narrow *where* a pattern applies along dimensions retrieval can filter cheaply. `NULL` on any column means "applies to any value on that axis" — the safe default that keeps pre-existing rows correct without a backfill. `project` is a scope tag (typically the JIRA project short-name like `"AOS"`), deliberately not named `project_key` because it is not a foreign key. `platform` uses the same vocabulary as `config/project-setup.json`'s `platform` field (`python`, `dotnet`, `jvm`, ...). The Reflector emits these fields when a pattern would be **wrong** or **irrelevant** for a different value on the axis; when in doubt it leaves them `NULL` and the review UI can tighten scope on promotion.
 
 **`confidence`** is the Curator's primary decision variable. It is never shown raw to the LLM — the injection layer maps it to a tier label. It drives: whether an item appears in retrieval at all (threshold filter), which tier label it receives (`[ESTABLISHED]` / `[PATTERN]` / `[TENTATIVE]`), and how aggressively the Curator merges vs creates when a similar candidate arrives.
 
@@ -131,6 +136,7 @@ The existing migration sequence ends at `011_rename_execution_summary.sql`. New 
 | `013_rejection_reason.sql` | `ALTER TABLE workflows ADD COLUMN rejection_reason TEXT` | Moves rejection reason from audit_log to first-class field |
 | `014_context_items.sql` | Creates `context_items` and `context_items_staged` with indexes | Main context store |
 | `015_pr_comments_json.sql` | Declarative only — no data transform | Marks the column as expecting JSON format going forward |
+| `016_context_item_applicability.sql` | Adds `project`, `repo`, `platform` columns + composite index on both context-item tables | Applicability dimensions (AOS-268); nullable, no backfill — NULL means "applies everywhere". `project` (not `project_key`) is a scope tag, not a foreign key |
 
 **On migration 015:** The learning pipeline handles the format transition by checking whether `pr_comments` parses as valid JSON. If it does not, the workflow is skipped and deferred until a separate one-time backfill script transforms old rows. The schema migration declares intent; the data migration transforms the rows; the pipeline only processes rows that meet the new contract. This avoids dual-format handling entirely and keeps the classifier unambiguous.
 
@@ -142,6 +148,7 @@ CREATE INDEX idx_context_items_scope        ON context_items(scope, scope_value)
 CREATE INDEX idx_context_items_confidence   ON context_items(confidence);
 CREATE INDEX idx_context_items_status       ON context_items(status);
 CREATE INDEX idx_context_items_last_validated ON context_items(last_validated);
+CREATE INDEX idx_context_items_applicability  ON context_items(project, repo, platform);
 ```
 
 The retrieval function filters on `pattern_type`, `scope`, `status`, and `confidence` on every query. The decay job filters on `last_validated`. Without indexes these become full table scans as the store grows.
@@ -160,9 +167,14 @@ WHERE status = 'active'
       OR (scope = 'task_type'    AND scope_value = :task_type)
       OR (scope = 'file_pattern' AND :file_path LIKE scope_value)
   )
+  AND (project     IS NULL OR project     = :project)
+  AND (repo        IS NULL OR repo        = :repo)
+  AND (platform    IS NULL OR platform    = :platform)
 ORDER BY confidence DESC
 LIMIT :top_k
 ```
+
+The three trailing predicates enforce applicability: a row with `platform = 'python'` is only a candidate when the current workflow is on Python; a row with `platform IS NULL` matches any workflow. Retrieval-side wiring lands with Epic 4 — migration 016 only widens the storage shape.
 
 SQL handles scope filtering; Python handles semantic ranking and tier-label formatting before the result reaches the recipe.
 

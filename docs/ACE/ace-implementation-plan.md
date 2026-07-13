@@ -113,6 +113,7 @@ Nothing reaches runtime. This is Phase 1 shadow learning.
 | 2.4 | feat | Curator: staging writes with create/merge/contradict | Keyword-similarity matching (no embeddings yet); quality gate reformulates/discards run-specific facts; ALL output goes to staging |
 | 2.5 | feat | Offline mining runner | Batch over eligible workflows, per-row try/except, `learning_pipeline_failed` audit action, inserts `context_extraction_log` row on success; `--limit`, `--dry-run`, `--workflow-id` flags |
 | 2.6 | chore | First historical extraction pass + calibration notes | Run against real DB; record item counts, dedup pressure, confidence distribution in a findings doc — this calibrates thresholds for Epic 5 |
+| 2.7 | feat | Applicability dimensions (`project`, `repo`, `platform`) on context items | Migration 016 adds three nullable columns to `context_items` + staged (NULL = applies everywhere); Reflector emits them, Curator propagates, repository writes them; retrieval-side wiring deferred to Epic 4 (AOS-268) |
 
 **Exit criteria:** full historical pass completes idempotently (second run processes 0 rows);
 staged items have correct `last_validated` = source workflow date (not extraction date).

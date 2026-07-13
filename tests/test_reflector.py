@@ -302,6 +302,73 @@ def test_reflect_normalises_codebase_wide_scope_value_to_none():
 
 
 # ---------------------------------------------------------------------------
+# Applicability dimensions (AOS-268)
+# ---------------------------------------------------------------------------
+
+
+def test_reflect_defaults_applicability_dimensions_to_none():
+    """Candidates without applicability keys parse as None on all three axes."""
+    body = json.dumps({"candidates": [_valid_candidate_json()]})
+    with patch(
+        "ace.pipeline.reflector.litellm.completion",
+        return_value=_mock_response(body),
+    ):
+        result = reflect(_bundle())
+
+    assert result[0].project is None
+    assert result[0].repo is None
+    assert result[0].platform is None
+
+
+def test_reflect_carries_applicability_dimensions_when_present():
+    raw = _valid_candidate_json(
+        project="AOS",
+        repo="ngb-agent-orchestrator",
+        platform="python",
+    )
+    body = json.dumps({"candidates": [raw]})
+    with patch(
+        "ace.pipeline.reflector.litellm.completion",
+        return_value=_mock_response(body),
+    ):
+        result = reflect(_bundle())
+
+    assert result[0].project == "AOS"
+    assert result[0].repo == "ngb-agent-orchestrator"
+    assert result[0].platform == "python"
+
+
+def test_reflect_normalises_blank_applicability_to_none():
+    """Empty / whitespace-only strings collapse to None so retrieval sees uniform nulls."""
+    raw = _valid_candidate_json(project="", repo="   ", platform=None)
+    body = json.dumps({"candidates": [raw]})
+    with patch(
+        "ace.pipeline.reflector.litellm.completion",
+        return_value=_mock_response(body),
+    ):
+        result = reflect(_bundle())
+
+    assert result[0].project is None
+    assert result[0].repo is None
+    assert result[0].platform is None
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["project", "repo", "platform"],
+)
+def test_reflect_rejects_non_string_applicability_fields(field: str):
+    raw = _valid_candidate_json(**{field: 123})
+    body = json.dumps({"candidates": [raw]})
+    with patch(
+        "ace.pipeline.reflector.litellm.completion",
+        return_value=_mock_response(body),
+    ):
+        with pytest.raises(ReflectorError):
+            reflect(_bundle())
+
+
+# ---------------------------------------------------------------------------
 # Model resolution
 # ---------------------------------------------------------------------------
 

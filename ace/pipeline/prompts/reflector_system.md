@@ -20,6 +20,9 @@ shape:
       "pattern_type": "approach" | "concern" | "test_coverage" | "implementation",
       "scope": "task_type" | "file_pattern" | "codebase_wide",
       "scope_value": "<string or null>",
+      "project": "<string or null>",
+      "repo": "<string or null>",
+      "platform": "<string or null>",
       "description": "<one-sentence generalisable rule>",
       "evidence": [
         {
@@ -99,6 +102,35 @@ for). Descriptions **may not**.
   `scope_value` is a glob relative to the repo root (e.g.,
   `"state/migrations/**"`, `"ace/pipeline/**"`). Use the paths visible in the
   trace's `files_likely_affected` or `files_changed` — do not invent paths.
+
+**Applicability dimensions — `project`, `repo`, `platform`:**
+
+These three fields are orthogonal to `scope`. They narrow *where* a pattern
+applies along dimensions the retrieval layer can filter on cheaply. The
+default for all three is `null`, which means "applies to any value on that
+axis". Only set a value when the pattern would be **wrong** or **irrelevant**
+for a different value.
+
+- `project` — set to the project short-name (e.g. `"AOS"`, typically the
+  JIRA project key) only when the pattern is tied to a concept specific to
+  that project (a project-owned vocabulary, a project-specific SLA, a
+  component only that project ships). Almost always `null` — most patterns
+  generalise across projects in the same org. This is a scope tag, not a
+  foreign key.
+- `repo` — set to the repo short name (e.g. `"ngb-agent-orchestrator"`) when
+  the pattern references artefacts local to this repo: a fixture name, a
+  file-layout convention, a build-tool config specific to this codebase.
+  Example: *"SQLite-touching tests must use the conftest clean-DB fixture"*
+  is repo-specific because `conftest.py`'s fixture is local.
+- `platform` — set to a runtime tag (`"python"`, `"dotnet"`, `"jvm"`,
+  `"node"`, …) when the pattern only holds under that runtime — typically
+  because it depends on a language feature or ecosystem convention. Example:
+  *"Service protocols grow additively via structural subtyping"* is
+  `platform = "python"` because structural subtyping is a Python idiom.
+  Use the same vocabulary as `config/project-setup.json`'s `platform` field.
+
+If in doubt, leave the field `null`. Over-narrowing hides useful items from
+future retrieval; the review UI can always tighten scope on promotion.
 
 **`description`** — one sentence, imperative or declarative, no more than ~200
 characters. State the rule, not the anecdote.

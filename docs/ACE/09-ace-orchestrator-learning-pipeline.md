@@ -88,6 +88,10 @@ The Reflector receives the full trace and produces one or more candidates. Each 
 {
   "pattern_type": "approach" | "concern" | "test_coverage" | "implementation",
   "scope": "task_type" | "file_pattern" | "codebase_wide",
+  "scope_value": "state_machine_change" | None,
+  "project": "AOS" | None,
+  "repo": "ngb-agent-orchestrator" | None,
+  "platform": "python" | None,
   "description": "When modifying the state machine, check migration compatibility first.",
   "evidence": [
     {"workflow_id": "abc-123", "signal_source": "clarification_round_1", "detail": "..."}
@@ -96,6 +100,8 @@ The Reflector receives the full trace and produces one or more candidates. Each 
   "suggested_tier": "PATTERN"
 }
 ```
+
+`project`, `repo`, and `platform` are the **applicability dimensions** added in AOS-268 — orthogonal to `scope`. Each is optional; `None` means "applies to any value on that axis". The Reflector sets a value only when the pattern would be wrong or irrelevant elsewhere (e.g. `platform = "python"` on a rule that depends on structural subtyping). `project` (not `project_key`) is a scope tag, typically the JIRA project short-name, and is not a foreign key. See `docs/ACE/11-ace-orchestrator-data-model.md` for storage and retrieval semantics.
 
 The Reflector prompt instructs the LLM to identify decisions that *could have gone differently* — places where the agent was uncertain, where a human corrected it, or where the outcome diverged from the plan — and produce a generalisable pattern for each.
 

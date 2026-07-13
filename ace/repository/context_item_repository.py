@@ -46,8 +46,9 @@ class ContextItemRepository:
                 INSERT INTO {_LIVE_TABLE} (
                     id, pattern_type, scope, scope_value, description,
                     confidence, occurrence_count, last_validated,
-                    created_at, updated_at, status, provenance
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    created_at, updated_at, status, provenance,
+                    project, repo, platform
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     row["id"],
@@ -62,6 +63,9 @@ class ContextItemRepository:
                     row["updated_at"],
                     row["status"],
                     json.dumps(row["provenance"]),
+                    row["project"],
+                    row["repo"],
+                    row["platform"],
                 ),
             )
             conn.commit()
@@ -156,8 +160,9 @@ class ContextItemRepository:
                     id, pattern_type, scope, scope_value, description,
                     confidence, occurrence_count, last_validated,
                     created_at, updated_at, status, provenance,
-                    review_notes, promoted_at, rejected_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    review_notes, promoted_at, rejected_at,
+                    project, repo, platform
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     row["id"],
@@ -175,6 +180,9 @@ class ContextItemRepository:
                     row["review_notes"],
                     row["promoted_at"],
                     row["rejected_at"],
+                    row["project"],
+                    row["repo"],
+                    row["platform"],
                 ),
             )
             conn.commit()
@@ -328,6 +336,9 @@ class ContextItemRepository:
             updated_at=now,
             status="active",
             provenance=[*staged.provenance, approval_entry],
+            project=staged.project,
+            repo=staged.repo,
+            platform=staged.platform,
         )
 
         conn = get_connection()
@@ -340,8 +351,9 @@ class ContextItemRepository:
                     INSERT INTO {_LIVE_TABLE} (
                         id, pattern_type, scope, scope_value, description,
                         confidence, occurrence_count, last_validated,
-                        created_at, updated_at, status, provenance
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        created_at, updated_at, status, provenance,
+                        project, repo, platform
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         row["id"],
@@ -356,6 +368,9 @@ class ContextItemRepository:
                         row["updated_at"],
                         row["status"],
                         json.dumps(row["provenance"]),
+                        row["project"],
+                        row["repo"],
+                        row["platform"],
                     ),
                 )
                 set_clauses = ["promoted_at = ?", "updated_at = ?"]

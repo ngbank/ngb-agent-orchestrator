@@ -63,6 +63,14 @@ class ContextItem:
 
     The staged-only fields (``review_notes``, ``promoted_at``, ``rejected_at``)
     are ``None`` for rows read from the live ``context_items`` table.
+
+    ``project``, ``repo``, and ``platform`` are the applicability
+    dimensions added by migration 016 (see AOS-268 and
+    ``docs/ACE/11-ace-orchestrator-data-model.md``). ``None`` on any of
+    them means "applies to all values on that axis" — the safe default that
+    lets pre-existing items keep matching every workflow. ``project`` is a
+    scope tag (typically a JIRA project short-name like ``"AOS"``), not a
+    foreign key.
     """
 
     id: str
@@ -80,6 +88,9 @@ class ContextItem:
     review_notes: Optional[str] = None
     promoted_at: Optional[str] = None
     rejected_at: Optional[str] = None
+    project: Optional[str] = None
+    repo: Optional[str] = None
+    platform: Optional[str] = None
 
     def to_row(self) -> dict[str, Any]:
         """Column values for an INSERT/UPDATE, keyed by column name."""
@@ -99,6 +110,9 @@ class ContextItem:
             "review_notes": self.review_notes,
             "promoted_at": self.promoted_at,
             "rejected_at": self.rejected_at,
+            "project": self.project,
+            "repo": self.repo,
+            "platform": self.platform,
         }
 
     @classmethod
@@ -130,6 +144,9 @@ class ContextItem:
             review_notes=row["review_notes"] if "review_notes" in keys else None,
             promoted_at=row["promoted_at"] if "promoted_at" in keys else None,
             rejected_at=row["rejected_at"] if "rejected_at" in keys else None,
+            project=row["project"] if "project" in keys else None,
+            repo=row["repo"] if "repo" in keys else None,
+            platform=row["platform"] if "platform" in keys else None,
         )
 
 
@@ -140,6 +157,10 @@ class CandidateItem:
     ``evidence`` entries are the pre-provenance shape from the Reflector prompt
     (``{"workflow_id", "signal_source", "detail"}``) — the Curator converts
     accepted evidence into full :class:`ProvenanceEntry` records on write.
+
+    ``project`` / ``repo`` / ``platform`` are the applicability
+    dimensions the Reflector emits per AOS-268. See :class:`ContextItem`
+    for semantics; ``None`` means "applies to any value on that axis".
     """
 
     pattern_type: PatternType
@@ -149,3 +170,6 @@ class CandidateItem:
     evidence: list[dict[str, Any]] = field(default_factory=list)
     scope_value: Optional[str] = None
     suggested_tier: Optional[str] = None
+    project: Optional[str] = None
+    repo: Optional[str] = None
+    platform: Optional[str] = None
