@@ -215,6 +215,74 @@ class ContextItemRepository:
         """Append *entry* to a staged item's provenance chain."""
         self._append_provenance(_STAGED_TABLE, item_id, entry)
 
+    def update_staged_status(self, item_id: str, status: str) -> None:
+        """Set the status column on a staged item (e.g. ``'conflicted'``).
+
+        Items are never hard-deleted from staging — status transitions preserve
+        the full audit trail while controlling which items appear in the review
+        queue.
+        """
+        now = datetime.now(UTC).isoformat()
+        conn = get_connection()
+        try:
+            conn.execute(
+                f"UPDATE {_STAGED_TABLE} SET status = ?, updated_at = ? WHERE id = ?",
+                (status, now, item_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def merge_staged(
+        self,
+        item_id: str,
+        *,
+        new_confidence: float,
+        provenance_entry: ProvenanceEntry,
+    ) -> None:
+        """Atomically update a staged item for a Curator merge operation.
+
+        In one transaction: increments ``occurrence_count`` by 1, sets
+        ``confidence`` to *new_confidence*, and appends *provenance_entry* to
+        the JSON provenance array.  ``updated_at`` is refreshed to now.
+
+        This is the correct merge primitive — doing the three writes separately
+        would leave the row in an inconsistent intermediate state if a failure
+        occurred between them.
+        """
+        now = datetime.now(UTC).isoformat()
+        conn = get_connection()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                row = conn.execute(
+                    f"SELECT provenance FROM {_STAGED_TABLE} WHERE id = ?", (item_id,)
+                ).fetchone()
+                if row is None:
+                    conn.rollback()
+                    return
+
+                entries = json.loads(row["provenance"]) if row["provenance"] else []
+                entries.append(provenance_entry.to_dict())
+
+                conn.execute(
+                    f"""
+                    UPDATE {_STAGED_TABLE}
+                    SET confidence = ?,
+                        occurrence_count = occurrence_count + 1,
+                        provenance = ?,
+                        updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (new_confidence, json.dumps(entries), now, item_id),
+                )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+        finally:
+            conn.close()
+
     def promote(
         self,
         item_id: str,
