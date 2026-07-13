@@ -14,9 +14,9 @@ Design docs, rollout phases, and the full epic/ticket breakdown live in
 
 ```
 ace/
-├── models.py       # ContextItem, ProvenanceEntry, CandidateItem dataclasses (ticket 1.6)
+├── models.py       # ContextItem, ProvenanceEntry, CandidateItem dataclasses
 ├── config.py       # feature flags, thresholds, tier boundaries (ticket 4.2)
-├── repository/     # SQLite repositories over context_items / context_items_staged (ticket 1.6)
+├── repository/     # SQLite repositories over context_items / context_items_staged
 ├── pipeline/       # trace reading, evaluation, reflection, curation (Epic 2)
 ├── retrieval/      # retrieve_context_items() and prompt-block rendering (ticket 4.1)
 ├── cli/            # `ace` entrypoint, mirrors dispatcher/run.py (Epic 3)
