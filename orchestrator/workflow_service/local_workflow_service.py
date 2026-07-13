@@ -786,7 +786,7 @@ def _to_detail(row: Dict[str, Any]) -> WorkflowDetail:
         work_plan=row.get("work_plan"),
         code_generation_summary=row.get("code_generation_summary"),
         clarification_history=row.get("clarification_history") or [],
-        pr_comments=row.get("pr_comments"),
+        pr_comments=row.get("pr_comments") or [],
         usage_summary=usage or {},
         retry_count=int(row.get("retry_count") or 0),
     )

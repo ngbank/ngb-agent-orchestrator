@@ -47,7 +47,7 @@ class WorkflowDetail:
     work_plan: Optional[Dict[str, Any]] = None
     code_generation_summary: Optional[Dict[str, Any]] = None
     clarification_history: List[Dict[str, Any]] = field(default_factory=list)
-    pr_comments: Optional[str] = None
+    pr_comments: List[Dict[str, Any]] = field(default_factory=list)
     usage_summary: Dict[str, Any] = field(default_factory=dict)
     retry_count: int = 0
 

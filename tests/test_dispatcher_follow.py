@@ -56,7 +56,7 @@ def _detail(
         work_plan=None,
         code_generation_summary=code_generation_summary,
         clarification_history=[],
-        pr_comments=None,
+        pr_comments=[],
         usage_summary={},
         retry_count=0,
     )

@@ -650,7 +650,7 @@ def _detail_from_json(row: Dict[str, Any]) -> WorkflowDetail:
         work_plan=row.get("work_plan"),
         code_generation_summary=row.get("code_generation_summary"),
         clarification_history=list(row.get("clarification_history") or []),
-        pr_comments=row.get("pr_comments"),
+        pr_comments=list(row.get("pr_comments") or []),
         usage_summary=dict(row.get("usage_summary") or {}),
         retry_count=int(row.get("retry_count") or 0),
     )

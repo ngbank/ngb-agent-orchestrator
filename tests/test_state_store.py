@@ -934,6 +934,109 @@ def test_clarification_history_backward_compat(test_db):
 
 
 # ---------------------------------------------------------------------------
+# update_pr_comments tests
+# ---------------------------------------------------------------------------
+
+
+def test_update_pr_comments_appends_round(test_db):
+    """Test that pr_comments appends a structured round entry."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-85")
+
+    state_store.update_pr_comments(workflow_id, "Please fix the typo", actor="developer")
+
+    workflow = state_store.get_workflow(workflow_id)
+    rounds = workflow["pr_comments"]
+    assert isinstance(rounds, list)
+    assert len(rounds) == 1
+    assert rounds[0]["round"] == 1
+    assert rounds[0]["comments"] == "Please fix the typo"
+    assert rounds[0]["actor"] == "developer"
+    assert "timestamp" in rounds[0]
+
+
+def test_update_pr_comments_appends_multiple_rounds(test_db):
+    """Test that multiple calls append rounds in order, preserving prior rounds."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-85")
+
+    state_store.update_pr_comments(workflow_id, "Missing test coverage", actor="reviewer1")
+    state_store.update_pr_comments(workflow_id, "Looks better, one more nit", actor="reviewer2")
+
+    workflow = state_store.get_workflow(workflow_id)
+    rounds = workflow["pr_comments"]
+    assert len(rounds) == 2
+    assert rounds[0]["round"] == 1
+    assert rounds[0]["comments"] == "Missing test coverage"
+    assert rounds[1]["round"] == 2
+    assert rounds[1]["comments"] == "Looks better, one more nit"
+
+
+def test_update_pr_comments_noop_for_missing_workflow(test_db):
+    """Test that update_pr_comments is a no-op when workflow_id does not exist."""
+    state_store.update_pr_comments("does-not-exist", "some comment")
+
+
+def test_update_pr_comments_creates_audit_log(test_db):
+    """Test that update_pr_comments creates an audit log entry."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-85")
+    state_store.update_pr_comments(workflow_id, "Fix the edge case", actor="dispatcher")
+
+    audit_log = state_store.get_audit_log(workflow_id)
+    entries = [e for e in audit_log if e["action"] == "pr_comments_updated"]
+    assert len(entries) == 1
+    assert "dispatcher" in entries[0]["actor"]
+
+
+def test_get_workflow_by_ticket_deserializes_pr_comments(test_db):
+    """Test that get_workflow_by_ticket deserializes pr_comments."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-85")
+    state_store.update_pr_comments(workflow_id, "Fix this")
+
+    workflows = state_store.get_workflow_by_ticket("AOS-85")
+    assert len(workflows) == 1
+    rounds = workflows[0]["pr_comments"]
+    assert isinstance(rounds, list)
+    assert rounds[0]["round"] == 1
+
+
+def test_list_workflows_deserializes_pr_comments(test_db):
+    """Test that list_workflows deserializes pr_comments."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-85")
+    state_store.update_pr_comments(workflow_id, "Fix this")
+
+    workflows = state_store.list_workflows(ticket_key="AOS-85")
+    assert len(workflows) == 1
+    rounds = workflows[0]["pr_comments"]
+    assert isinstance(rounds, list)
+    assert rounds[0]["round"] == 1
+
+
+def test_pr_comments_backward_compat(test_db):
+    """Test that workflows without pr_comments return None/empty list gracefully."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-85")
+    workflow = state_store.get_workflow(workflow_id)
+    assert workflow.get("pr_comments") is None or workflow.get("pr_comments") == []
+
+
+def test_pr_comments_legacy_text_degrades_to_empty_list(test_db):
+    """Rows still holding the pre-migration 015 separator-delimited text should not
+    crash JSON parsing; they degrade to an empty list until the one-time backfill
+    script (scripts/backfill_pr_comments_json.py) converts them."""
+    workflow_id = state_store.create_workflow(ticket_key="AOS-85")
+    conn = get_connection()
+    try:
+        conn.execute(
+            "UPDATE workflows SET pr_comments = ? WHERE id = ?",
+            ("--- Review round 2026-06-06T00:00:00 ---\nOld free-text comment", workflow_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    workflow = state_store.get_workflow(workflow_id)
+    assert workflow["pr_comments"] == []
+
+
+# ---------------------------------------------------------------------------
 # FakeWorkflowRepository — demonstrates injection without a real database
 # ---------------------------------------------------------------------------
 
