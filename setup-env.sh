@@ -226,8 +226,8 @@ if $DO_DEPS; then
 
     info "Installing/updating dependencies..."
     "$VENV_DIR/bin/pip" install --quiet --upgrade pip
-    "$VENV_DIR/bin/pip" install --quiet -r requirements.txt
-    "$VENV_DIR/bin/pip" install --quiet -r requirements-dev.txt
+    "$VENV_DIR/bin/pip" install --quiet --prefer-binary -r requirements.txt
+    "$VENV_DIR/bin/pip" install --quiet --prefer-binary -r requirements-dev.txt
     "$VENV_DIR/bin/pip" install --quiet -e .
 
     info "Installing pre-commit hooks..."
