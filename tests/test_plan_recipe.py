@@ -78,3 +78,56 @@ def test_recipe_uses_importable_validator_target() -> None:
     # still importable (guards against renaming utilities/ without also
     # updating the recipe).
     importlib.import_module("orchestrator.work_planner.utilities")
+
+
+def test_recipe_clarification_rules_require_concern_removal() -> None:
+    """Reviewer-answer processing must instruct the planner to REMOVE
+    resolved concerns, not merely annotate them.
+
+    Without this rule the planner keeps concerns populated across rounds
+    and the router (edges.py::route_after_validate_plan) never lets the
+    plan reach approval, so the clarification loop cannot converge.
+    """
+    # Collapse whitespace so YAML line-wrapping doesn't break substring
+    # matches against multi-word phrases.
+    text = " ".join(RECIPE_PATH.read_text().split())
+    assert "**REMOVE that concern from the new `concerns` array.**" in text, (
+        "plan.yaml no longer instructs the planner to remove resolved "
+        "concerns from the array. Reviewer-answer processing must apply "
+        "answers as removals — otherwise the clarification loop cannot "
+        "converge (router requires empty concerns to approve)."
+    )
+
+
+def test_recipe_forbids_verbatim_concern_repetition() -> None:
+    """The planner must be explicitly forbidden from re-emitting a
+    concern whose text appears verbatim in any prior round.
+
+    Verbatim self-repetition was the observed failure mode on
+    workflow 7bff04f9 (2026-07-13): the planner echoed round-1 concerns
+    into rounds 2 and 3 even after the reviewer resolved them, hitting
+    MAX_CLARIFICATION_ROUNDS.
+    """
+    text = " ".join(RECIPE_PATH.read_text().split())
+    assert "**NEVER re-emit a concern whose text appears verbatim" in text, (
+        "plan.yaml no longer forbids verbatim re-emission of prior-round "
+        "concerns. This rule is required to prevent the clarification "
+        "loop from stalling on the same concern across rounds."
+    )
+
+
+def test_recipe_binds_pass_status_to_empty_concerns() -> None:
+    """`status=\"pass\"` must be documented as REQUIRING `concerns=[]`.
+
+    The router (edges.py::route_after_validate_plan) treats non-empty
+    concerns as a signal to loop back regardless of status. The recipe
+    must reflect this so the planner emits an approvable plan when the
+    reviewer has answered every concern.
+    """
+    text = " ".join(RECIPE_PATH.read_text().split())
+    assert '`status="pass"` REQUIRES `concerns=[]`' in text, (
+        "plan.yaml no longer binds status='pass' to empty concerns. "
+        "The Status Invariants section must state this rule without an "
+        "acknowledgement carve-out — the router does not honour "
+        "acknowledgements, only empty concerns."
+    )
