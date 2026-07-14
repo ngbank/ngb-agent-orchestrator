@@ -1,5 +1,8 @@
 # ACE — Retrieval and Injection: Selecting Context for the Next Run
 
+> **Superseded in part by Topic 15 (Injection-time synthesizer).**
+> This topic describes retrieval and the flat-list injection block as originally designed. The rendering half of the story — how retrieved items reach the prompt — was later moved from a formatting step inside retrieval to a dedicated inference-driven synthesizer. Read Topic 15 for the current model; the retrieval, scoring, and diversity-filter concepts below still apply.
+
 ## Why retrieval is its own problem
 
 A well-structured playbook and skillbook are only useful if retrieval selects the right items. Retrieval is not a search problem in the traditional sense — you're composing a context window that maximizes relevance while staying within token budget and avoiding distraction. These constraints are in tension.
@@ -60,6 +63,14 @@ Where and how items are inserted into the prompt affects whether the agent acts 
 **Retrieval-on-demand** — items available as a tool the agent can call. Agent controls retrieval; risk that it doesn't retrieve what it needs before it knows what it doesn't know.
 
 **Critical coupling:** injection format alone is insufficient. If the planner system prompt doesn't establish that injected playbook items are *binding pre-conditions* — not suggestions — the model will follow its default behaviour regardless of what context items say. The agent must be explicitly taught to act on retrieved context, not just receive it. Injection format and planner prompt design must be designed together. This is covered in detail in Topic 8.
+
+## From flat-list injection to synthesized document (see Topic 15)
+
+The sections above assume the injected block is a formatted list of retrieved items with tier labels — the direct output of retrieval, template-rendered. Epic 2 mining runs surfaced that this model breaks down for LLM-generated context items: paraphrase variants of the same rule share too few tokens to survive a curator merge without false positives, and any merge that does succeed flattens nuance. That failure mode is what forced consolidation to move from the curator (write time) to a synthesizer (read time).
+
+Under the current model, retrieval still does everything above — scope filter, composite scoring, diversity filter, budget fit — but returns raw items rather than a rendered block. An LLM-driven synthesizer then renders those items into a structured document (development rules / architectural approach / testing approach / known pitfalls) using the ticket context as a rendering signal. The injection format described below is still where the document lands; the document just isn't a flat list anymore.
+
+See Topic 15 for the synthesizer design, prompt shape, caching contract, and what changed on the curator side (Topic 5).
 
 ## Retrieval hygiene: two failure modes
 

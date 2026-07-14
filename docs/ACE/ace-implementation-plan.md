@@ -110,7 +110,7 @@ Nothing reaches runtime. This is Phase 1 shadow learning.
 | 2.1 | feat | Trace reader: extraction query + `TraceBundle` model | The topic-07 query, minus the audit_log JOIN (uses 013 column); anti-joins `context_extraction_log` for eligibility |
 | 2.2 | feat | Rule-based evaluator with tests | Encode the topic-09 triage table verbatim; verdicts: proceed / skip / flag |
 | 2.3 | feat | Reflector: LLM candidate extraction | Candidate schema from topic 09; prompt enforces generalisability (no ticket keys/branches); structured output validation |
-| 2.4 | feat | Curator: staging writes with create/merge/contradict | Keyword-similarity matching (no embeddings yet); quality gate reformulates/discards run-specific facts; ALL output goes to staging |
+| 2.4 | feat | Curator: staging writes with create/merge/contradict | Keyword-similarity matching (no embeddings yet); quality gate reformulates/discards run-specific facts; ALL output goes to staging. **AOS-273 trims this scope**: `merge` handles exact duplicates only (semantic consolidation moves to the synthesizer, AOS-274 / topic 15); contradiction populates a `conflicts_with` array instead of a blocking `status='conflicted'` |
 | 2.5 | feat | Offline mining runner | Batch over eligible workflows, per-row try/except, `learning_pipeline_failed` audit action, inserts `context_extraction_log` row on success; `--limit`, `--dry-run`, `--workflow-id` flags |
 | 2.6 | chore | First historical extraction pass + calibration notes | Run against real DB; record item counts, dedup pressure, confidence distribution in a findings doc — this calibrates thresholds for Epic 5 |
 | 2.7 | feat | Applicability dimensions (`project`, `repo`, `platform`) on context items | Migration 016 adds three nullable columns to `context_items` + staged (NULL = applies everywhere); Reflector emits them, Curator propagates, repository writes them; retrieval-side wiring deferred to Epic 4 (AOS-268) |
@@ -140,18 +140,27 @@ evidence event. This is the human-confidence loop.
 
 **Goal:** promoted (active) items reach the planner and code generator prompts, behind feature flags,
 with utilization logging. This is Phase 2 limited injection.
-**ACE learning:** retrieval/injection (topics 04, 08), impl topics 80/81/82/88.
+**ACE learning:** retrieval/injection (topics 04, 08, 15), impl topics 80/81/82/88.
+
+**Sequencing note (2026-07-14):** Epic 4 was originally scoped around a flat-list injection block —
+retrieval returned a formatted string, injection consumed it verbatim. Epic 2 mining runs showed
+that LLM paraphrase variance defeats write-time merging (see AOS-273 for the analysis and
+[15-ace-injection-synthesizer.md](15-ace-injection-synthesizer.md) for the design). Semantic
+consolidation moves to an inference-driven synthesizer between retrieval and injection. The table
+below reflects the revised sequence; AOS-274 is the new ticket.
 
 | # | Type | Ticket | Notes |
 |---|------|--------|-------|
-| 4.1 | feat | `retrieve_context_items()` retrieval adapter | Topic-11 SQL scope filter + Python keyword ranking; tier mapping (≥0.90 ESTABLISHED / 0.70 PATTERN / 0.50 TENTATIVE / <0.50 excluded); returns formatted block; empty-store returns empty string (safe no-op) |
-| 4.2 | feat | ACE config surface + feature flags | `ace_enabled` master flag, per-injection-point flags (planner/code_generator/pr_rerun), confidence threshold, top_k; default OFF |
-| 4.3 | feat | Planner injection | `generate_plan`: temp-file `context_items_path` param (clarifications_path pattern); render in `plan.yaml` before Fetch Ticket step with "guidance, not constraints" framing |
-| 4.4 | feat | Code generator injection incl. PR re-run | `run_goose`: same param pattern; `generate_code.yaml` Step 1 after `get_developer_rules`; on re-run keep `pr_comments` and context items as SEPARATE params, human feedback rendered first |
-| 4.5 | feat | Utilization telemetry | Log retrieval events (workflow_id, injected item IDs, tiers) to audit_log/otel; this is the Phase-2→3 gate evidence |
+| 4.1 | feat | `retrieve_context_items()` retrieval adapter (AOS-235) | Topic-11 SQL scope filter + Python keyword ranking; tier mapping (≥0.90 ESTABLISHED / 0.70 PATTERN / 0.50 TENTATIVE / <0.50 excluded); **returns `list[ContextItem]` — no formatting**; empty-store returns empty list (safe no-op). Applicability filter from AOS-268 |
+| 4.2 | feat | ACE config surface + feature flags (AOS-236) | `ace_enabled` master flag, per-injection-point flags (planner/code_generator/pr_rerun), confidence threshold, top_k, and `ace_synthesizer_enabled` (default OFF; when OFF, fall back to legacy flat-list format for reversibility) |
+| 4.3 | feat | Injection-time synthesizer (AOS-274) | `ace/retrieval/synthesizer.py` renders retrieved items into a structured markdown document (development_rules / architectural_approach / testing_approach / known_pitfalls) via LLM. Prompt at `ace/retrieval/prompts/synthesize.md`. Cache table `context_block_cache` keyed by `hash((ticket_key, applicability_filter, corpus_snapshot_id, recipe_target))`. See [15-ace-injection-synthesizer.md](15-ace-injection-synthesizer.md) |
+| 4.4 | feat | Planner injection (AOS-237) | `generate_plan`: temp-file `context_items_path` param (clarifications_path pattern); render synthesizer output in `plan.yaml` before Fetch Ticket step with "guidance, not constraints" framing |
+| 4.5 | feat | Code generator injection incl. PR re-run (AOS-238) | `run_goose`: same param pattern; `generate_code.yaml` Step 1 after `get_developer_rules`; on re-run keep `pr_comments` and synthesizer output as SEPARATE params, human feedback rendered first |
+| 4.6 | feat | Utilization telemetry (AOS-239) | Log retrieval events (workflow_id, retrieved item IDs, synthesizer input IDs, synthesizer output section IDs, tiers) to audit_log/otel; this is the Phase-2→3 gate evidence |
 
-**Exit criteria:** with flags on, a live workflow's rendered recipes contain tier-labelled items;
-with flags off, zero behavior change; injected-item IDs traceable per workflow.
+**Exit criteria:** with flags on, a live workflow's rendered recipes contain a synthesized context
+block; with flags off, zero behavior change; retrieved-item IDs and synthesizer inputs traceable
+per workflow.
 
 ## Epic 5 — Live learning loop and automated promotion
 
