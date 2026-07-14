@@ -521,6 +521,129 @@ class TestPostExecutionComment:
         assert "❌ Ticket not found" in result.output
 
 
+class TestEmitRetryHint:
+    """Tests for ``_emit_retry_hint`` (AOS-269).
+
+    The helper prints a ``dispatcher --retry`` recovery hint to stderr when
+    the guard-failure status is retryable, and stays silent otherwise.
+    """
+
+    def _capture_stderr(self, workflow_id, status, capsys):
+        from dispatcher.commands.common import _emit_retry_hint
+
+        _emit_retry_hint(workflow_id, status)
+        return capsys.readouterr().err
+
+    def test_emits_hint_for_failed(self, capsys):
+        out = self._capture_stderr("wf-1", WorkflowStatus.FAILED, capsys)
+        assert "Resume with: dispatcher --retry --workflow-id wf-1" in out
+
+    def test_emits_hint_for_in_progress(self, capsys):
+        out = self._capture_stderr("wf-2", WorkflowStatus.IN_PROGRESS, capsys)
+        assert "Resume with: dispatcher --retry --workflow-id wf-2" in out
+
+    def test_emits_hint_for_pr_commented(self, capsys):
+        out = self._capture_stderr("wf-3", WorkflowStatus.PR_COMMENTED, capsys)
+        assert "Resume with: dispatcher --retry --workflow-id wf-3" in out
+
+    def test_emits_hint_for_approved(self, capsys):
+        out = self._capture_stderr("wf-4", WorkflowStatus.APPROVED, capsys)
+        assert "Resume with: dispatcher --retry --workflow-id wf-4" in out
+
+    def test_silent_for_completed(self, capsys):
+        assert self._capture_stderr("wf-5", WorkflowStatus.COMPLETED, capsys) == ""
+
+    def test_silent_for_rejected(self, capsys):
+        assert self._capture_stderr("wf-6", WorkflowStatus.REJECTED, capsys) == ""
+
+    def test_silent_for_cancelled(self, capsys):
+        assert self._capture_stderr("wf-7", WorkflowStatus.CANCELLED, capsys) == ""
+
+    def test_silent_for_active_pending_statuses(self, capsys):
+        """Active (non-retryable) statuses should not emit — those are the
+        expected inputs for the guard-happy path, not error conditions."""
+        for status in (
+            WorkflowStatus.PENDING,
+            WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION,
+            WorkflowStatus.PENDING_APPROVAL,
+            WorkflowStatus.PENDING_PR_APPROVAL,
+        ):
+            assert (
+                self._capture_stderr("wf", status, capsys) == ""
+            ), f"expected no output for {status}"
+
+    def test_hint_is_wired_into_comment_pr_guard(self, test_db, cli_runner):
+        """End-to-end: --comment-pr against a FAILED workflow shows the hint.
+
+        FAILED is retryable, so the guard rejection must be accompanied by the
+        ``dispatcher --retry`` recovery hint. This is the wire-up test that
+        would have caught the missing hint in the AOS-229 92eae01b incident.
+        """
+        workflow_id = state_store.create_workflow("AOS-269-TEST", status=WorkflowStatus.FAILED)
+        result = cli_runner.invoke(run, ["--comment-pr", "--workflow-id", workflow_id])
+
+        assert result.exit_code == 1
+        assert "not pending PR approval" in result.output
+        assert f"Resume with: dispatcher --retry --workflow-id {workflow_id}" in result.output
+
+    def test_hint_is_silent_for_comment_pr_on_non_retryable(self, test_db, cli_runner):
+        """--comment-pr against PENDING_APPROVAL (active, non-retryable) must
+        not emit the retry hint — retrying a workflow still awaiting plan
+        approval would be user-hostile.
+        """
+        workflow_id = state_store.create_workflow(
+            "AOS-269-TEST", status=WorkflowStatus.PENDING_APPROVAL
+        )
+        result = cli_runner.invoke(run, ["--comment-pr", "--workflow-id", workflow_id])
+
+        assert result.exit_code == 1
+        assert "not pending PR approval" in result.output
+        assert "Resume with: dispatcher --retry" not in result.output
+
+    def test_hint_is_wired_into_clarify_guard(self, test_db, cli_runner):
+        """--clarify against FAILED shows the retry hint."""
+        workflow_id = state_store.create_workflow("AOS-269-TEST", status=WorkflowStatus.FAILED)
+        result = cli_runner.invoke(run, ["--clarify", "--workflow-id", workflow_id])
+        assert result.exit_code == 1
+        assert "not pending clarification" in result.output
+        assert f"Resume with: dispatcher --retry --workflow-id {workflow_id}" in result.output
+
+    def test_hint_is_wired_into_approve_guard(self, test_db, cli_runner):
+        """--approve-plan against FAILED shows the retry hint."""
+        workflow_id = state_store.create_workflow("AOS-269-TEST", status=WorkflowStatus.FAILED)
+        result = cli_runner.invoke(run, ["--approve-plan", "--workflow-id", workflow_id])
+        assert result.exit_code == 1
+        assert "not pending approval" in result.output
+        assert f"Resume with: dispatcher --retry --workflow-id {workflow_id}" in result.output
+
+    def test_hint_is_wired_into_reject_guard(self, test_db, cli_runner):
+        """--reject against FAILED shows the retry hint."""
+        workflow_id = state_store.create_workflow("AOS-269-TEST", status=WorkflowStatus.FAILED)
+        result = cli_runner.invoke(
+            run,
+            ["--reject", "--workflow-id", workflow_id, "--reason", "test"],
+        )
+        assert result.exit_code == 1
+        assert "not pending approval" in result.output
+        assert f"Resume with: dispatcher --retry --workflow-id {workflow_id}" in result.output
+
+    def test_hint_is_wired_into_approve_pr_guard(self, test_db, cli_runner):
+        """--approve-pr against FAILED shows the retry hint."""
+        workflow_id = state_store.create_workflow("AOS-269-TEST", status=WorkflowStatus.FAILED)
+        result = cli_runner.invoke(run, ["--approve-pr", "--workflow-id", workflow_id])
+        assert result.exit_code == 1
+        assert "not pending PR approval" in result.output
+        assert f"Resume with: dispatcher --retry --workflow-id {workflow_id}" in result.output
+
+    def test_hint_is_wired_into_reject_pr_guard(self, test_db, cli_runner):
+        """--reject-pr against FAILED shows the retry hint."""
+        workflow_id = state_store.create_workflow("AOS-269-TEST", status=WorkflowStatus.FAILED)
+        result = cli_runner.invoke(run, ["--reject-pr", "--workflow-id", workflow_id])
+        assert result.exit_code == 1
+        assert "not pending PR approval" in result.output
+        assert f"Resume with: dispatcher --retry --workflow-id {workflow_id}" in result.output
+
+
 class TestFetchTicketNode:
     """Tests for graph/work_planner/nodes/fetch_ticket.py dependency injection."""
 
