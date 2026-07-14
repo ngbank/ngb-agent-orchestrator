@@ -58,18 +58,36 @@ prompt: |
   - `concerns`: The list of concern strings from the previous plan (risks and questions combined)
   - `answers`: The reviewer's answers (array of `{concern, answer}` objects)
 
-  You MUST incorporate the reviewer's answers into your new plan:
-  - Adjust the approach based on the answers
-  - Update tasks to reflect clarified requirements
-  - Remove concerns that have been fully addressed from `concerns`
-  - Only add NEW concerns if the answers reveal additional ambiguity or new risks
-  - If the reviewer explicitly accepts/acknowledges a concern (e.g., "I accept this",
-    "proceed anyway", "that's fine", "acknowledged"), treat that concern as **acknowledged**.
-    Acknowledged concerns may remain in `concerns` for documentation purposes,
-    but they do NOT force the status away from "pass".
-  - Update `status` to "pass" if all concerns have been answered or acknowledged
-  - Remove concerns that are no longer relevant based on the answers
-  - Keep concerns that are still relevant (even if acknowledged) for documentation
+  ### Reviewer-answer processing rules (MUST follow exactly)
+
+  The `concerns` array is a to-do list of unresolved items — NOT a documentation ledger.
+  The reviewer's answers are decisions. Apply them as removals:
+
+  1. For every concern in any prior round whose text was addressed by a reviewer answer
+     (including answers that acknowledge, accept, or waive the concern — phrases such as
+     "I accept this", "proceed anyway", "that's fine", "acknowledged", "resolved",
+     "do not re-raise", or a substantive direct answer): **REMOVE that concern from the
+     new `concerns` array.** Do not carry it forward. Do not rephrase it. Do not keep it
+     "for documentation."
+  2. **NEVER re-emit a concern whose text appears verbatim (or near-verbatim) in any
+     prior round's `concerns` array.** Verbatim self-repetition is a hard signal that
+     you are not processing the reviewer answers — treat it as an error and remove the
+     concern.
+  3. Only keep a concern if the reviewer's answer explicitly left it unresolved
+     (e.g., the reviewer said "I don't know" / "ask the team") or the answer surfaced
+     a genuinely NEW blocker not present in prior rounds.
+  4. You MAY add NEW concerns only if the reviewer's answer itself introduced a new
+     ambiguity or risk that was not previously visible.
+  5. Adjust `approach` and `tasks` to reflect the clarified requirements.
+  6. After steps 1-4, set `status`:
+     - `"pass"` iff `concerns` is now empty.
+     - `"concerns"` if at least one genuinely-open concern remains.
+     - `"blocked"` only if implementation cannot proceed without further reviewer input.
+
+  **Convergence contract:** if the reviewer has answered every concern from the previous
+  round, the new plan MUST emit `status="pass"` with `concerns=[]`. The workflow's router
+  requires empty `concerns` to approve the plan; a non-empty `concerns` array — regardless
+  of `status` value — will send the plan back for another clarification round.
   {% endif %}
 
   ## Step 2: Fetch JIRA Ticket Data
@@ -149,11 +167,11 @@ prompt: |
     → When blocked, add specific clarifying questions to `concerns`
 
   ### Status Invariants (MUST follow):
-  - If `concerns` is non-empty AND those concerns have NOT been acknowledged by the reviewer
-    in a previous clarification round, status MUST be `"concerns"` or `"blocked"` (never `"pass"`).
-  - If `concerns` is non-empty BUT all concerns have been explicitly acknowledged/accepted
-    by the reviewer in clarifications, status CAN be `"pass"`.
-  - Use `"blocked"` only when implementation cannot proceed without additional reviewer input.
+  - `status="pass"` REQUIRES `concerns=[]`. No exceptions. Acknowledged concerns must
+    be removed from `concerns`, not left in with `status="pass"`.
+  - `status="concerns"` REQUIRES `concerns` to be non-empty (at least one genuinely open item).
+  - `status="blocked"` is used only when implementation cannot proceed without additional
+    reviewer input; typically paired with a non-empty `concerns` array.
 
   ### Critical Schema Rules:
   - `schema_version` MUST be exactly "1.0" (string, not number)
@@ -161,7 +179,7 @@ prompt: |
   - `tasks` array MUST have at least 1 task
   - `concerns` CAN be an empty array []
   - `status` MUST be one of: "pass", "concerns", "blocked"
-  - `status` MUST NOT be `"pass"` when `concerns` is non-empty (unless all concerns are acknowledged)
+  - `status` MUST NOT be `"pass"` when `concerns` is non-empty (no acknowledgement carve-out)
   - Do NOT add any fields not defined in the schema above
   - All string fields must not be empty (minLength: 1)
   - Each task MUST have id (integer >= 1), description (string), and files_likely_affected (array)

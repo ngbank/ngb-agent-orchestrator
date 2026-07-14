@@ -162,6 +162,19 @@ The CLI will prompt for an answer to each question interactively. After all answ
 - If the regenerated plan still has concerns, the workflow pauses again for another round.
 - A maximum of **3 clarification rounds** is enforced. If exceeded, the workflow fails with an error — start a fresh workflow with a clearer ticket description.
 
+### Convergence Contract
+
+The clarification loop can only converge to plan approval when the regenerated plan meets **both** conditions:
+
+- `status == "pass"`
+- `concerns == []` (empty array)
+
+The plan recipe (`orchestrator/work_planner/recipes/plan.yaml`) instructs the planner LLM to apply reviewer answers as **removals** from the `concerns` array — an answered concern must be dropped, not kept for documentation. Verbatim re-emission of a prior-round concern is explicitly forbidden and is a signal the planner is not processing the reviewer's answers.
+
+A plan with `status="pass"` but non-empty `concerns` is treated as unresolved by the router (`orchestrator/work_planner/edges.py::route_after_validate_plan`) and loops back for another clarification round. This is intentional: acknowledgements are decisions the planner must reflect in the next plan, not annotations to leave in place.
+
+If you author or edit the recipe, keep the two sides aligned — the router does not honour acknowledgements, only empty concerns.
+
 
 
 ## Retrying a Failed Workflow
