@@ -1,5 +1,8 @@
 # ACE — Curation Quality: Deduplication, Harmful Signal, Decay, and Pruning
 
+> **Amended by Topic 15 (Injection-time synthesizer).**
+> The deduplication and contradiction sections below describe the curator's *original* scope. Under the current design, semantic consolidation of LLM-paraphrased items moves out of the curator entirely and happens at injection time via an inference-driven synthesizer. The curator's `merge` step is retained only for exact-duplicate dedup, and contradiction detection populates a `conflicts_with` flag on both items rather than setting a blocking `status='conflicted'`. Read the amendments at the end of the two affected sections below, and Topic 15 for the full rationale. The harmful-signal, decay, and pruning sections are unaffected.
+
 ## Why curation exists
 
 The learning loop adds to the memory stores continuously. The reflector produces candidates; the evaluator scores them. But neither component owns the *health* of what's already in the store. Without active maintenance, the stores degrade: near-duplicate lessons accumulate, bad signal from accidental successes sneaks in, and lessons written against an old version of the codebase quietly misdirect the agent on every relevant future run.
@@ -21,6 +24,8 @@ Four problem classes drive its design.
 
 **Distinction from the diversity filter.** The curator deduplicates at write/maintenance time, operating globally across the store. The diversity filter (Topic 4) deduplicates at retrieval time, operating on a candidate set relative to a specific incoming task. They are complementary: the curator keeps the store healthy long-term; the diversity filter handles residual clustering in any given retrieval.
 
+**Amendment (Topic 15).** Under the synthesizer model, the curator's `merge` and `subsume` strategies are retained *only* for exact or near-literal duplicates (repeat mining runs on the same workflow). Semantic consolidation of paraphrase variants — the very case the tradeoff paragraph above warned about — is no longer attempted at write time. Paraphrase variants co-exist in staging under separate `occurrence_count` counters; the synthesizer collapses them contextually when it renders the injection block for a specific ticket. The similarity threshold stays conservative for the same reason: false merges are more expensive than duplicated storage.
+
 ## 2. Harmful signal handling
 
 **Problem.** Not all successful outcomes reflect good behavior. The agent may have succeeded by coincidence, or via a shortcut that passed automated checks but introduced debt caught by a human reviewer after merge. If the reflector ingests that outcome uncritically, a bad lesson enters the store and begins influencing every future run that resembles that situation — context poisoning.
@@ -32,6 +37,8 @@ Four problem classes drive its design.
 - **Retrospective penalty.** If downstream feedback (PR rejections, CI failures on code generated using this pattern) indicates an item contributed to a bad outcome, its confidence score is penalized. Enough penalties trigger re-review.
 
 **The deliberate asymmetry.** The staging-area pattern introduces latency — a genuine lesson learned today won't help until it's promoted. This is intentional. A false positive in the live store actively misdirects the agent on every relevant run until someone notices and removes it. A delayed true positive means the agent learns slightly slower. It is safer to build confidence across multiple corroborating runs than to eagerly store a bad context item. The asymmetry favors caution on writes.
+
+**Amendment (Topic 15).** Contradiction handling no longer sets `status='conflicted'` on either item. Instead, the curator populates a symmetric `conflicts_with` array on both items (each holding the other's ID) and leaves them in normal staged state. Retrieval passes `conflicts_with` through to the synthesizer, which surfaces both angles in its rendered document rather than silently choosing. This changes contradiction from a blocking event to an injection-time rendering signal — humans still resolve contradictions eventually (via the TUI conflict queue, Epic 5), but the pipeline no longer stalls on them.
 
 ## 3. Decay
 

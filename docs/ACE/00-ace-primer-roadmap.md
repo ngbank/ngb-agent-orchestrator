@@ -58,6 +58,7 @@ Primary cross-session source index:
 | 12  | Integration safety model — quality gates, rollback, and blast-radius control                            | [12-ace-orchestrator-guardrails.md](12-ace-orchestrator-guardrails.md)            | ✅ Covered     |
 | 13  | Measurement framework — leading/lagging signals for context quality                                     | [13-ace-measurement.md](13-ace-measurement.md)                                    | ✅ Covered     |
 | 14  | End-to-end rollout blueprint — phased adoption plan for your framework                                  | [14-ace-rollout-blueprint.md](14-ace-rollout-blueprint.md)                        | ✅ Covered     |
+| 15  | Injection-time synthesizer — merging at read time, not write time                                       | [15-ace-injection-synthesizer.md](15-ace-injection-synthesizer.md)                | ✅ Covered     |
 
 ## Supplemental deep-dive track (evaluation epistemology)
 
