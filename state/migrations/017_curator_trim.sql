@@ -1,7 +1,7 @@
 -- Migration 017: Trim the Curator to a quality-gate + exact-dedup safety net.
 --
 -- Semantic consolidation of context items moves from write time (Curator) to
--- read time (injection-time synthesizer, AOS-274). See AOS-273 and
+-- read time (injection-time synthesizer). See
 -- docs/ACE/15-ace-injection-synthesizer.md for the full rationale.
 --
 -- Schema changes:
@@ -16,7 +16,7 @@
 --    longer increments this counter — every row would be stuck at 1 forever,
 --    inviting incorrect retrieval-scoring queries. Evidence-count is derivable
 --    from `len(provenance)` at read time; any future cross-workflow strength
---    signal (AOS-278, Epic 10) will use a semantically distinct column name.
+--    signal will use a semantically distinct column name.
 --
 -- Idempotency is handled by the migration runner (schema_migrations tracking
 -- table), so this file runs exactly once. SQLite ALTER TABLE DROP COLUMN

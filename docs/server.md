@@ -7,8 +7,8 @@ following workflow events and log output in real time. The CLI continues
 to work against the in-process `LocalWorkflowService` and is **not**
 affected by the server.
 
-The `HttpWorkflowService` client (B3, AOS-143) routes the dispatcher
-through this server when `ORCHESTRATOR_MODE=remote`. See
+The `HttpWorkflowService` client routes the dispatcher through this server
+when `ORCHESTRATOR_MODE=remote`. See
 [docs/configuration.md](configuration.md#dispatcher--orchestrator-transport)
 for the env-var contract.
 

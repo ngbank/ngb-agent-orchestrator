@@ -2,8 +2,8 @@
 ACE CLI entrypoint.
 
 Thin scaffold mirroring ``dispatcher/run.py``. Subcommands (``mine``,
-``items``, ``promote``, ``reject``, ``stats``, ``ontology``) are wired up
-starting in Epic 3, ticket 3.1.
+``items``, ``promote``, ``reject``, ``stats``, ``ontology``) will be wired
+up as the mining/review pipeline lands.
 """
 
 import click
@@ -11,7 +11,7 @@ import click
 
 @click.command()
 def run() -> None:
-    """Entry point for the ``ace`` CLI; subcommands land in Epic 3."""
+    """Entry point for the ``ace`` CLI; subcommands not yet implemented."""
     click.echo("ace: no commands implemented yet")
 
 

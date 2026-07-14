@@ -1172,7 +1172,7 @@ def test_fake_repository_can_be_injected_without_database():
     """Demonstrate that FakeWorkflowRepository satisfies WorkflowRepository protocol.
 
     No database is needed — this proves callers can be tested with a pure
-    in-memory double, satisfying the DIP goal of AOS-96.
+    in-memory double, satisfying the DIP goal for the repository boundary.
     """
     from state.workflow_repository import WorkflowRepository
     from state.workflow_status import WorkflowStatus
@@ -1200,7 +1200,7 @@ def test_fake_repository_can_be_injected_without_database():
 
 
 # =====================================================================
-# Atomic Transaction Tests (AOS-113: Audit Log Durability)
+# Atomic Transaction Tests: Audit Log Durability
 # =====================================================================
 
 
@@ -1323,7 +1323,7 @@ def test_retry_count_atomicity(test_db):
 
 
 # =====================================================================
-# Negative Tests: Rollback Scenarios (AOS-113: Audit Log Durability)
+# Negative Tests: Rollback Scenarios (Audit Log Durability)
 # =====================================================================
 
 

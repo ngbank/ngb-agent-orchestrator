@@ -6,22 +6,6 @@ workflow. This document records the shape of that file and the queries that
 let you reconstruct what happened — useful for post-hoc debugging, cost /
 latency analysis, and answering "where did the time actually go?".
 
-History:
-
-- AOS-117: per-workflow file routing via `workflow.id` span attribute.
-- AOS-118: route LiteLLM proxy `llm.call` spans into the same file +
-  emit a `graph.node.*` span for every dispatched node (incl. subgraphs)
-  + propagate W3C `traceparent` from dispatcher to proxy so `llm.call`
-  spans share the workflow's trace tree.
-- AOS-170: removed the parallel `llm_token_usage.jsonl` / `llm_failures.jsonl`
-  logger; token usage is now aggregated directly from `llm.call` spans in
-  `otel.jsonl` via `orchestrator.litellm_callbacks.aggregate_token_usage`,
-  filtered by the `workflow.stage` span attribute.
-- AOS-194: renamed the `execute` workflow-stage identifier to `generate_code`
-  throughout (`goose_session` stage, `NGB_WORKFLOW_STAGE`, `workflow.stage`
-  span attribute, log filenames) to match the `execute_plan` → `generate_code`
-  node rename from AOS-181.
-
 ---
 
 ## File layout

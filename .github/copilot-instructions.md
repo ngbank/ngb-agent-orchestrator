@@ -71,11 +71,32 @@ Never add detailed usage, API reference, or troubleshooting to README — put it
 - Adding or removing integration points (JIRA, SQLite, external APIs)
 - Adding new workflow stages or steps
 - Adding error handling or alternative paths
-- Include the ticket ID in step annotations (e.g., "Step X: Description (AOS-XX)")
+- Describe steps by what they do, not by ticket ID (see "Ticket References" below).
 
 **Commit documentation with code**: Include documentation updates in the same commit/PR as the code changes they describe. Documentation commits should reference the ticket ID.
 
 Example: `docs(AOS-39): Update plan-recipe-flow.mmd and workflows.md with WorkPlan posting workflow`
+
+## Ticket References in Code and Documentation
+
+JIRA is the source of truth for ticket-level history and scope; `docs/ACE/ace-implementation-plan.md` is the source of truth for the ticket ↔ design mapping. Do NOT duplicate that information as inline annotations in source code, comments, docstrings, migration files, tests, or design docs.
+
+**Forbidden (do not add these):**
+- Ticket-ID annotations on modules, functions, classes, sections, or bullets — `# AOS-273 change`, `See AOS-XXX`, `per AOS-XXX`, `(AOS-XXX)`, `Post-AOS-XXX`, `Amendment (AOS-XXX)`.
+- Epic / phase labels used purely as annotations — `Epic 4`, `Phase 2`, `ticket 4.3`.
+- Mermaid `Note over` step annotations that end with `(AOS-XX)`.
+- "History" / "changelog" bullets in docs listing which ticket added what — git history covers this.
+
+**Permitted (these stay):**
+- Fixture / test data values: `ticket_key="AOS-1"`, `"AOS-143"` in test setup.
+- CLI usage examples: `dispatcher --ticket AOS-41`, `feature/AOS-35+summary` in READMEs / docs / docstrings.
+- Format examples: `"e.g. 'AOS-141'"`, `"pattern: [A-Z]+-[0-9]+"`.
+- Regex-example comments where the ticket looks like real input: `# ticket keys: AOS-226, JIRA-1`.
+- Prompt training examples that need realistic-looking data (e.g. `ace/pipeline/prompts/reflector_system.md`).
+- **`docs/ACE/ace-implementation-plan.md`** — this file IS the ticket ↔ design mapping; ticket refs belong here.
+- Commit messages, PR titles / descriptions, and branch names — those are audit records and MUST reference the ticket.
+
+**Rule of thumb:** if the reference is data or an example, keep it. If the reference is annotative metadata explaining *why* this code / doc exists or *when* it was added, remove it — JIRA, the implementation plan, and git history already own that.
 
 ### Pull Request Process
 

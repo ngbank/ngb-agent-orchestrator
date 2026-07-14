@@ -66,13 +66,13 @@ sequenceDiagram
     Goose->>Dispatcher: WorkPlan JSON returned
 
     rect rgb(255, 235, 245)
-        Note over Dispatcher,SQLite: Step 6: Store WorkPlan (AOS-39)
+        Note over Dispatcher,SQLite: Step 6: Store WorkPlan
         Dispatcher->>SQLite: update_work_plan()<br/>Store WorkPlan JSON
         SQLite-->>Dispatcher: ✅ Stored
     end
 
     rect rgb(255, 245, 210)
-        Note over User,Dispatcher: Step 6b: WorkPlan Clarification Loop (AOS-73)
+        Note over User,Dispatcher: Step 6b: WorkPlan Clarification Loop
         alt WorkPlan status is 'concerns'/'blocked'
             Dispatcher->>SQLite: update_status(PENDING_WORKPLAN_CLARIFICATION)
             SQLite-->>Dispatcher: ✅ Status updated
@@ -93,7 +93,7 @@ sequenceDiagram
     end
 
     rect rgb(245, 235, 255)
-        Note over Dispatcher,ACLI: Step 7: Post to Jira (AOS-39)
+        Note over Dispatcher,ACLI: Step 7: Post to Jira
         Dispatcher->>Formatter: format_work_plan_comment()<br/>(WorkPlan, ticket_key)
         Formatter-->>Dispatcher: Formatted comment<br/>(summary, tasks, risks, approval)
         Dispatcher->>ACLI: acli jira workitem comment add<br/>--key {ticket_key}<br/>--comment {formatted_comment}
@@ -109,7 +109,7 @@ sequenceDiagram
     Dispatcher->>User: ⏸️ WorkPlan ready for review<br/>Workflow ID: {workflow_id}
 
     rect rgb(255, 250, 220)
-        Note over User,SQLite: Step 8: Developer Approval Gate (AOS-40)
+        Note over User,SQLite: Step 8: Developer Approval Gate
         Note over Dispatcher: Graph suspended at await_approval<br/>Status → PENDING_APPROVAL in SQLite
         User->>Dispatcher: python -m dispatcher.run --approve-plan {workflow_id}<br/>OR<br/>python -m dispatcher.run --reject {workflow_id} --reason "..."
         alt Approved
@@ -118,7 +118,7 @@ sequenceDiagram
             Dispatcher->>Dispatcher: Resume graph → generate_code
 
             rect rgb(235, 255, 235)
-                Note over Dispatcher,ExecRecipe: Step 9: Execute WorkPlan (AOS-41)
+                Note over Dispatcher,ExecRecipe: Step 9: Execute WorkPlan
                 Dispatcher->>FileSystem: Write WorkPlan JSON<br/>to /tmp/{workflow_id}_workplan.json
                 Dispatcher->>Goose: goose run --recipe orchestrator/code_generator/recipes/generate_code.yaml<br/>--params ticket_key={ticket_key}<br/>--params work_plan_path=...<br/>--params output_path=...
                 Goose->>ExecRecipe: Initialize recipe
@@ -155,7 +155,7 @@ sequenceDiagram
             end
 
             rect rgb(225, 245, 255)
-                Note over Dispatcher,GitHub: Step 10: Push Branch and Create PR (AOS-120)
+                Note over Dispatcher,GitHub: Step 10: Push Branch and Create PR
                 Note over Dispatcher: fetch_github_token node gets GitHub App token once<br/>push_and_create_pr node reuses it for push + PR
                 Dispatcher->>Formatter: format_execution_summary_comment()<br/>(execution_summary incl. pr_url)
                 Formatter-->>Dispatcher: Formatted comment
@@ -179,4 +179,4 @@ sequenceDiagram
 
     Note over User,Formatter: WorkPlan Status Classification:<br/>• "pass" - Clear scope, ready to implement<br/>• "concerns" - Has risks or dependencies<br/>• "blocked" - Missing info or ambiguous<br/><br/>WorkPlan Comment Sections:<br/>• Plan Summary (approach and status)<br/>• Task List (with files affected)<br/>• Risks<br/>• Questions for Reviewer<br/>• Approval Instructions<br/>  - dispatcher approve {ticket_key}<br/>  - dispatcher reject {ticket_key}
 
-    Note over User,Dispatcher: Remote-mode submission contract (AOS-149):<br/>In ORCHESTRATOR_MODE=remote every mutation route (POST /workflows,<br/>approve-plan, retry, comment-pr, ...) returns 202 Accepted immediately<br/>and runs the graph drive on the server's BackgroundDispatcher thread<br/>pool. The dispatcher CLI subscribes to GET /workflows/{id}/events (SSE)<br/>by default so the operator sees the same node_start / node_end /<br/>interrupt / completed lifecycle they got from the old synchronous calls.<br/>Pass --detach to submit and exit without following; press Ctrl-C to<br/>detach mid-stream without affecting the server-side workflow.
+    Note over User,Dispatcher: Remote-mode submission contract:<br/>In ORCHESTRATOR_MODE=remote every mutation route (POST /workflows,<br/>approve-plan, retry, comment-pr, ...) returns 202 Accepted immediately<br/>and runs the graph drive on the server's BackgroundDispatcher thread<br/>pool. The dispatcher CLI subscribes to GET /workflows/{id}/events (SSE)<br/>by default so the operator sees the same node_start / node_end /<br/>interrupt / completed lifecycle they got from the old synchronous calls.<br/>Pass --detach to submit and exit without following; press Ctrl-C to<br/>detach mid-stream without affecting the server-side workflow.

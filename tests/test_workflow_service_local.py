@@ -7,7 +7,7 @@ These tests cover every public method of ``LocalWorkflowService`` using:
     state_history without booting LangGraph.
 
 No dispatcher CLI or TUI code is exercised — those layers are wired in by
-AOS-139 (A2) and AOS-140 (A3).
+separate integration test suites.
 """
 
 from __future__ import annotations

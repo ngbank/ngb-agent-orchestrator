@@ -65,18 +65,18 @@ class ContextItem:
     are ``None`` for rows read from the live ``context_items`` table.
 
     ``project``, ``repo``, and ``platform`` are the applicability
-    dimensions added by migration 016 (see AOS-268 and
+    dimensions on staged and live items (see
     ``docs/ACE/11-ace-orchestrator-data-model.md``). ``None`` on any of
     them means "applies to all values on that axis" — the safe default that
     lets pre-existing items keep matching every workflow. ``project`` is a
     scope tag (typically a JIRA project short-name like ``"AOS"``), not a
     foreign key.
 
-    ``conflicts_with`` (migration 017 / AOS-273) is a list of ids of other
-    items that give opposing guidance on the same subject. Populated by the
-    Curator when contradiction is detected; consumed by retrieval /
-    synthesizer to present both angles rather than block on ``conflicted``
-    status. Empty list = no known contradictions.
+    ``conflicts_with`` is a list of ids of other items that give opposing
+    guidance on the same subject. Populated by the Curator when contradiction
+    is detected; consumed by retrieval / synthesizer to present both angles
+    rather than block on ``conflicted`` status. Empty list = no known
+    contradictions.
     """
 
     id: str
@@ -102,11 +102,9 @@ class ContextItem:
     def evidence_count(self) -> int:
         """Number of workflow-evidence events that contributed to this item.
 
-        Derived from ``len(provenance)`` — there is no separate stored counter
-        (see AOS-273: the previous ``occurrence_count`` column was retired
-        because it would be stuck at 1 under the trimmed Curator). Any future
-        cross-workflow strength signal (AOS-278) uses a semantically distinct
-        column name and its own audit trail.
+        Derived from ``len(provenance)`` — there is no separate stored counter.
+        Any future cross-workflow strength signal will use a semantically
+        distinct column name and its own audit trail.
         """
         return len(self.provenance)
 
@@ -180,8 +178,8 @@ class CandidateItem:
     accepted evidence into full :class:`ProvenanceEntry` records on write.
 
     ``project`` / ``repo`` / ``platform`` are the applicability
-    dimensions the Reflector emits per AOS-268. See :class:`ContextItem`
-    for semantics; ``None`` means "applies to any value on that axis".
+    dimensions the Reflector emits. See :class:`ContextItem` for semantics;
+    ``None`` means "applies to any value on that axis".
     """
 
     pattern_type: PatternType

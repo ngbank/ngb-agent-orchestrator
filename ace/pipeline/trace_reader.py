@@ -2,8 +2,8 @@
 
 Reads terminal (``completed`` / ``failed`` / ``rejected``) workflows from
 SQLite and assembles them into :class:`TraceBundle` objects — the raw input
-to the Evaluator (ticket 2.2). Two changes from the topic-07 query as
-originally sketched in ``docs/ACE/07-ace-orchestrator-current-state.md``:
+to the Evaluator. Two changes from the topic-07 query as originally sketched
+in ``docs/ACE/07-ace-orchestrator-current-state.md``:
 
 - ``rejection_reason`` is read directly from the ``workflows`` column added
   by migration 013, instead of a ``LEFT JOIN`` on ``audit_log``.

@@ -2,8 +2,8 @@
 ACE — Agentic Context Engine
 
 Learns behavioral context items and ontology relationships from workflow
-traces, and (from Epic 4 onward) injects them into planner / code generator
-prompts. See docs/ACE/ace-implementation-plan.md for the rollout plan.
+traces and injects them into planner / code generator prompts. See
+docs/ACE/ace-implementation-plan.md for the rollout plan.
 
 Boundary rule: ``orchestrator/`` may import from ``ace/``; ``ace/`` never
 imports from ``orchestrator/`` graph code — it reads the workflow DB through

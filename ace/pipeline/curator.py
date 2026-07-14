@@ -1,8 +1,8 @@
 """Curator: quality gate + exact-dedup safety net + contradiction flag.
 
-Post-AOS-273 the Curator is deliberately small. Semantic consolidation moved
-to read time (injection-time synthesizer, AOS-274 / Epic 4). At mine time the
-Curator does three things and nothing more:
+The Curator is deliberately small. Semantic consolidation moved to read
+time (injection-time synthesizer). At mine time the Curator does three
+things and nothing more:
 
 - **quality gate** — descriptions that reference run-specific artifacts
   (ticket keys, branch names, commit hashes) are reformulated by stripping
@@ -28,7 +28,7 @@ threshold a new item is created.
 
 ALL writes target ``context_items_staged``; the live ``context_items`` store
 is never touched by the Curator. Promotion to the live store happens via
-manual review (Epic 3) or automated rules (Epic 5).
+manual review or automated rules.
 
 ``last_validated`` is always set to ``bundle.created_at`` (the *source*
 workflow date) — not the extraction date. This is the anchor for the decay
@@ -195,7 +195,7 @@ def curate(
        - **create**       — score < :data:`MERGE_THRESHOLD`
        - **merge**        — score ≥ threshold and polarity is compatible;
          append a :class:`ProvenanceEntry` to the existing row (confidence
-         and other columns are NOT touched, per AOS-273).
+         and other columns are NOT touched).
        - **contradict**   — score ≥ threshold and polarity is opposing;
          write the candidate as a *new* pending staged row and symmetrically
          populate ``conflicts_with`` on both rows. Neither row is blocked
@@ -231,8 +231,8 @@ def curate(
             platform=candidate.platform,
         )
 
-        # SQL-level pattern_type filter (AOS-273) — cross-pattern items are
-        # orthogonal and can never merge, so we push the filter into SQL.
+        # SQL-level pattern_type filter — cross-pattern items are orthogonal
+        # and can never merge, so we push the filter into SQL.
         peers = repo.list_staged_by_pattern_type(clean_candidate.pattern_type, pending_only=True)
         best_match, best_score = _best_match(clean_candidate, peers)
         provenance_entry = _build_provenance_entry(clean_candidate, bundle)
@@ -255,8 +255,7 @@ def curate(
                 result.contradicted += 1
             else:
                 # Exact-dedup safety net: append provenance only. Confidence
-                # is deliberately NOT recomputed — see module docstring and
-                # AOS-273.
+                # is deliberately NOT recomputed — see module docstring.
                 repo.append_staged_provenance(best_match.id, provenance_entry)
                 logger.debug(
                     "Curator: merged candidate into staged item %s "
@@ -358,8 +357,8 @@ def _best_match(
 
     *peers* must already be filtered to the candidate's ``pattern_type`` —
     the caller does this in SQL via
-    :meth:`ContextItemRepository.list_staged_by_pattern_type` (AOS-273), so
-    this function does not re-check the pattern_type.
+    :meth:`ContextItemRepository.list_staged_by_pattern_type`, so this
+    function does not re-check the pattern_type.
     """
     candidate_tokens = _tokenise(candidate.description)
     best: Optional[ContextItem] = None

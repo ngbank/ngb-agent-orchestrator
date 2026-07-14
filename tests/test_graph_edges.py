@@ -205,7 +205,7 @@ def test_route_generate_plan_with_error():
     state = {
         "ticket_key": "AOS-50",
         "work_plan_data": {"tasks": []},
-        "error": "Plan generation not yet implemented (AOS-51).",
+        "error": "Plan generation not yet implemented.",
     }
     assert route_after_generate_plan(state) == "cleanup"
 

@@ -18,9 +18,9 @@ from state.workflow_status import WorkflowStatus
 def _make_test_service(graph=None, graph_factory=None):
     """Build a LocalWorkflowService for tests, wired to the given graph.
 
-    After AOS-139 the CLI no longer patches ``build_orchestrator``; instead
-    tests inject a pre-built ``WorkflowService`` via ``cli_runner.invoke(run,
-    args, obj=service)`` and pass either a concrete ``graph`` or a
+    The CLI does not patch ``build_orchestrator``; instead tests inject a
+    pre-built ``WorkflowService`` via ``cli_runner.invoke(run, args,
+    obj=service)`` and pass either a concrete ``graph`` or a
     ``graph_factory`` callable.
     """
     if graph_factory is None:
@@ -847,7 +847,7 @@ def test_get_actor_imported_from_graph_utils():
 
 
 def test_dispatcher_commands_have_no_direct_repo_or_builder_imports():
-    """AOS-139: dispatcher/commands/ must route everything through WorkflowService.
+    """dispatcher/commands/ must route everything through WorkflowService.
 
     The handlers must not directly import the SQLite repository, the LangGraph
     builder, the retry helpers, or LangGraph itself; doing so would bypass the

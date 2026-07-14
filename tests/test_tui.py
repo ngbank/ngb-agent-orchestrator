@@ -441,7 +441,7 @@ class TestWorkflowTUI:
         self,
         sample_summaries: List[WorkflowSummary],
     ):
-        """AOS-184: PR actions must surface as soon as the row is in
+        """PR actions must surface as soon as the row is in
         ``PENDING_PR_APPROVAL`` regardless of whether the ``pr_url`` column
         is populated.
 

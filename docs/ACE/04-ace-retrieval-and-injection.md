@@ -66,7 +66,7 @@ Where and how items are inserted into the prompt affects whether the agent acts 
 
 ## From flat-list injection to synthesized document (see Topic 15)
 
-The sections above assume the injected block is a formatted list of retrieved items with tier labels — the direct output of retrieval, template-rendered. Epic 2 mining runs surfaced that this model breaks down for LLM-generated context items: paraphrase variants of the same rule share too few tokens to survive a curator merge without false positives, and any merge that does succeed flattens nuance. That failure mode is what forced consolidation to move from the curator (write time) to a synthesizer (read time).
+The sections above assume the injected block is a formatted list of retrieved items with tier labels — the direct output of retrieval, template-rendered. Early mining runs surfaced that this model breaks down for LLM-generated context items: paraphrase variants of the same rule share too few tokens to survive a curator merge without false positives, and any merge that does succeed flattens nuance. That failure mode is what forced consolidation to move from the curator (write time) to a synthesizer (read time).
 
 Under the current model, retrieval still does everything above — scope filter, composite scoring, diversity filter, budget fit — but returns raw items rather than a rendered block. An LLM-driven synthesizer then renders those items into a structured document (development rules / architectural approach / testing approach / known pitfalls) using the ticket context as a rendering signal. The injection format described below is still where the document lands; the document just isn't a flat list anymore.
 

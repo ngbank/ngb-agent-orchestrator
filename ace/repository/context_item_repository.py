@@ -222,11 +222,11 @@ class ContextItemRepository:
     ) -> list[ContextItem]:
         """List staged items of a given ``pattern_type``, filtered in SQL.
 
-        Used by the Curator's similarity lookup (AOS-273): cross-pattern_type
-        items are orthogonal and can never merge, so pushing the filter into
-        SQL avoids materialising unrelated rows.  Defaults to
-        ``pending_only=True`` because the only in-repo caller — the Curator —
-        is scanning the human review queue.
+        Used by the Curator's similarity lookup: cross-pattern_type items are
+        orthogonal and can never merge, so pushing the filter into SQL avoids
+        materialising unrelated rows.  Defaults to ``pending_only=True``
+        because the only in-repo caller — the Curator — is scanning the human
+        review queue.
         """
         clauses = ["pattern_type = ?"]
         params: list = [pattern_type]
@@ -274,8 +274,8 @@ class ContextItemRepository:
         """Symmetrically record a contradiction between two *staged* items.
 
         Appends *other_id* to ``staged_id``'s ``conflicts_with`` array and
-        vice versa in a single transaction (AOS-273). Idempotent: an id
-        already present in the target array is not appended twice.
+        vice versa in a single transaction. Idempotent: an id already present
+        in the target array is not appended twice.
 
         Both items are expected to be in the staging table — this is the only
         place the Curator writes conflict edges. If either id is missing the

@@ -1,7 +1,7 @@
 """Unit tests for ace.pipeline.curator — quality gate + dedup + conflict flag.
 
-Post-AOS-273 the Curator does three things (see the module docstring for the
-full rationale, and docs/ACE/15-ace-injection-synthesizer.md for why semantic
+The Curator does three things (see the module docstring for the full
+rationale, and docs/ACE/15-ace-injection-synthesizer.md for why semantic
 consolidation moved to read time):
 
 - create: no similar staged item → new row inserted
@@ -265,7 +265,7 @@ def test_created_item_provenance_uses_bundle_date(repo):
 
 def test_merge_appends_provenance_without_touching_confidence(repo):
     """Existing staged item with similar description → provenance appended,
-    confidence unchanged (AOS-273: no weighted-mean recomputation)."""
+    confidence unchanged (no weighted-mean recomputation)."""
     existing = _staged_item(
         "item-1",
         "Always run migrations before deploying code changes to keep schema consistent.",
@@ -317,7 +317,7 @@ def test_merge_provenance_entry_has_correct_bundle_date(repo):
 def test_contradict_writes_both_rows_with_symmetric_conflicts_with(repo):
     """Similar items with opposing polarity → BOTH rows written as pending
     staged items, conflicts_with populated symmetrically. Neither row is
-    blocked with status='conflicted' (AOS-273)."""
+    blocked with status='conflicted'."""
     existing = _staged_item(
         "item-3",
         "Run migrations before deploying code changes to production.",
@@ -438,7 +438,7 @@ def test_multiple_candidates_mixed_operations(repo):
 
 
 # ---------------------------------------------------------------------------
-# Applicability dimensions (AOS-268)
+# Applicability dimensions
 # ---------------------------------------------------------------------------
 
 

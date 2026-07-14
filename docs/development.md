@@ -224,7 +224,7 @@ ORCHESTRATOR_MODE=local  .venv/bin/python -m dispatcher.run --ticket <TICKET>
 ORCHESTRATOR_MODE=remote .venv/bin/python -m dispatcher.run --ticket <TICKET>
 ```
 
-Commit `.goose-version` in the same change that documents the upgrade — see AOS-205 for the motivating incident (goose 1.41.0 from the unpinned `stable` tag triggered a Kimi-K2.6 reasoning loop that never resolved).
+Commit `.goose-version` in the same change that documents the upgrade — an unpinned `stable` tag has historically shipped goose releases that trigger reasoning loops with some models (e.g. goose 1.41.0 caused a Kimi-K2.6 loop that never resolved).
 
 ---
 

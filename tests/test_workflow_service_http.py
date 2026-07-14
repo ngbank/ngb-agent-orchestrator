@@ -69,7 +69,7 @@ class _FakeWorkflowService:
         self.list_calls: List[Dict[str, Any]] = []
         self.events: Dict[str, List[WorkflowEventDTO]] = {}
         self.log_bytes: Dict[str, Dict[str, bytes]] = {}
-        # AOS-147 — per-method recorders + canned results / exceptions.
+        # Per-method recorders + canned results / exceptions.
         self.approve_plan_calls: List[str] = []
         self.reject_plan_calls: List[Dict[str, Any]] = []
         self.submit_clarification_calls: List[Dict[str, Any]] = []
@@ -721,7 +721,7 @@ class TestHeaders:
 
 
 # ---------------------------------------------------------------------------
-# Approval / clarification / retry / PR review (AOS-147)
+# Approval / clarification / retry / PR review
 # ---------------------------------------------------------------------------
 
 
