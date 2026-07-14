@@ -90,7 +90,7 @@ prompt: |
   provided by a reviewer and **must be fully addressed** in this run:
 
   ```
-  {{ pr_comments }}
+  {{ pr_comments | indent(2) }}
   ```
 
   **Mandatory requirements for this run:**
