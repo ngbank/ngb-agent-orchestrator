@@ -522,7 +522,7 @@ class TestPostExecutionComment:
 
 
 class TestEmitRetryHint:
-    """Tests for ``_emit_retry_hint`` (AOS-269).
+    """Tests for ``_emit_retry_hint``.
 
     The helper prints a ``dispatcher --retry`` recovery hint to stderr when
     the guard-failure status is retryable, and stays silent otherwise.
@@ -576,10 +576,9 @@ class TestEmitRetryHint:
         """End-to-end: --comment-pr against a FAILED workflow shows the hint.
 
         FAILED is retryable, so the guard rejection must be accompanied by the
-        ``dispatcher --retry`` recovery hint. This is the wire-up test that
-        would have caught the missing hint in the AOS-229 92eae01b incident.
+        ``dispatcher --retry`` recovery hint.
         """
-        workflow_id = state_store.create_workflow("AOS-269-TEST", status=WorkflowStatus.FAILED)
+        workflow_id = state_store.create_workflow("TEST-123", status=WorkflowStatus.FAILED)
         result = cli_runner.invoke(run, ["--comment-pr", "--workflow-id", workflow_id])
 
         assert result.exit_code == 1
@@ -592,7 +591,7 @@ class TestEmitRetryHint:
         approval would be user-hostile.
         """
         workflow_id = state_store.create_workflow(
-            "AOS-269-TEST", status=WorkflowStatus.PENDING_APPROVAL
+            "TEST-123", status=WorkflowStatus.PENDING_APPROVAL
         )
         result = cli_runner.invoke(run, ["--comment-pr", "--workflow-id", workflow_id])
 
@@ -602,7 +601,7 @@ class TestEmitRetryHint:
 
     def test_hint_is_wired_into_clarify_guard(self, test_db, cli_runner):
         """--clarify against FAILED shows the retry hint."""
-        workflow_id = state_store.create_workflow("AOS-269-TEST", status=WorkflowStatus.FAILED)
+        workflow_id = state_store.create_workflow("TEST-123", status=WorkflowStatus.FAILED)
         result = cli_runner.invoke(run, ["--clarify", "--workflow-id", workflow_id])
         assert result.exit_code == 1
         assert "not pending clarification" in result.output
@@ -610,7 +609,7 @@ class TestEmitRetryHint:
 
     def test_hint_is_wired_into_approve_guard(self, test_db, cli_runner):
         """--approve-plan against FAILED shows the retry hint."""
-        workflow_id = state_store.create_workflow("AOS-269-TEST", status=WorkflowStatus.FAILED)
+        workflow_id = state_store.create_workflow("TEST-123", status=WorkflowStatus.FAILED)
         result = cli_runner.invoke(run, ["--approve-plan", "--workflow-id", workflow_id])
         assert result.exit_code == 1
         assert "not pending approval" in result.output
@@ -618,7 +617,7 @@ class TestEmitRetryHint:
 
     def test_hint_is_wired_into_reject_guard(self, test_db, cli_runner):
         """--reject against FAILED shows the retry hint."""
-        workflow_id = state_store.create_workflow("AOS-269-TEST", status=WorkflowStatus.FAILED)
+        workflow_id = state_store.create_workflow("TEST-123", status=WorkflowStatus.FAILED)
         result = cli_runner.invoke(
             run,
             ["--reject", "--workflow-id", workflow_id, "--reason", "test"],
@@ -629,7 +628,7 @@ class TestEmitRetryHint:
 
     def test_hint_is_wired_into_approve_pr_guard(self, test_db, cli_runner):
         """--approve-pr against FAILED shows the retry hint."""
-        workflow_id = state_store.create_workflow("AOS-269-TEST", status=WorkflowStatus.FAILED)
+        workflow_id = state_store.create_workflow("TEST-123", status=WorkflowStatus.FAILED)
         result = cli_runner.invoke(run, ["--approve-pr", "--workflow-id", workflow_id])
         assert result.exit_code == 1
         assert "not pending PR approval" in result.output
@@ -637,7 +636,7 @@ class TestEmitRetryHint:
 
     def test_hint_is_wired_into_reject_pr_guard(self, test_db, cli_runner):
         """--reject-pr against FAILED shows the retry hint."""
-        workflow_id = state_store.create_workflow("AOS-269-TEST", status=WorkflowStatus.FAILED)
+        workflow_id = state_store.create_workflow("TEST-123", status=WorkflowStatus.FAILED)
         result = cli_runner.invoke(run, ["--reject-pr", "--workflow-id", workflow_id])
         assert result.exit_code == 1
         assert "not pending PR approval" in result.output

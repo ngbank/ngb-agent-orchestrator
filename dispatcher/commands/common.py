@@ -9,8 +9,7 @@ remains is purely presentation / side-effect glue the CLI layer still needs:
 * :func:`_post_execution_comment` — formats and posts the execution-summary
   JIRA comment after a successful run.
 * :func:`_emit_retry_hint` — prints a ``dispatcher --retry`` recovery hint
-  when a human-in-the-loop guard rejects a workflow that is still retryable
-  (AOS-269).
+  when a human-in-the-loop guard rejects a workflow that is still retryable.
 """
 
 from typing import Optional
@@ -41,8 +40,6 @@ def _emit_retry_hint(workflow_id: str, status: WorkflowStatus) -> None:
     hint to stderr so users know what to do next; it stays silent for
     non-retryable statuses (terminal states or other active states) where a
     retry would be inappropriate.
-
-    Filed as AOS-269.
     """
     if status.is_retryable():
         click.echo(

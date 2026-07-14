@@ -199,7 +199,7 @@ an error. Workflows that ended with `partial` execution status (build pass, test
 are marked `completed`, not `failed`, and are NOT considered retryable — they should be
 finished manually.
 
-### Guard-Failure Recovery Hint (AOS-269)
+### Guard-Failure Recovery Hint
 
 The human-in-the-loop commands (`--clarify`, `--approve-plan`, `--reject`, `--approve-pr`,
 `--comment-pr`, `--reject-pr`) all refuse to act when the target workflow is not in the
