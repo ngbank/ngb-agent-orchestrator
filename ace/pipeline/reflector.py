@@ -185,6 +185,25 @@ def _validate_candidates(data: dict, *, workflow_id: str) -> list[CandidateItem]
     return candidates
 
 
+def _validate_optional_str(value: Any, index: int, field_name: str) -> Optional[str]:
+    """Coerce and validate an optional string field on a Reflector candidate.
+
+    ``None`` and missing keys pass through as ``None`` (meaning "applies to
+    all values on that axis" for the applicability dimensions added by
+    AOS-268). Non-string values raise ``ValueError`` so the retry loop in
+    :func:`reflect` can catch them. Empty / whitespace-only strings are
+    normalised to ``None`` so retrieval can treat null uniformly.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(
+            f"Candidate {index}: {field_name} must be a string or null, got {type(value).__name__}"
+        )
+    stripped = value.strip()
+    return stripped or None
+
+
 def _validate_one(raw: Any, *, index: int, workflow_id: str) -> CandidateItem:
     if not isinstance(raw, dict):
         raise ValueError(f"Candidate {index} is not an object: {type(raw).__name__}")
@@ -229,6 +248,13 @@ def _validate_one(raw: Any, *, index: int, workflow_id: str) -> CandidateItem:
             f"Candidate {index}: suggested_tier={suggested_tier!r} not in {sorted(_ALLOWED_TIERS)}"
         )
 
+    # Applicability dimensions (AOS-268). All three are optional strings; None
+    # means "applies to all values on that axis". Empty strings are normalised
+    # to None so the retrieval layer can treat null uniformly.
+    project = _validate_optional_str(raw.get("project"), index, "project")
+    repo = _validate_optional_str(raw.get("repo"), index, "repo")
+    platform = _validate_optional_str(raw.get("platform"), index, "platform")
+
     evidence_raw = raw.get("evidence", [])
     if not isinstance(evidence_raw, list):
         raise ValueError(f"Candidate {index}: evidence must be a list")
@@ -258,6 +284,9 @@ def _validate_one(raw: Any, *, index: int, workflow_id: str) -> CandidateItem:
         evidence=evidence,
         scope_value=scope_value,
         suggested_tier=suggested_tier,
+        project=project,
+        repo=repo,
+        platform=platform,
     )
 
 

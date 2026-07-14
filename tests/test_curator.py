@@ -68,6 +68,9 @@ def _candidate(
     initial_confidence: float = 0.6,
     evidence: list[dict[str, Any]] | None = None,
     scope_value: str | None = None,
+    project: str | None = None,
+    repo: str | None = None,
+    platform: str | None = None,
 ) -> CandidateItem:
     return CandidateItem(
         pattern_type=pattern_type,
@@ -76,6 +79,9 @@ def _candidate(
         description=description,
         initial_confidence=initial_confidence,
         evidence=evidence or [],
+        project=project,
+        repo=repo,
+        platform=platform,
     )
 
 
@@ -406,3 +412,36 @@ def test_multiple_candidates_mixed_operations(repo):
     assert result.created == 1
     assert result.discarded == 1
     assert result.contradicted == 0
+
+
+# ---------------------------------------------------------------------------
+# Applicability dimensions (AOS-268)
+# ---------------------------------------------------------------------------
+
+
+def test_created_item_carries_applicability_dimensions(repo):
+    """project / repo / platform on the candidate flow through to the staged row."""
+    candidate = _candidate(
+        "Service protocols should grow additively via structural subtyping.",
+        pattern_type="approach",
+        platform="python",
+        repo="ngb-agent-orchestrator",
+    )
+    curate([candidate], _bundle(), repo=repo)
+
+    staged = repo.list_staged()
+    assert len(staged) == 1
+    assert staged[0].platform == "python"
+    assert staged[0].repo == "ngb-agent-orchestrator"
+    assert staged[0].project is None
+
+
+def test_created_item_defaults_applicability_dimensions_to_none(repo):
+    """A candidate without applicability fields writes NULLs, meaning applies everywhere."""
+    candidate = _candidate("Always run migrations before deploying code changes.")
+    curate([candidate], _bundle(), repo=repo)
+
+    staged = repo.list_staged()
+    assert staged[0].project is None
+    assert staged[0].repo is None
+    assert staged[0].platform is None

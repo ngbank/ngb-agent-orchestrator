@@ -314,3 +314,68 @@ def test_reject_marks_rejected_at_and_preserves_row(repo):
 
     # Rejected items never reach the live store.
     assert repo.get("staged-1") is None
+
+
+# ---------------------------------------------------------------------------
+# Applicability dimensions (AOS-268)
+# ---------------------------------------------------------------------------
+
+
+def test_create_round_trips_applicability_dimensions(repo):
+    """project / repo / platform round-trip through the live store."""
+    item = _make_item(
+        project="AOS",
+        repo="ngb-agent-orchestrator",
+        platform="python",
+    )
+    repo.create(item)
+
+    fetched = repo.get(item.id)
+    assert fetched is not None
+    assert fetched.project == "AOS"
+    assert fetched.repo == "ngb-agent-orchestrator"
+    assert fetched.platform == "python"
+
+
+def test_create_defaults_applicability_dimensions_to_none(repo):
+    """An item constructed without the new fields reads back as NULL on all three."""
+    repo.create(_make_item())
+
+    fetched = repo.get("item-1")
+    assert fetched.project is None
+    assert fetched.repo is None
+    assert fetched.platform is None
+
+
+def test_create_staged_round_trips_applicability_dimensions(repo):
+    item = _make_staged_item(
+        project="AOS",
+        repo="ngb-agent-orchestrator",
+        platform="python",
+    )
+    repo.create_staged(item)
+
+    fetched = repo.get_staged(item.id)
+    assert fetched is not None
+    assert fetched.project == "AOS"
+    assert fetched.repo == "ngb-agent-orchestrator"
+    assert fetched.platform == "python"
+
+
+def test_promote_preserves_applicability_dimensions(repo):
+    """Promotion copies project / repo / platform into the live row."""
+    repo.create_staged(
+        _make_staged_item(
+            project="AOS",
+            repo="ngb-agent-orchestrator",
+            platform="python",
+        )
+    )
+
+    repo.promote("staged-1")
+
+    live = repo.get("staged-1")
+    assert live is not None
+    assert live.project == "AOS"
+    assert live.repo == "ngb-agent-orchestrator"
+    assert live.platform == "python"

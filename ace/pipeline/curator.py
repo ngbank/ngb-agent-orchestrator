@@ -213,6 +213,9 @@ def curate(
             initial_confidence=candidate.initial_confidence,
             evidence=candidate.evidence,
             suggested_tier=candidate.suggested_tier,
+            project=candidate.project,
+            repo=candidate.repo,
+            platform=candidate.platform,
         )
 
         best_match, best_score = _best_match(clean_candidate, existing)
@@ -259,6 +262,9 @@ def curate(
                 updated_at=now,
                 status="staged",
                 provenance=[provenance_entry],
+                project=clean_candidate.project,
+                repo=clean_candidate.repo,
+                platform=clean_candidate.platform,
             )
             repo.create_staged(item)
             logger.debug(
