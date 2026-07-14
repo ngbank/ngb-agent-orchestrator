@@ -1,8 +1,8 @@
 """Offline mining runner: batch-processes eligible workflows through the
 ACE learning pipeline (Evaluator → Reflector → Curator).
 
-Entry point for the ``ace mine`` CLI command (ticket 3.1). This module is
-intentionally side-effect-free in dry-run mode — no DB writes occur.
+Entry point for the ``ace mine`` CLI command. This module is intentionally
+side-effect-free in dry-run mode — no DB writes occur.
 
 Pipeline per workflow:
 

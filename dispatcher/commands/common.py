@@ -1,8 +1,8 @@
 """Shared CLI helpers used across command handlers.
 
-After AOS-139 (route CLI through WorkflowService) this module no longer owns
-graph/state-store helpers — those live behind ``WorkflowService``.  What
-remains is purely presentation / side-effect glue the CLI layer still needs:
+The CLI routes through ``WorkflowService``, so this module does not own
+graph/state-store helpers.  What remains is purely presentation / side-effect
+glue the CLI layer still needs:
 
 * :data:`STATUS_DISPLAY`, :data:`NODE_EMOJI` re-exports.
 * :func:`_get_actor` (shared with the rest of the codebase).

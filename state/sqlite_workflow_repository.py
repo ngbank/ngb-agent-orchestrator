@@ -253,7 +253,7 @@ class SQLiteWorkflowRepository:
 
         When *status* is REJECTED, *reason* is also written to the
         `rejection_reason` column, alongside the audit log entry, so callers
-        can read it without a JOIN on audit_log (ACE Epic 1, ticket 1.3).
+        can read it without a JOIN on audit_log.
 
         When *pr_approval_decision* is provided (``"approved"`` / ``"rejected"``
         / ``"commented"``), it is written to the ``pr_approval_decision``

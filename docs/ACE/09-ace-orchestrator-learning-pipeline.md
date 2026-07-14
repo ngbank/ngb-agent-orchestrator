@@ -101,11 +101,11 @@ The Reflector receives the full trace and produces one or more candidates. Each 
 }
 ```
 
-`project`, `repo`, and `platform` are the **applicability dimensions** added in AOS-268 — orthogonal to `scope`. Each is optional; `None` means "applies to any value on that axis". The Reflector sets a value only when the pattern would be wrong or irrelevant elsewhere (e.g. `platform = "python"` on a rule that depends on structural subtyping). `project` (not `project_key`) is a scope tag, typically the JIRA project short-name, and is not a foreign key. See `docs/ACE/11-ace-orchestrator-data-model.md` for storage and retrieval semantics.
+`project`, `repo`, and `platform` are the **applicability dimensions** — orthogonal to `scope`. Each is optional; `None` means "applies to any value on that axis". The Reflector sets a value only when the pattern would be wrong or irrelevant elsewhere (e.g. `platform = "python"` on a rule that depends on structural subtyping). `project` (not `project_key`) is a scope tag, typically the JIRA project short-name, and is not a foreign key. See `docs/ACE/11-ace-orchestrator-data-model.md` for storage and retrieval semantics.
 
 The Reflector prompt instructs the LLM to identify decisions that *could have gone differently* — places where the agent was uncertain, where a human corrected it, or where the outcome diverged from the plan — and produce a generalisable pattern for each.
 
-**Key Reflector constraint:** The Reflector must generate *generalisable* patterns, not run-specific facts. "The AOS-41 migration needed a `retry_count` column" is not a context item. "SQLite schema changes in this codebase require a new migration file with a sequential prefix" is a context item. The Reflector prompt must enforce this distinction explicitly. However, enforcement is a shared responsibility — the Curator is the quality gate (see below).
+**Key Reflector constraint:** The Reflector must generate *generalisable* patterns, not run-specific facts. "The migration for ticket X needed a `retry_count` column" is not a context item. "SQLite schema changes in this codebase require a new migration file with a sequential prefix" is a context item. The Reflector prompt must enforce this distinction explicitly. However, enforcement is a shared responsibility — the Curator is the quality gate (see below).
 
 ---
 
@@ -117,11 +117,13 @@ The Curator operates in two modes depending on which terminal path triggered the
 
 The Curator receives Reflector candidates and applies one of three operations per candidate:
 
-**Create new item.** No existing item is sufficiently similar. Write the candidate as a new row with `confidence = initial_confidence`, `occurrence_count = 1`.
+**Create new item.** No existing item is sufficiently similar. Write the candidate as a new row with `confidence = initial_confidence` and a single `provenance` entry.
 
-**Merge with existing item.** An existing item is semantically similar. Increment `occurrence_count`, add the new evidence to `provenance`, update confidence via weighted average. The description of the higher-confidence item wins unless new evidence suggests a refinement.
+**Merge with existing item (exact-dedup safety net).** An existing pending item in the same `pattern_type` matches above the Jaccard threshold with compatible polarity. Append the new evidence to `provenance`; **confidence is not recomputed** and there is no occurrence counter. Semantic consolidation of paraphrase variants is handled at read time by the synthesizer (see [`15-ace-injection-synthesizer.md`](15-ace-injection-synthesizer.md)).
 
-**Flag contradiction.** An existing item says the opposite. Neither is automatically deleted — both are flagged for manual review. Contradictions usually mean the pattern is context-dependent and needs a scope refinement.
+**Flag contradiction.** An existing item says the opposite. Both rows are written as normal pending staged items and `conflicts_with` is populated symmetrically — neither row is blocked with `status='conflicted'`. The read-time synthesizer decides how to surface the pair.
+
+> **Amendment.** The original design incremented an `occurrence_count` column on merge and recomputed confidence as a weighted mean. Under the trimmed Curator both actions are gone: merges are rare (exact-dedup only), confidence stays stable-after-creation modulo human review and time-based decay, and the schema no longer carries `occurrence_count`. Evidence count is derived from `len(provenance)` via `ContextItem.evidence_count`.
 
 **Quality enforcement.** Before applying any operation, the Curator checks: does this description reference a specific ticket key, branch name, or run artifact? If so, it reformulates to remove the specificity or discards. The Reflector generates broadly; the Curator enforces generalisability before persistence.
 
@@ -151,7 +153,7 @@ Safe pattern: wrap the entire pipeline in a try/except, log failures to `audit_l
 
 For the historical extraction pass: route all Reflector output to `context_items_staged` first, promote after manual review. This is your best opportunity to calibrate confidence thresholds before they affect live operation.
 
-For the live pipeline, a reasonable middle path: write directly for items where `initial_confidence ≥ 0.80` AND a matching item already exists with `occurrence_count ≥ 2` (reinforcing known patterns is low risk); stage everything else until the pipeline is validated.
+For the live pipeline, a reasonable middle path: write directly for items where `initial_confidence ≥ 0.80` AND a matching item already exists with `evidence_count ≥ 2` (reinforcing known patterns is low risk); stage everything else until the pipeline is validated.
 
 ---
 

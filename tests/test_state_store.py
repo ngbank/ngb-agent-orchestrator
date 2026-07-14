@@ -307,7 +307,7 @@ def test_context_items_table_schema(test_db):
         "scope_value",
         "description",
         "confidence",
-        "occurrence_count",
+        "conflicts_with",
         "last_validated",
         "created_at",
         "updated_at",
@@ -334,7 +334,7 @@ def test_context_items_staged_table_schema(test_db):
         "scope_value",
         "description",
         "confidence",
-        "occurrence_count",
+        "conflicts_with",
         "last_validated",
         "created_at",
         "updated_at",
@@ -381,7 +381,7 @@ def test_context_items_insert_and_query(test_db):
             """
             INSERT INTO context_items (
                 id, pattern_type, scope, scope_value, description,
-                confidence, occurrence_count, last_validated,
+                confidence, conflicts_with, last_validated,
                 created_at, updated_at, status, provenance
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
@@ -392,7 +392,7 @@ def test_context_items_insert_and_query(test_db):
                 "state/migrations/**",
                 "Use additive migrations, never in-place ALTER for SQLite.",
                 0.75,
-                2,
+                "[]",
                 "2026-05-15T14:32:00Z",
                 "2026-05-15T14:32:00Z",
                 "2026-05-15T14:32:00Z",
@@ -419,7 +419,7 @@ def test_context_items_staged_insert_and_query(test_db):
             """
             INSERT INTO context_items_staged (
                 id, pattern_type, scope, scope_value, description,
-                confidence, occurrence_count, last_validated,
+                confidence, conflicts_with, last_validated,
                 created_at, updated_at, status, provenance,
                 review_notes, promoted_at, rejected_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -431,7 +431,7 @@ def test_context_items_staged_insert_and_query(test_db):
                 None,
                 "Reviewer flagged missing test coverage on state transitions.",
                 0.5,
-                1,
+                "[]",
                 "2026-06-01T00:00:00Z",
                 "2026-06-01T00:00:00Z",
                 "2026-06-01T00:00:00Z",
@@ -1172,7 +1172,7 @@ def test_fake_repository_can_be_injected_without_database():
     """Demonstrate that FakeWorkflowRepository satisfies WorkflowRepository protocol.
 
     No database is needed — this proves callers can be tested with a pure
-    in-memory double, satisfying the DIP goal of AOS-96.
+    in-memory double, satisfying the DIP goal for the repository boundary.
     """
     from state.workflow_repository import WorkflowRepository
     from state.workflow_status import WorkflowStatus
@@ -1200,7 +1200,7 @@ def test_fake_repository_can_be_injected_without_database():
 
 
 # =====================================================================
-# Atomic Transaction Tests (AOS-113: Audit Log Durability)
+# Atomic Transaction Tests: Audit Log Durability
 # =====================================================================
 
 
@@ -1323,7 +1323,7 @@ def test_retry_count_atomicity(test_db):
 
 
 # =====================================================================
-# Negative Tests: Rollback Scenarios (AOS-113: Audit Log Durability)
+# Negative Tests: Rollback Scenarios (Audit Log Durability)
 # =====================================================================
 
 

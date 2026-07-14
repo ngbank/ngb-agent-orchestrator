@@ -27,7 +27,8 @@ computer-based environment. Their core finding:
 
 **Relevance to this project:** The execute recipe currently allows compound shell commands that
 `cat`/`sed`/`rg` many files in a single turn. This is the opposite of bounded context loading and
-directly contributed to the AOS-81 failure.
+directly contributed to an early failure mode where the agent exhausted its turn budget on
+reconnaissance reads.
 
 ---
 
@@ -149,7 +150,7 @@ actively hostile to long-horizon coding work, where text-only "thinking" turns a
 expected between tool calls (deciding the next file to edit, planning a refactor, reading then
 writing).
 
-**Adopted mitigation (AOS-87): do not use `response:` for autonomous coding recipes.**
+**Adopted mitigation: do not use `response:` for autonomous coding recipes.**
 
 Both `orchestrator/code_generator/recipes/generate_code.yaml` and `orchestrator/work_planner/recipes/plan.yaml` were originally written with `response:`
 schemas, but the dispatcher reads structured results from a file (`output_path`), never from
@@ -183,7 +184,7 @@ tool calls (typically because the recipe instructs it to stop after writing the 
 | Per-task read→implement loop | Anthropic + aider | ✅ Step 4 enforces per-task ordering |
 | Minimal targeted context loading | aider | ✅ `files_likely_affected` is authoritative; broad searches banned |
 | Absolute paths over `cd &&` compounds | Anthropic ACI | ✅ Compound patterns banned |
-| Omit `response:` schema for autonomous recipes | Goose source | ✅ Removed in AOS-87 |
+| Omit `response:` schema for autonomous recipes | Goose source | ✅ |
 | Tool-anchored session end ("write file, then stop") | Goose source | ✅ Both recipes end on file-verification |
 
 ---

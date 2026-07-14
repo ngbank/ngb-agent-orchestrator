@@ -248,7 +248,7 @@ fi
 # `dispatcher-tui` (whose sys.path[0] is venv/bin, not the repo root) fail
 # with ModuleNotFoundError on the new or renamed packages. Refreshing on
 # every setup-env.sh run — regardless of --deps — is a no-op when nothing
-# has changed and self-heals drift otherwise. See AOS-205.
+# has changed and self-heals drift otherwise.
 if [[ -x "$VENV_DIR/bin/pip" ]] && ! $DO_DEPS; then
     "$VENV_DIR/bin/pip" install --quiet -e . \
         || error "Editable install refresh failed."
@@ -260,7 +260,7 @@ fi
 # Install the pinned goose CLI version to ~/.local/bin. This must match the
 # version installed inside the container (both read from .goose-version) so
 # that ORCHESTRATOR_MODE=local and ORCHESTRATOR_MODE=remote run identical
-# tooling. See AOS-205.
+# tooling.
 if $DO_GOOSE; then
     GOOSE_VERSION_PINNED="$(tr -d '[:space:]' < .goose-version)"
     [[ -n "$GOOSE_VERSION_PINNED" ]] \

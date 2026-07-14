@@ -302,7 +302,7 @@ def test_reflect_normalises_codebase_wide_scope_value_to_none():
 
 
 # ---------------------------------------------------------------------------
-# Applicability dimensions (AOS-268)
+# Applicability dimensions
 # ---------------------------------------------------------------------------
 
 

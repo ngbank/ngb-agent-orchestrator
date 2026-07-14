@@ -13,10 +13,10 @@
 #
 #   Historically ``config/litellm.yaml`` was maintained as a hand-written
 #   reference config for developers who wanted to run a standalone proxy for
-#   probing or curl testing. That file drifted from the generator (see
-#   AOS-202) and was silently unused by every code path. This wrapper
-#   replaces it: it generates the same YAML the dispatcher uses, so the dev
-#   proxy behaves identically to the production one.
+#   probing or curl testing. That file drifted from the generator and was
+#   silently unused by every code path. This wrapper replaces it: it generates
+#   the same YAML the dispatcher uses, so the dev proxy behaves identically
+#   to the production one.
 #
 # Usage:
 #

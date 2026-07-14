@@ -72,8 +72,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # The version is pinned via .goose-version (single source of truth shared with
 # the host installer in setup-env.sh) rather than the moving `stable` tag,
 # because upstream releases have shipped regressions that trigger degenerate
-# reasoning loops with some models. See AOS-205 for the incident that motivated
-# this pin. Override at build time with `--build-arg GOOSE_VERSION=<x.y.z>`.
+# reasoning loops with some models. Override at build time with
+# `--build-arg GOOSE_VERSION=<x.y.z>`.
 ARG GOOSE_VERSION=
 COPY .goose-version /tmp/.goose-version
 RUN apt-get update \

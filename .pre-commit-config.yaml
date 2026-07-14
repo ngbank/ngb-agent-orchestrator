@@ -82,7 +82,7 @@ repos:
   # root) will fail with ModuleNotFoundError until the editable install is
   # refreshed. This hook auto-runs `pip install -e .` whenever pyproject.toml
   # differs between the previous and new refs, so the drift never surfaces to
-  # the developer. See AOS-205. Installed via `pre-commit install --hook-type
+  # the developer. Installed via `pre-commit install --hook-type
   # post-checkout --hook-type post-merge --hook-type post-rewrite` (handled
   # automatically by setup-env.sh).
   - repo: local

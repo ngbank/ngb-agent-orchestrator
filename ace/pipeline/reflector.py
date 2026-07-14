@@ -2,21 +2,20 @@
 
 Reads a :class:`~ace.pipeline.trace_reader.TraceBundle`, calls an LLM with the
 system prompt at ``ace/pipeline/prompts/reflector_system.md``, and returns a
-list of :class:`~ace.models.CandidateItem` — the Curator's input (ticket 2.4).
+list of :class:`~ace.models.CandidateItem` — the Curator's input.
 
-Contract (per AOS-225 design):
+Contract:
 
 - Returns ``list[CandidateItem]``; an empty list means "trace produced no
   generalisable signal" (the correct answer for trivial traces).
 - Raises :class:`ReflectorError` on API failures or on parse/validation
-  failures that persist through one retry. The runner (ticket 2.5) is
-  expected to wrap the call in try/except and emit a
-  ``learning_pipeline_failed`` audit event on failure (topic-09 § failure
-  isolation).
+  failures that persist through one retry. The runner is expected to wrap
+  the call in try/except and emit a ``learning_pipeline_failed`` audit event
+  on failure (topic-09 § failure isolation).
 
 Model selection: reads ``ACE_REFLECTOR_MODEL``, falling back to
-``GOOSE_MODEL``. Kept as an env var here so ticket 4.2 can promote it into
-:mod:`ace.config` without changing the call site.
+``GOOSE_MODEL``. Kept as an env var here so it can be promoted into
+:mod:`ace.config` later without changing the call site.
 """
 
 from __future__ import annotations
@@ -189,8 +188,8 @@ def _validate_optional_str(value: Any, index: int, field_name: str) -> Optional[
     """Coerce and validate an optional string field on a Reflector candidate.
 
     ``None`` and missing keys pass through as ``None`` (meaning "applies to
-    all values on that axis" for the applicability dimensions added by
-    AOS-268). Non-string values raise ``ValueError`` so the retry loop in
+    all values on that axis" for the applicability dimensions).
+    Non-string values raise ``ValueError`` so the retry loop in
     :func:`reflect` can catch them. Empty / whitespace-only strings are
     normalised to ``None`` so retrieval can treat null uniformly.
     """
@@ -248,9 +247,9 @@ def _validate_one(raw: Any, *, index: int, workflow_id: str) -> CandidateItem:
             f"Candidate {index}: suggested_tier={suggested_tier!r} not in {sorted(_ALLOWED_TIERS)}"
         )
 
-    # Applicability dimensions (AOS-268). All three are optional strings; None
-    # means "applies to all values on that axis". Empty strings are normalised
-    # to None so the retrieval layer can treat null uniformly.
+    # Applicability dimensions. All three are optional strings; None means
+    # "applies to all values on that axis". Empty strings are normalised to
+    # None so the retrieval layer can treat null uniformly.
     project = _validate_optional_str(raw.get("project"), index, "project")
     repo = _validate_optional_str(raw.get("repo"), index, "repo")
     platform = _validate_optional_str(raw.get("platform"), index, "platform")
@@ -265,9 +264,9 @@ def _validate_one(raw: Any, *, index: int, workflow_id: str) -> CandidateItem:
         signal_source = entry.get("signal_source")
         if not isinstance(signal_source, str) or not signal_source.strip():
             raise ValueError(f"Candidate {index}, evidence {e_index}: signal_source required")
-        # The Curator (ticket 2.4) turns these into ProvenanceEntry records;
-        # inject the workflow_id here so downstream code has the full audit
-        # chain without re-looking-up the bundle.
+        # The Curator turns these into ProvenanceEntry records; inject the
+        # workflow_id here so downstream code has the full audit chain
+        # without re-looking-up the bundle.
         evidence.append(
             {
                 "workflow_id": workflow_id,

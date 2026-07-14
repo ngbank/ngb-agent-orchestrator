@@ -1,15 +1,20 @@
-"""Unit tests for ace.pipeline.curator — create/merge/contradict/discard logic.
+"""Unit tests for ace.pipeline.curator — quality gate + dedup + conflict flag.
 
-Each test targets one behaviour described in the ticket-2.4 spec:
+The Curator does three things (see the module docstring for the full
+rationale, and docs/ACE/15-ace-injection-synthesizer.md for why semantic
+consolidation moved to read time):
 
 - create: no similar staged item → new row inserted
-- merge: similar staged item found, compatible polarity → merged in place
-- contradict: similar staged item found, opposing polarity → flagged conflicted
+- merge (exact-dedup safety net): similar staged item found, compatible
+  polarity → append a ProvenanceEntry to the existing row; confidence is NOT
+  touched
+- contradict: similar staged item found, opposing polarity → BOTH rows are
+  written as pending staged items with `conflicts_with` populated
+  symmetrically. Neither row is blocked with status='conflicted'.
 - discard: quality gate strips run-specific references; too short → discarded
 - reformulate: quality gate strips reference but keeps useful remainder
 - last_validated anchoring: uses bundle.created_at, not extraction date
 - pattern_type isolation: items of different pattern_types are never merged
-- merge confidence: weighted mean formula
 - empty candidates: returns zero CurationResult
 """
 
@@ -92,7 +97,6 @@ def _staged_item(
     pattern_type: PatternType = "approach",
     scope: Scope = "codebase_wide",
     confidence: float = 0.6,
-    occurrence_count: int = 1,
     status: Status = "staged",
 ) -> ContextItem:
     return ContextItem(
@@ -101,7 +105,6 @@ def _staged_item(
         scope=scope,
         description=description,
         confidence=confidence,
-        occurrence_count=occurrence_count,
         last_validated="2026-04-01T00:00:00Z",
         created_at="2026-04-01T00:00:00Z",
         updated_at="2026-04-01T00:00:00Z",
@@ -219,7 +222,8 @@ def test_create_new_staged_item_when_no_similar_exists(repo):
     assert len(staged) == 1
     assert staged[0].description == candidate.description
     assert staged[0].status == "staged"
-    assert staged[0].occurrence_count == 1
+    assert staged[0].conflicts_with == []
+    assert staged[0].evidence_count == 1
 
 
 def test_created_item_confidence_equals_initial_confidence(repo):
@@ -259,14 +263,13 @@ def test_created_item_provenance_uses_bundle_date(repo):
     assert prov.signal_source == "pr_comment"
 
 
-def test_merge_increments_occurrence_and_updates_confidence(repo):
-    """Existing staged item with similar description → occurrence_count += 1,
-    confidence = weighted mean, provenance appended."""
+def test_merge_appends_provenance_without_touching_confidence(repo):
+    """Existing staged item with similar description → provenance appended,
+    confidence unchanged (no weighted-mean recomputation)."""
     existing = _staged_item(
         "item-1",
         "Always run migrations before deploying code changes to keep schema consistent.",
         confidence=0.6,
-        occurrence_count=2,
     )
     repo.create_staged(existing)
 
@@ -278,13 +281,17 @@ def test_merge_increments_occurrence_and_updates_confidence(repo):
 
     assert result.merged == 1
     assert result.created == 0
+    assert result.contradicted == 0
 
     updated = repo.get_staged("item-1")
     assert updated is not None
-    assert updated.occurrence_count == 3
-    expected_confidence = (0.6 * 2 + 0.7) / 3
-    assert updated.confidence == pytest.approx(expected_confidence, abs=1e-9)
-    assert len(updated.provenance) == 1  # one new entry appended
+    # Confidence is UNCHANGED — the Curator no longer recomputes it.
+    assert updated.confidence == pytest.approx(0.6)
+    # But provenance grows by one entry (the new evidence event).
+    assert len(updated.provenance) == 1
+    assert updated.evidence_count == 1
+    # No new row was created — still one staged row total.
+    assert len(repo.list_staged()) == 1
 
 
 def test_merge_provenance_entry_has_correct_bundle_date(repo):
@@ -292,7 +299,6 @@ def test_merge_provenance_entry_has_correct_bundle_date(repo):
         "item-2",
         "Always run migrations before deploying code changes to keep schema consistent.",
         confidence=0.5,
-        occurrence_count=1,
     )
     repo.create_staged(existing)
 
@@ -308,8 +314,10 @@ def test_merge_provenance_entry_has_correct_bundle_date(repo):
     assert updated.provenance[0].workflow_date == source_date
 
 
-def test_contradict_sets_existing_item_status_to_conflicted(repo):
-    """Similar items with opposing polarity → existing item flagged conflicted."""
+def test_contradict_writes_both_rows_with_symmetric_conflicts_with(repo):
+    """Similar items with opposing polarity → BOTH rows written as pending
+    staged items, conflicts_with populated symmetrically. Neither row is
+    blocked with status='conflicted'."""
     existing = _staged_item(
         "item-3",
         "Run migrations before deploying code changes to production.",
@@ -329,9 +337,25 @@ def test_contradict_sets_existing_item_status_to_conflicted(repo):
     assert result.created == 0
     assert result.merged == 0
 
-    flagged = repo.get_staged("item-3")
-    assert flagged is not None
-    assert flagged.status == "conflicted"
+    # Existing row stays pending — no more status='conflicted' blocking.
+    existing_after = repo.get_staged("item-3")
+    assert existing_after is not None
+    assert existing_after.status == "staged"
+    assert existing_after.promoted_at is None
+    assert existing_after.rejected_at is None
+
+    # A new pending staged row was written for the candidate (previously it
+    # was silently discarded — that was a latent bug).
+    all_pending = repo.list_staged(pending_only=True)
+    assert {i.id for i in all_pending} >= {"item-3"}
+    assert len(all_pending) == 2
+    new_row = next(i for i in all_pending if i.id != "item-3")
+    assert new_row.status == "staged"
+    assert new_row.description == candidate.description
+
+    # conflicts_with is populated symmetrically on both rows.
+    assert existing_after.conflicts_with == [new_row.id]
+    assert new_row.conflicts_with == ["item-3"]
 
 
 def test_quality_gate_discards_run_specific_candidate(repo):
@@ -387,7 +411,6 @@ def test_multiple_candidates_mixed_operations(repo):
         "item-6",
         "Always run migrations before deploying code changes to keep schema consistent.",
         confidence=0.5,
-        occurrence_count=1,
     )
     repo.create_staged(existing)
 
@@ -415,7 +438,7 @@ def test_multiple_candidates_mixed_operations(repo):
 
 
 # ---------------------------------------------------------------------------
-# Applicability dimensions (AOS-268)
+# Applicability dimensions
 # ---------------------------------------------------------------------------
 
 

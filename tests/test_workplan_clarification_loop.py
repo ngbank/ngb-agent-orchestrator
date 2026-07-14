@@ -208,7 +208,7 @@ def test_loop_converges_within_max_rounds_for_multi_round_resolution():
 
 
 def test_loop_errors_when_planner_re_emits_same_concerns_verbatim():
-    """Simulates the AOS-270 failure mode: planner re-emits the same
+    """Simulates the failure mode where the planner re-emits the same
     concern verbatim in every round despite the reviewer resolving it.
     Router keeps looping back; the max-rounds guard eventually errors.
     """

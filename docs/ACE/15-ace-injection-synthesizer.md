@@ -6,7 +6,7 @@ Topic 4 (retrieval and injection) described how retrieved items reach the planne
 
 Both topics assume the shape of the injected context is a **flat list of items with tier labels** — the direct output of retrieval formatted for the model. Under that model, the curator has to consolidate paraphrase variants at write time, because retrieval cannot fix a duplicated store.
 
-Early Epic 2 mining runs invalidated that assumption. This topic describes the architectural shift that replaces the flat-list injection model with an inference-driven synthesizer, and explains what it means for the surrounding pieces.
+Early mining runs invalidated that assumption. This topic describes the architectural shift that replaces the flat-list injection model with an inference-driven synthesizer, and explains what it means for the surrounding pieces.
 
 ## The mining-side observation that forced the change
 
@@ -21,9 +21,9 @@ Two things follow from this:
 
 ## The design shift
 
-**Storage stays fragmented.** Paraphrase variants co-exist as separate staged items, each with `occurrence_count = 1` in most cases. The Reflector's phrasing is preserved verbatim. The curator's remaining responsibilities shrink to quality-gate reformulation, exact-duplicate dedup, and a lightweight contradiction *flag* (a `conflicts_with` list, not a blocking status).
+**Storage stays fragmented.** Paraphrase variants co-exist as separate staged items, each with its own `provenance` chain (typically a single entry per row). The Reflector's phrasing is preserved verbatim. The curator's remaining responsibilities shrink to quality-gate reformulation, exact-duplicate dedup, and a lightweight contradiction *flag* (a `conflicts_with` list, not a blocking status).
 
-**Retrieval returns raw items, not a rendered block.** The retrieval adapter (Epic 4 / AOS-235) is refactored to return `list[ContextItem]` filtered by applicability (repo, project, platform — Epic 2 / AOS-268), confidence tier, and top-K. It does not format.
+**Retrieval returns raw items, not a rendered block.** The retrieval adapter is refactored to return `list[ContextItem]` filtered by applicability (repo, project, platform), confidence tier, and top-K. It does not format.
 
 **A new synthesizer stage renders a structured document.** Between retrieval and injection, an LLM call takes the retrieved items plus the ticket context and produces a compact markdown document with a fixed section shape:
 
@@ -32,7 +32,7 @@ Two things follow from this:
 - **Testing approach** — expectations for how work is verified.
 - **Known pitfalls** — negative patterns worth calling out explicitly.
 
-The synthesizer prompt instructs the model to cite source item IDs inline, prefer higher-confidence and higher-`occurrence_count` inputs when they conflict, preserve alternate phrasings under a "notes" sub-bullet when scope conditions genuinely differ, and surface both sides of any `conflicts_with` pair rather than silently choosing.
+The synthesizer prompt instructs the model to cite source item IDs inline, prefer higher-confidence and higher-`evidence_count` (derived from `len(provenance)`) inputs when they conflict, preserve alternate phrasings under a "notes" sub-bullet when scope conditions genuinely differ, and surface both sides of any `conflicts_with` pair rather than silently choosing.
 
 **Injection consumes the synthesizer output**, not raw items. The planner and code generator recipes receive the synthesized document via the same `context_items_path` temp-file parameter contract already established for the flat-list model — the substitution is transparent at the recipe layer.
 
@@ -50,7 +50,7 @@ Three properties of the read-time merge dissolve the write-time problems:
 
 **One extra LLM call per injection.** Retrieval used to be a SQL + Python-side rank operation. The synthesizer adds a model call before the planner runs. This is mitigated by caching: cache key is `hash((ticket_key, applicability_filter_predicate, corpus_snapshot_id, recipe_target))` where `corpus_snapshot_id` is the max `updated_at` across matching staged items. Cache invalidation is implicit — when the store changes, the snapshot ID changes, and the cache key changes.
 
-**Non-determinism at injection.** The same set of retrieved items can render slightly differently across runs. This is acceptable given that the retrieved *set* is deterministic given the filter and store snapshot; the LLM's phrasing choices vary but the source items don't. The provenance manifest records which source item IDs contributed to which section, so utilization telemetry (Epic 4 / AOS-239) still works.
+**Non-determinism at injection.** The same set of retrieved items can render slightly differently across runs. This is acceptable given that the retrieved *set* is deterministic given the filter and store snapshot; the LLM's phrasing choices vary but the source items don't. The provenance manifest records which source item IDs contributed to which section, so utilization telemetry still works.
 
 **Prompt quality becomes load-bearing.** The synthesizer's output quality directly gates injection quality. A bad prompt produces a bad document from good source items. This is a hazard the flat-list model did not have — retrieval formatting was a template, not a model call.
 
@@ -90,14 +90,14 @@ Source: [`ace/deduplication/detector.py`](https://github.com/kayba-ai/agentic-co
 
 ### Comparison
 
-| Aspect | `ace-agent/ace` | `kayba-ai/agentic-context-engine` | Our design (post AOS-273 / -274) |
+| Aspect | `ace-agent/ace` | `kayba-ai/agentic-context-engine` | Our design |
 |---|---|---|---|
 | Similarity signal | Semantic (mpnet, cosine) | Semantic (OpenAI or MiniLM, cosine) | Lexical (Jaccard) — exact-dedup only |
 | Threshold | 0.90 (embedding) | 0.85 (embedding) | 0.35 (Jaccard) |
 | Merge decision | LLM merge prompt per group | LLM-authored typed op (MERGE / DELETE / KEEP / UPDATE) | Deterministic weighted-mean (exact dupes only) |
 | Frequency | Per-sample (opt-in) | Every 10 samples | Per-candidate (cheap because Jaccard) |
 | Scoping | None | Within section only | Within `pattern_type` only |
-| Sticky "keep separate" record | No | **Yes** (`SimilarityDecision`) | No (see AOS-276 for follow-up) |
+| Sticky "keep separate" record | No | **Yes** (`SimilarityDecision`) | No (deferred as an optional follow-up) |
 | Consolidation timing | Write time | Write time | **Read time** (synthesizer) |
 | Default state | OFF (`BulletpointAnalyzer`) / ON (curator prompt) | ON | ON (exact-dedup); read-time synthesizer flag-gated |
 
@@ -111,26 +111,15 @@ The reason we diverge: their playbook is per-training-run and single-domain — 
 
 Cost profile shifts as a result: they pay the LLM cost once per merge event (amortized over many retrievals); we pay once per (ticket, filter, corpus-snapshot) combination. The synthesizer cache (`hash((ticket_key, applicability_filter, corpus_snapshot_id, recipe_target))`) is what makes this viable — without caching, per-injection LLM calls would be prohibitive.
 
-**Divergence 2: We use lexical similarity for exact-dedup, not embeddings for semantic dedup.** Both references default to sentence-transformers or OpenAI embeddings. We stayed with Jaccard on tokens — but only after narrowing the Curator's job to exact-duplicate detection (AOS-273). Under that narrowed job, Jaccard is honest: false negatives are covered by the extraction-log idempotency guarantee, false positives are limited by the `pattern_type` scoping and the conservative 0.35 threshold. If AOS-273 ever expanded to include semantic similarity, we would need to switch to embeddings — but AOS-274's read-time synthesizer removes the incentive to expand.
+**Divergence 2: We use lexical similarity for exact-dedup, not embeddings for semantic dedup.** Both references default to sentence-transformers or OpenAI embeddings. We stayed with Jaccard on tokens — but only after narrowing the Curator's job to exact-duplicate detection. Under that narrowed job, Jaccard is honest: false negatives are covered by the extraction-log idempotency guarantee, false positives are limited by the `pattern_type` scoping and the conservative 0.35 threshold. If the Curator ever expanded to include semantic similarity, we would need to switch to embeddings — but the read-time synthesizer removes the incentive to expand.
 
-**What we adopted from the references.** Section/type scoping (kayba's `within_section_only=True`) matches our `pattern_type` filter in AOS-273. The Reflector / Curator / synthesizer separation aligns with kayba's principle that consolidation is a distinct pipeline concern from writing. Both influences are called out in AOS-273 and AOS-274.
+**What we adopted from the references.** Section/type scoping (kayba's `within_section_only=True`) matches our `pattern_type` filter in the Curator. The Reflector / Curator / synthesizer separation aligns with kayba's principle that consolidation is a distinct pipeline concern from writing.
 
-**What we deferred.** Kayba's `SimilarityDecision` pair-cache is architecturally attractive but speculative in our context — filed as **AOS-276** under Epic 10 (AOS-275) to pick up if the synthesizer surfaces evidence we need it. Batching the Curator's similarity pass (both references do this) is deferred to **AOS-277** in the same epic, contingent on us ever introducing embedding-based similarity to the Curator.
+**What we deferred.** Kayba's `SimilarityDecision` pair-cache is architecturally attractive but speculative in our context — filed as an optional follow-up to pick up if the synthesizer surfaces evidence we need it. Batching the Curator's similarity pass (both references do this) is deferred as another optional follow-up, contingent on us ever introducing embedding-based similarity to the Curator.
 
-## Boundary with the ontology track (Epics 7–8)
+## Boundary with the ontology track
 
-Ontology injection (Epic 8 / AOS-216) faces a similar rendering question — turning a subgraph selection into a prompt block. The same synthesizer principle likely applies but with a different prompt shape: ontology is authoritative (canonical, framed as constraints), while context items are probabilistic (framed as guidance). This topic stays scoped to context items; extending synthesis to ontology is a follow-up under Epic 8.
-
-## Sequencing implications for Epic 4
-
-The Epic 4 ticket order changes:
-
-1. **AOS-235** — Retrieval adapter, refactored to return `list[ContextItem]` (no formatting).
-2. **AOS-236** — Config surface + feature flags, including `ace_synthesizer_enabled` (default OFF; fallback = flat-list format).
-3. **AOS-274 (new)** — Synthesizer module, prompt template, cache table, telemetry surface.
-4. **AOS-237** — Planner injection using synthesizer output.
-5. **AOS-238** — Code generator injection using synthesizer output.
-6. **AOS-239** — Utilization telemetry, extended with `synthesizer_input_ids` and `synthesizer_output_section_ids`.
+Ontology injection faces a similar rendering question — turning a subgraph selection into a prompt block. The same synthesizer principle likely applies but with a different prompt shape: ontology is authoritative (canonical, framed as constraints), while context items are probabilistic (framed as guidance). This topic stays scoped to context items; extending synthesis to ontology is a follow-up on the ontology track.
 
 ## Context loading references
 
@@ -146,15 +135,6 @@ The Epic 4 ticket order changes:
 - `docs/ACE/05-ace-curation-quality.md`
 - `docs/ACE/08-ace-orchestrator-injection-points.md`
 - `docs/ACE/11-ace-orchestrator-data-model.md`
-- `docs/ACE/ace-implementation-plan.md`
+- `docs/ACE/ace-implementation-plan.md` — canonical ticket ↔ design mapping.
 - `ace/pipeline/curator.py`
 - `ace/retrieval/` (target module for synthesizer)
-
-### JIRA anchors
-- Parent epic: **AOS-212** (ACE Epic 4 — Retrieval and injection).
-- Synthesizer ticket: **AOS-274**.
-- Curator scope trim (motivated by this shift): **AOS-273**.
-- Applicability dimensions on staged items (retrieval filter): **AOS-268** (done).
-- Optional follow-ups epic: **AOS-275** (Epic 10) — hosts speculative alignments with reference implementations.
-  - **AOS-276** — Pair-decision cache (kayba's `SimilarityDecision` analogue), contingent on synthesizer evidence.
-  - **AOS-277** — Batched Curator dedup pass, contingent on embedding-based similarity being introduced.

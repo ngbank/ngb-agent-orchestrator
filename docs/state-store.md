@@ -66,7 +66,7 @@ Append-only record of every state change and significant action.
 
 ### `schema_migrations`
 
-Tracks which SQL migration files have been applied. Added in migration runner upgrade (AOS-41).
+Tracks which SQL migration files have been applied. Managed by the migration runner.
 
 | Column | Type | Description |
 |---|---|---|

@@ -1,4 +1,4 @@
-"""Tests for the --retry workflow resumption feature (AOS-88)."""
+"""Tests for the --retry workflow resumption feature."""
 
 import os
 import tempfile
@@ -19,9 +19,9 @@ from state.workflow_status import WorkflowStatus
 def _make_test_service(graph=None, graph_factory=None):
     """Build a LocalWorkflowService for tests, wired to the given graph.
 
-    After AOS-139 the CLI no longer patches ``build_orchestrator``; instead
-    tests inject a pre-built ``WorkflowService`` via ``cli_runner.invoke(run,
-    args, obj=service)`` and pass either a concrete ``graph`` or a
+    The CLI does not patch ``build_orchestrator``; instead tests inject a
+    pre-built ``WorkflowService`` via ``cli_runner.invoke(run, args,
+    obj=service)`` and pass either a concrete ``graph`` or a
     ``graph_factory`` callable.
     """
     if graph_factory is None:
@@ -512,7 +512,7 @@ def test_retry_integration_plan_failure_then_success(
 
 
 # ---------------------------------------------------------------------------
-# AOS-89 — IN_PROGRESS retry + SIGINT recovery
+# IN_PROGRESS retry + SIGINT recovery
 # ---------------------------------------------------------------------------
 
 
@@ -594,9 +594,9 @@ def test_retry_still_rejects_completed_workflow(test_db, cli_runner):
     assert "not retryable" in result.output
 
 
-# AOS-139: The legacy ``_mark_workflow_interrupted`` helper has been folded
-# into ``LocalWorkflowService.mark_interrupted``. Its behavior is now covered
-# by ``tests/test_workflow_service_local.py::TestAdminMutations``
+# The legacy ``_mark_workflow_interrupted`` helper has been folded into
+# ``LocalWorkflowService.mark_interrupted``. Its behavior is now covered by
+# ``tests/test_workflow_service_local.py::TestAdminMutations``
 # (test_mark_interrupted_sets_failed,
 # test_mark_interrupted_is_noop_when_terminal,
 # test_mark_interrupted_unknown_workflow_is_safe).

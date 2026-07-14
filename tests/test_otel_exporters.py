@@ -25,7 +25,7 @@ def logs_base_dir():
         os.environ["LOGS_DIR"] = tmpdir
 
         # NGB_WORKFLOW_ID is intentionally unset — routing comes from span
-        # attributes now (AOS-117). Strip it so leaked env doesn't mask bugs.
+        # attributes now. Strip it so leaked env doesn't mask bugs.
         original_workflow_id = os.environ.pop("NGB_WORKFLOW_ID", None)
 
         yield Path(tmpdir)
@@ -145,7 +145,7 @@ class TestLocalJsonFileExporter:
         # (or exist but be empty)
 
     def test_export_failure_logs_error(self, temp_logs_dir, caplog, monkeypatch):
-        """Export failures are logged, not printed (AOS-166/AOS-169)."""
+        """Export failures are logged, not printed."""
         exporter = LocalJsonFileExporter()
         span = MockSpan(name="test.span")
 
@@ -166,7 +166,7 @@ class TestLocalJsonFileExporter:
     def test_export_routes_by_workflow_id_attribute(self, logs_base_dir):
         """Spans land in LOGS_DIR/<workflow.id>/otel.jsonl based on the span attribute.
 
-        Regression: AOS-117. Previously the path was derived from the
+        Regression: previously the path was derived from the
         ``NGB_WORKFLOW_ID`` env var, which was never set on the dispatcher
         process, so every span fell back to ``unknown/otel.jsonl``.
         """
@@ -293,7 +293,7 @@ class TestMultiExporter:
 
 
 class TestRedaction:
-    """Tests for span redaction (AOS-113: redaction controls)."""
+    """Tests for span redaction controls."""
 
     def test_should_redact_debug_mode_disables(self):
         """Test that OTEL_DEBUG_LOCAL=true disables redaction."""

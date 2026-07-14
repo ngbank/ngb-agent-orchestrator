@@ -22,7 +22,7 @@ sequenceDiagram
     Graph->>WP: invoke WorkPlanner subgraph
 
     rect rgb(230, 240, 255)
-        Note over WP: Node 1 — validate_input (AOS-50)
+        Note over WP: Node 1 — validate_input
         WP->>WP: Check ticket key format
         alt Invalid format
             WP-->>Graph: error → route to error_handler → END
@@ -30,7 +30,7 @@ sequenceDiagram
     end
 
     rect rgb(230, 245, 255)
-        Note over WP,SQLite: Node 2 — check_duplicate (AOS-50)
+        Note over WP,SQLite: Node 2 — check_duplicate
         WP->>SQLite: get_workflow_by_ticket()
         SQLite-->>WP: Existing workflows
         alt Active workflow found
@@ -41,32 +41,32 @@ sequenceDiagram
     end
 
     rect rgb(230, 255, 240)
-        Note over WP,JiraLib: Node 3 — fetch_ticket (AOS-50)
+        Note over WP,JiraLib: Node 3 — fetch_ticket
         WP->>JiraLib: get_ticket(ticket_key)
         JiraLib-->>WP: JiraTicket<br/>(key, title, description, labels, status)
         Note over WP: Domain exceptions (JiraConfigurationError,<br/>JiraTicketNotFoundError) bubble up to CLI
     end
 
     rect rgb(240, 255, 230)
-        Note over WP,SQLite: Node 4 — create_workflow_record (AOS-50)
+        Note over WP,SQLite: Node 4 — create_workflow_record
         WP->>SQLite: create_workflow() → status: PENDING
         WP->>SQLite: update_status() → status: IN_PROGRESS
         SQLite-->>WP: workflow_id
     end
 
     rect rgb(255, 250, 230)
-        Note over WP,Goose: Node 5 — generate_plan (AOS-50 — stub)
+        Note over WP,Goose: Node 5 — generate_plan (stub)
         WP->>Goose: [STUB] Future: invoke plan recipe
         Note over WP: Returns work_plan_data: None until implemented
     end
 
     rect rgb(255, 245, 230)
-        Note over WP,Validator: Node 6 — validate_plan (AOS-50)
+        Note over WP,Validator: Node 6 — validate_plan
         alt work_plan_data present
             WP->>Validator: validate_work_plan(work_plan_data)
             alt Validation fails or status == "blocked"
                 Validator-->>WP: error → route to error_handler
-            else Plan has concerns/blocked (AOS-73)
+            else Plan has concerns/blocked
                 Validator-->>WP: ⚠️  Plan needs clarification
                 Note over WP: Route to await_workplan_clarification
             else Passes validation cleanly
@@ -79,7 +79,7 @@ sequenceDiagram
     end
 
     rect rgb(255, 230, 245)
-        Note over WP,SQLite: Node 6b — await_workplan_clarification (AOS-73)
+        Note over WP,SQLite: Node 6b — await_workplan_clarification
         alt Plan needs clarification
             WP->>SQLite: update_status() → PENDING_WORKPLAN_CLARIFICATION
             WP-->>CLI: Print questions/risks and exit
@@ -102,7 +102,7 @@ sequenceDiagram
     end
 
     rect rgb(255, 235, 245)
-        Note over WP,SQLite: Node 7 — store_plan (AOS-50)
+        Note over WP,SQLite: Node 7 — store_plan
         alt work_plan_data present
             WP->>SQLite: update_work_plan()
             SQLite-->>WP: ✅ Stored
@@ -112,7 +112,7 @@ sequenceDiagram
     end
 
     rect rgb(245, 235, 255)
-        Note over WP,JiraLib: Node 8 — post_to_jira (AOS-50)
+        Note over WP,JiraLib: Node 8 — post_to_jira
         alt work_plan_data present
             WP->>Formatter: format_work_plan_comment()
             Formatter-->>WP: Formatted comment
@@ -128,7 +128,7 @@ sequenceDiagram
     end
 
     WP-->>Graph: Final WorkPlannerState
-    Graph->>Graph: generate_code node (stub — AOS-50)
+    Graph->>Graph: generate_code node (stub)
     Graph-->>CLI: Final OrchestratorState
 
     rect rgb(235, 255, 235)
@@ -142,7 +142,7 @@ sequenceDiagram
     end
 
     rect rgb(255, 220, 220)
-        Note over CLI: Domain exception handlers (AOS-50)
+        Note over CLI: Domain exception handlers
         alt JiraTicketNotFoundError
             CLI-->>User: ❌ Ticket not found: {e}
         else JiraConfigurationError

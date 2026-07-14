@@ -210,7 +210,7 @@ def _record_node_output(span: Span, node_name: str, output: Any) -> None:
     if not isinstance(output, dict):
         return
 
-    # AOS-117 enrichment: surface which state keys this node produced (no values,
+    # Enrichment: surface which state keys this node produced (no values,
     # avoids any redaction concern) and a rough size signal.
     keys = sorted(str(k) for k in output.keys())
     if keys:
