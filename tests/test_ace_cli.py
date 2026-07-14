@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 import pytest
 from click.testing import CliRunner
 
@@ -50,17 +48,10 @@ def cli_runner():
 # ---------------------------------------------------------------------------
 
 
-def test_mine_without_flag_exits_error(cli_runner):
-    """Calling ace without --mine prints an error and exits non-zero."""
-    result = cli_runner.invoke(run, [])
-    assert result.exit_code == 1
-    assert "No command specified" in result.output
-
-
 def test_mine_runs_pipeline(cli_runner):
-    """ace --mine delegates to the service and prints summary."""
+    """ace mine delegates to the service and prints summary."""
     fake_service = _make_fake_service()
-    result = cli_runner.invoke(run, ["--mine"], obj=fake_service)
+    result = cli_runner.invoke(run, ["mine"], obj=fake_service)
     assert result.exit_code == 0
     assert "Mining complete" in result.output
     assert "processed=2" in result.output
@@ -68,15 +59,15 @@ def test_mine_runs_pipeline(cli_runner):
 
 
 def test_mine_dry_run(cli_runner):
-    """ace --mine --dry-run passes dry_run=True to the service."""
+    """ace mine --dry-run passes dry_run=True to the service."""
     fake_service = _make_fake_service()
-    result = cli_runner.invoke(run, ["--mine", "--dry-run"], obj=fake_service)
+    result = cli_runner.invoke(run, ["mine", "--dry-run"], obj=fake_service)
     assert result.exit_code == 0
     assert "[dry-run]" in result.output
 
 
 def test_mine_with_limit(cli_runner):
-    """ace --mine --limit 10 passes limit=10 to the service."""
+    """ace mine --limit 10 passes limit=10 to the service."""
     calls = []
 
     class RecordingService:
@@ -84,13 +75,13 @@ def test_mine_with_limit(cli_runner):
             calls.append({"limit": limit, "dry_run": dry_run, "workflow_id": workflow_id})
             return MiningResult()
 
-    result = cli_runner.invoke(run, ["--mine", "--limit", "10"], obj=RecordingService())
+    result = cli_runner.invoke(run, ["mine", "--limit", "10"], obj=RecordingService())
     assert result.exit_code == 0
     assert calls == [{"limit": 10, "dry_run": False, "workflow_id": None}]
 
 
 def test_mine_with_workflow_id(cli_runner):
-    """ace --mine --workflow-id <id> passes workflow_id to the service."""
+    """ace mine --workflow-id <id> passes workflow_id to the service."""
     calls = []
 
     class RecordingService:
@@ -98,9 +89,7 @@ def test_mine_with_workflow_id(cli_runner):
             calls.append({"limit": limit, "dry_run": dry_run, "workflow_id": workflow_id})
             return MiningResult()
 
-    result = cli_runner.invoke(
-        run, ["--mine", "--workflow-id", "wf-abc"], obj=RecordingService()
-    )
+    result = cli_runner.invoke(run, ["mine", "--workflow-id", "wf-abc"], obj=RecordingService())
     assert result.exit_code == 0
     assert calls == [{"limit": None, "dry_run": False, "workflow_id": "wf-abc"}]
 

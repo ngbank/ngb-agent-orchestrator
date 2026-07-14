@@ -11,7 +11,7 @@ from typing import Optional
 
 from ace.repository.context_item_repository import ContextItemRepository
 
-from .protocols import AgentContextEngineService, MiningResult
+from .protocols import MiningResult
 
 
 def _run_mining(*, limit, dry_run, workflow_id):
@@ -56,7 +56,3 @@ class LocalAgentContextEngineService:
             contradicted=runner_result.curation.contradicted,
             discarded=runner_result.curation.discarded,
         )
-
-
-# Satisfy the Protocol at runtime for isinstance checks.
-AgentContextEngineService.register(LocalAgentContextEngineService)

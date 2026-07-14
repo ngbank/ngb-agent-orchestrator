@@ -21,7 +21,6 @@ Usage:
 
 from __future__ import annotations
 
-import sys
 from typing import TYPE_CHECKING, Optional
 
 import click
@@ -48,14 +47,14 @@ def _resolve_service(ctx: click.Context) -> "AgentContextEngineService":
     return service
 
 
-@click.command()
+@click.group()
 @click.pass_context
-@click.option(
-    "--mine",
-    "do_mine",
-    is_flag=True,
-    help="Run the offline mining pipeline over eligible workflows",
-)
+def run(ctx: click.Context) -> None:
+    """ACE CLI — Agentic Context Engine."""
+
+
+@run.command()
+@click.pass_context
 @click.option(
     "--dry-run",
     is_flag=True,
@@ -73,33 +72,13 @@ def _resolve_service(ctx: click.Context) -> "AgentContextEngineService":
     default=None,
     help="Process a single specific workflow, bypassing eligibility anti-join",
 )
-def run(
+def mine(
     ctx: click.Context,
-    do_mine: bool,
     dry_run: bool,
     limit: Optional[int],
     workflow_id: Optional[str],
 ) -> None:
-    """ACE CLI — Agentic Context Engine.
-
-    Examples:
-
-        # Run the mining pipeline
-        ace mine
-
-        # Preview what would happen without writing to the database
-        ace mine --dry-run
-
-        # Process at most 10 workflows
-        ace mine --limit 10
-
-        # Re-process a specific workflow
-        ace mine --workflow-id <uuid>
-    """
-    if not do_mine:
-        click.echo("❌ No command specified. Use --mine to run the mining pipeline.", err=True)
-        sys.exit(1)
-
+    """Run the mining pipeline over eligible workflows."""
     service = _resolve_service(ctx)
 
     from ace.cli.commands.mine import _handle_mine
