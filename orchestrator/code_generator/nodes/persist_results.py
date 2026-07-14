@@ -45,7 +45,12 @@ def persist_results(state: PersistResultsInputState) -> PersistResultsOutputStat
             if not exec_error and exec_status in ("success", "partial") and pr_url_for_status
             else WorkflowStatus.FAILED
         )
-        update_status(workflow_id, new_status, actor="generate_code")
+        update_status(
+            workflow_id,
+            new_status,
+            pr_url=pr_url_for_status or None,
+            actor="generate_code",
+        )
         click.echo(
             f"{chr(0x2705) if new_status == WorkflowStatus.PENDING_PR_APPROVAL else chr(0x274c)} "
             f"Execution {code_generation_summary.get('status')} — "

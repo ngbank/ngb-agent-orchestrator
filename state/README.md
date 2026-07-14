@@ -225,9 +225,13 @@ Create a new workflow record.
 
 **Returns:** str - Workflow ID (UUID)
 
-### update_status(workflow_id, status, pr_url=None, actor="system", reason=None)
+### update_status(workflow_id, status, pr_url=None, actor="system", reason=None, pr_approval_decision=None)
 
-Update workflow status and optionally PR URL. Creates audit log entry.
+Update workflow status and optionally PR URL / approval decision. Creates
+audit log entry. When `status` is `REJECTED`, `reason` is also written to the
+`rejection_reason` column. When `pr_approval_decision` is provided (typically
+`"approved"`, `"rejected"`, or `"commented"`), it is written to the
+`pr_approval_decision` column in the same transaction.
 
 **Parameters:**
 - `workflow_id` (str): Workflow UUID
@@ -235,6 +239,7 @@ Update workflow status and optionally PR URL. Creates audit log entry.
 - `pr_url` (str, optional): Pull request URL
 - `actor` (str, optional): Who performed the update (default: "system")
 - `reason` (str, optional): Reason for the update
+- `pr_approval_decision` (str, optional): Reviewer decision for the PR (`"approved"` / `"rejected"` / `"commented"`)
 
 **Returns:** None
 

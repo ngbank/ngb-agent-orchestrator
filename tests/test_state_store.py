@@ -115,6 +115,48 @@ def test_update_status_with_pr_url(test_db):
     assert workflow["pr_url"] == "https://github.com/org/repo/pull/123"
 
 
+def test_update_status_with_pr_approval_decision(test_db):
+    """Test that pr_approval_decision kwarg is persisted to the column."""
+    workflow_id = state_store.create_workflow(ticket_key="TEST-271")
+
+    state_store.update_status(
+        workflow_id=workflow_id,
+        status=WorkflowStatus.COMPLETED,
+        pr_approval_decision="approved",
+    )
+
+    workflow = state_store.get_workflow(workflow_id)
+    assert workflow["status"] == WorkflowStatus.COMPLETED
+    assert workflow["pr_approval_decision"] == "approved"
+
+
+def test_update_status_with_pr_approval_decision_rejected(test_db):
+    """Rejected decision is persisted alongside REJECTED status."""
+    workflow_id = state_store.create_workflow(ticket_key="TEST-271")
+
+    state_store.update_status(
+        workflow_id=workflow_id,
+        status=WorkflowStatus.REJECTED,
+        reason="scope too broad",
+        pr_approval_decision="rejected",
+    )
+
+    workflow = state_store.get_workflow(workflow_id)
+    assert workflow["status"] == WorkflowStatus.REJECTED
+    assert workflow["pr_approval_decision"] == "rejected"
+    assert workflow["rejection_reason"] == "scope too broad"
+
+
+def test_update_status_without_pr_approval_decision_leaves_column_null(test_db):
+    """Omitting the kwarg leaves pr_approval_decision NULL (default behaviour)."""
+    workflow_id = state_store.create_workflow(ticket_key="TEST-271")
+
+    state_store.update_status(workflow_id=workflow_id, status=WorkflowStatus.IN_PROGRESS)
+
+    workflow = state_store.get_workflow(workflow_id)
+    assert workflow["pr_approval_decision"] is None
+
+
 def test_update_status_rejected_writes_rejection_reason(test_db):
     """Rejecting a workflow persists the reason to the rejection_reason column."""
     workflow_id = state_store.create_workflow(ticket_key="AOS-62")
@@ -1087,7 +1129,15 @@ class FakeWorkflowRepository:
             workflows = [w for w in workflows if w["ticket_key"] == ticket_key]
         return workflows[:limit]
 
-    def update_status(self, workflow_id, status, pr_url=None, actor="system", reason=None):
+    def update_status(
+        self,
+        workflow_id,
+        status,
+        pr_url=None,
+        actor="system",
+        reason=None,
+        pr_approval_decision=None,
+    ):
         if workflow_id in self._workflows:
             self._workflows[workflow_id]["status"] = status
 

@@ -60,6 +60,7 @@ class WorkflowRepository(Protocol):
         pr_url: Optional[str] = None,
         actor: str = "system",
         reason: Optional[str] = None,
+        pr_approval_decision: Optional[str] = None,
     ) -> None: ...
 
     def update_work_plan(
@@ -139,8 +140,16 @@ def update_status(
     pr_url: Optional[str] = None,
     actor: str = "system",
     reason: Optional[str] = None,
+    pr_approval_decision: Optional[str] = None,
 ) -> None:
-    return _default_repo().update_status(workflow_id, status, pr_url, actor, reason)
+    return _default_repo().update_status(
+        workflow_id,
+        status,
+        pr_url=pr_url,
+        actor=actor,
+        reason=reason,
+        pr_approval_decision=pr_approval_decision,
+    )
 
 
 def update_work_plan(

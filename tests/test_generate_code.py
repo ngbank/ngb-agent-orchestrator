@@ -317,6 +317,8 @@ def test_persist_results_transitions_to_pending_pr_approval_on_success():
         status_calls = mock_update_status.call_args_list
         assert len(status_calls) >= 1
         assert status_calls[-1][0][1] == WorkflowStatus.PENDING_PR_APPROVAL
+        # pr_url must be forwarded so the top-level column is written.
+        assert status_calls[-1][1]["pr_url"] == "https://github.com/org/repo/pull/1"
         assert result["failed_node"] is None
         assert result["pr_url"] == "https://github.com/org/repo/pull/1"
 
