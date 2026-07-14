@@ -64,6 +64,59 @@ Three properties of the read-time merge dissolve the write-time problems:
 
 **Topic 11 (data model).** Add a `conflicts_with` JSON column to `context_items` and `context_items_staged` so the flag has a home. Add a `context_block_cache` table for synthesizer output caching.
 
+## Reference implementations: how they handle deduplication
+
+Two reference implementations are cited throughout the ACE curriculum: `ace-agent/ace` (paper-style) and `kayba-ai/agentic-context-engine` (SDK-oriented). Both were reviewed while designing this topic. Both handle deduplication at **write time**, not read time, and both use **embedding-based similarity**, not lexical.
+
+### `ace-agent/ace`
+
+Two-layer approach — LLM curator plus an optional `BulletpointAnalyzer`.
+
+- **Curator prompt suppression.** The curator receives the entire current playbook plus the new reflection and is prompted to *"avoid redundancy — if similar advice already exists, only add new content that is a perfect complement."* MERGE / UPDATE / DELETE operations exist in the schema but are stubbed as TODO — the curator only emits ADD.
+- **`BulletpointAnalyzer` (opt-in, off by default).** Embeds every bullet with `sentence-transformers` (`all-mpnet-base-v2`) into FAISS, computes a full pairwise cosine similarity matrix, groups any pair above a **0.90** threshold, then makes a per-group LLM call to compose a merged bullet. Combined `helpful` / `harmful` counters are preserved.
+
+Source: [`ace/prompts/curator.py`](https://github.com/ace-agent/ace/blob/main/ace/prompts/curator.py), [`ace/core/bulletpoint_analyzer.py`](https://github.com/ace-agent/ace/blob/main/ace/core/bulletpoint_analyzer.py).
+
+### `kayba-ai/agentic-context-engine`
+
+Three-layer approach — separate `DeduplicateStep` in the pipeline that feeds a report into a `SkillManager` LLM which returns typed operations.
+
+- **`SimilarityDetector`.** Cosine on embeddings (LiteLLM `text-embedding-3-small` by default, local `all-MiniLM-L6-v2` fallback). Default threshold **0.85**, section-scoped (`within_section_only=True`), lazy thread-safe model loading.
+- **`DeduplicationManager.get_similarity_report()`.** Formats a natural-language report of similar pairs. The manager doesn't decide anything — it feeds the report into the next `SkillManager` prompt.
+- **SkillManager returns typed operations.** Four operation types — `MERGE`, `DELETE`, `KEEP`, `UPDATE`. The standout is `KEEP`: it records a *`differentiation`* (why the two skills legitimately coexist) and stores a persistent `SimilarityDecision` so future dedup runs skip the pair.
+- **`DeduplicateStep`.** Runs every `interval=10` samples (skips otherwise, since O(n²) similarity would be expensive per-sample). Explicitly decoupled from the SkillManager: *"The SkillManager only produces output; deduplication runs at a configurable interval."*
+
+Source: [`ace/deduplication/detector.py`](https://github.com/kayba-ai/agentic-context-engine/blob/main/ace/deduplication/detector.py), [`ace/deduplication/manager.py`](https://github.com/kayba-ai/agentic-context-engine/blob/main/ace/deduplication/manager.py), [`ace/deduplication/operations.py`](https://github.com/kayba-ai/agentic-context-engine/blob/main/ace/deduplication/operations.py), [`ace/steps/deduplicate.py`](https://github.com/kayba-ai/agentic-context-engine/blob/main/ace/steps/deduplicate.py).
+
+### Comparison
+
+| Aspect | `ace-agent/ace` | `kayba-ai/agentic-context-engine` | Our design (post AOS-273 / -274) |
+|---|---|---|---|
+| Similarity signal | Semantic (mpnet, cosine) | Semantic (OpenAI or MiniLM, cosine) | Lexical (Jaccard) — exact-dedup only |
+| Threshold | 0.90 (embedding) | 0.85 (embedding) | 0.35 (Jaccard) |
+| Merge decision | LLM merge prompt per group | LLM-authored typed op (MERGE / DELETE / KEEP / UPDATE) | Deterministic weighted-mean (exact dupes only) |
+| Frequency | Per-sample (opt-in) | Every 10 samples | Per-candidate (cheap because Jaccard) |
+| Scoping | None | Within section only | Within `pattern_type` only |
+| Sticky "keep separate" record | No | **Yes** (`SimilarityDecision`) | No (see AOS-276 for follow-up) |
+| Consolidation timing | Write time | Write time | **Read time** (synthesizer) |
+| Default state | OFF (`BulletpointAnalyzer`) / ON (curator prompt) | ON | ON (exact-dedup); read-time synthesizer flag-gated |
+
+## How this diverges from the reference implementations
+
+Two aspects of this design are genuine departures from both references. They are deliberate, not accidental — but they should be owned rather than hidden.
+
+**Divergence 1: We consolidate at read time, not write time.** Neither reference implementation renders context items through an LLM at injection time. Both consolidate at write time (either via the curator's own LLM call or a separate dedup step) and inject the consolidated store as a flat block.
+
+The reason we diverge: their playbook is per-training-run and single-domain — one consolidated shape fits every retrieval. Our corpus is cross-project and cross-repo — the "right" consolidation depends on the ticket context (repo, project, platform, ticket summary). Read-time consolidation is *what enables* contextual rendering. Write-time consolidation forecloses it, because you'd have to freeze one shape at storage time.
+
+Cost profile shifts as a result: they pay the LLM cost once per merge event (amortized over many retrievals); we pay once per (ticket, filter, corpus-snapshot) combination. The synthesizer cache (`hash((ticket_key, applicability_filter, corpus_snapshot_id, recipe_target))`) is what makes this viable — without caching, per-injection LLM calls would be prohibitive.
+
+**Divergence 2: We use lexical similarity for exact-dedup, not embeddings for semantic dedup.** Both references default to sentence-transformers or OpenAI embeddings. We stayed with Jaccard on tokens — but only after narrowing the Curator's job to exact-duplicate detection (AOS-273). Under that narrowed job, Jaccard is honest: false negatives are covered by the extraction-log idempotency guarantee, false positives are limited by the `pattern_type` scoping and the conservative 0.35 threshold. If AOS-273 ever expanded to include semantic similarity, we would need to switch to embeddings — but AOS-274's read-time synthesizer removes the incentive to expand.
+
+**What we adopted from the references.** Section/type scoping (kayba's `within_section_only=True`) matches our `pattern_type` filter in AOS-273. The Reflector / Curator / synthesizer separation aligns with kayba's principle that consolidation is a distinct pipeline concern from writing. Both influences are called out in AOS-273 and AOS-274.
+
+**What we deferred.** Kayba's `SimilarityDecision` pair-cache is architecturally attractive but speculative in our context — filed as **AOS-276** under Epic 10 (AOS-275) to pick up if the synthesizer surfaces evidence we need it. Batching the Curator's similarity pass (both references do this) is deferred to **AOS-277** in the same epic, contingent on us ever introducing embedding-based similarity to the Curator.
+
 ## Boundary with the ontology track (Epics 7–8)
 
 Ontology injection (Epic 8 / AOS-216) faces a similar rendering question — turning a subgraph selection into a prompt block. The same synthesizer principle likely applies but with a different prompt shape: ontology is authoritative (canonical, framed as constraints), while context items are probabilistic (framed as guidance). This topic stays scoped to context items; extending synthesis to ontology is a follow-up under Epic 8.
@@ -84,6 +137,10 @@ The Epic 4 ticket order changes:
 ### Papers and web docs
 - ACE paper (HTML): https://arxiv.org/html/2510.04618v3
 
+### Reference implementations (dedup comparison)
+- `ace-agent/ace` (paper-style): https://github.com/ace-agent/ace — see `ace/core/bulletpoint_analyzer.py` and `ace/prompts/curator.py`.
+- `kayba-ai/agentic-context-engine` (SDK): https://github.com/kayba-ai/agentic-context-engine — see `ace/deduplication/`, `ace/steps/deduplicate.py`, `ace/protocols/deduplication.py`.
+
 ### Local orchestrator files
 - `docs/ACE/04-ace-retrieval-and-injection.md`
 - `docs/ACE/05-ace-curation-quality.md`
@@ -98,3 +155,6 @@ The Epic 4 ticket order changes:
 - Synthesizer ticket: **AOS-274**.
 - Curator scope trim (motivated by this shift): **AOS-273**.
 - Applicability dimensions on staged items (retrieval filter): **AOS-268** (done).
+- Optional follow-ups epic: **AOS-275** (Epic 10) — hosts speculative alignments with reference implementations.
+  - **AOS-276** — Pair-decision cache (kayba's `SimilarityDecision` analogue), contingent on synthesizer evidence.
+  - **AOS-277** — Batched Curator dedup pass, contingent on embedding-based similarity being introduced.

@@ -248,6 +248,26 @@ separately toggleable; disabling either flag removes exactly that block.
 
 ---
 
+# Track 3 — Deferred quality improvements (Epic 10)
+
+## Epic 10 — Optional follow-ups and deferred quality improvements (AOS-275)
+
+**Goal:** hold speculative work that emerged from design reviews (notably the AOS-273 / AOS-274
+reference-implementation comparison) so it has a home other than a comment on a shipped ticket.
+Do NOT schedule these unless (a) live behaviour surfaces evidence they are needed, or (b) a
+downstream ticket pulls one in as a dependency. Prefer to close as "won't do" over accumulating
+speculative work.
+
+| # | Type | Ticket | Notes |
+|---|------|--------|-------|
+| 10.1 | feat | Pair-decision cache for synthesizer (AOS-276) | Persist LLM-authored "keep separate with differentiation" decisions across synthesizer runs (kayba's `SimilarityDecision` analogue). Trigger: synthesizer re-litigates the same pairs across renders in a way that hurts output quality or cost |
+| 10.2 | feat | Batched Curator dedup pass (AOS-277) | Move similarity detection out of `Curator.apply_candidate()` into a batched pass. Trigger: any ticket introducing embedding-based similarity to the Curator, OR Epic 5 maintenance job needing to host a dedup step |
+
+**Exit criteria (per ticket):** each ticket carries its own trigger conditions and definition of
+done. The epic itself has no exit criteria — it is a persistent home for deferred work.
+
+---
+
 ## Sequencing summary
 
 ```
@@ -262,6 +282,8 @@ Epic 1 (schema/scaffold) ──► Epic 2 (mining, staged-only) ──► Epic 3
                               Epic 7 (ontology mining + human-only review)
                                                     ▼
                               Epic 8 (unified consumption: items + ontology)
+
+Epic 10 (deferred / optional) ── evidence-driven, pulled in by other epics as needed
 ```
 
 - After Epic 3 you have the complete manual loop: mine → review → promote.
@@ -270,6 +292,7 @@ Epic 1 (schema/scaffold) ──► Epic 2 (mining, staged-only) ──► Epic 3
 - Epic 6 makes it safe to trust and expand.
 - Epic 7 extends mining to domain-model discovery with a strictly human gate.
 - Epic 8 brings both artifact types into the agent's context, separately framed and flagged.
+- Epic 10 is off-cycle — schedule its tickets only when evidence or a dependency demands them.
 
 Epic 7 can start any time after Epic 3 if you want to parallelize; Epic 8 depends on both
 Epic 4 (injection mechanism) and Epic 7 (approved ontology content). Epics 5/6 and 7/8 are
