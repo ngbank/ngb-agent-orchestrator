@@ -199,6 +199,23 @@ an error. Workflows that ended with `partial` execution status (build pass, test
 are marked `completed`, not `failed`, and are NOT considered retryable — they should be
 finished manually.
 
+### Guard-Failure Recovery Hint
+
+The human-in-the-loop commands (`--clarify`, `--approve-plan`, `--reject`, `--approve-pr`,
+`--comment-pr`, `--reject-pr`) all refuse to act when the target workflow is not in the
+expected pending status. When the current status is retryable (`failed`, `in_progress`,
+`pr_commented`, or `approved`), the CLI appends a recovery hint pointing at `--retry`:
+
+```
+❌ Workflow <uuid> is not pending PR approval (status: failed)
+   Resume with: dispatcher --retry --workflow-id <uuid>
+```
+
+This exists because a common failure mode is: user runs `--comment-pr`, the resumed graph
+crashes in `generate_code`, the workflow becomes `failed`, and the user re-runs the same
+`--comment-pr` command expecting recovery. The correct recovery path is always `--retry` —
+the hint makes that obvious at the point of failure instead of leaving the user guessing.
+
 ### Recovering Interrupted Workflows
 
 A workflow can also end up stuck in `in_progress` if the dispatcher process is killed

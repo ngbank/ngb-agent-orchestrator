@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Callable, List, Optional
 
 import click
 
-import dispatcher.commands.common as common  # noqa: F401  (kept for symmetry)
+import dispatcher.commands.common as common
 from dispatcher.commands.follow import submit_and_follow
 from state.workflow_status import WorkflowStatus
 
@@ -68,6 +68,7 @@ def _handle_clarify(
             f"❌ Workflow {resolved_id} is not pending clarification (status: {status_val})",
             err=True,
         )
+        common._emit_retry_hint(resolved_id, detail.status)
         sys.exit(1)
 
     work_plan = detail.work_plan or {}

@@ -8,6 +8,8 @@ remains is purely presentation / side-effect glue the CLI layer still needs:
 * :func:`_get_actor` (shared with the rest of the codebase).
 * :func:`_post_execution_comment` — formats and posts the execution-summary
   JIRA comment after a successful run.
+* :func:`_emit_retry_hint` — prints a ``dispatcher --retry`` recovery hint
+  when a human-in-the-loop guard rejects a workflow that is still retryable.
 """
 
 from typing import Optional
@@ -17,6 +19,7 @@ import click
 from dispatcher.constants import NODE_EMOJI, STATUS_DISPLAY
 from dispatcher.protocols import CommentPoster
 from orchestrator.utils import _get_actor  # noqa: F401  (re-exported)
+from state.workflow_status import WorkflowStatus
 
 # ---------------------------------------------------------------------------
 # Display helpers
@@ -24,6 +27,26 @@ from orchestrator.utils import _get_actor  # noqa: F401  (re-exported)
 
 _STATUS_DISPLAY = STATUS_DISPLAY
 _NODE_EMOJI = NODE_EMOJI
+
+
+def _emit_retry_hint(workflow_id: str, status: WorkflowStatus) -> None:
+    """Print a ``dispatcher --retry`` recovery hint if ``status`` is retryable.
+
+    The human-in-the-loop guards in ``--clarify``, ``--approve``, ``--reject``,
+    ``--approve-pr``, ``--comment-pr``, and ``--reject-pr`` all refuse to act
+    when a workflow is not in the expected pending status. When the current
+    status is retryable (FAILED / IN_PROGRESS / PR_COMMENTED / APPROVED), the
+    correct recovery path is ``dispatcher --retry``. This helper appends that
+    hint to stderr so users know what to do next; it stays silent for
+    non-retryable statuses (terminal states or other active states) where a
+    retry would be inappropriate.
+    """
+    if status.is_retryable():
+        click.echo(
+            f"   Resume with: dispatcher --retry --workflow-id {workflow_id}",
+            err=True,
+        )
+
 
 # Lazy-loaded in _post_execution_comment. Kept as module attributes so tests
 # can patch them without importing heavy dependencies at module import time.

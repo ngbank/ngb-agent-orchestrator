@@ -54,6 +54,7 @@ def _handle_approve(
             f"\u274c Workflow {resolved_id} is not pending approval (status: {status_val})",
             err=True,
         )
+        common._emit_retry_hint(resolved_id, detail.status)
         sys.exit(1)
 
     try:
@@ -120,6 +121,7 @@ def _handle_reject(
             f"❌ Workflow {resolved_id} is not pending approval (status: {status_val})",
             err=True,
         )
+        common._emit_retry_hint(resolved_id, detail.status)
         sys.exit(1)
 
     try:
