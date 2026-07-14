@@ -67,7 +67,6 @@ def infer_branch_prefix(state: CodeGeneratorState) -> dict:
                     ),
                 },
             ],
-            temperature=0,
         )
         if not hasattr(raw_response, "choices"):
             raise TypeError(f"Unexpected litellm response type: {type(raw_response)}")

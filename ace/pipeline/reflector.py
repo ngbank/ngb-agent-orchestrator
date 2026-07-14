@@ -114,7 +114,6 @@ def _call_llm(kwargs: dict, messages: list[dict]) -> str:
     raw_response = litellm.completion(
         **kwargs,
         messages=messages,
-        temperature=0,
         response_format={"type": "json_object"},
     )
     if not hasattr(raw_response, "choices"):

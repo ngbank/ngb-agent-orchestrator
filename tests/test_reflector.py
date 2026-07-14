@@ -409,7 +409,7 @@ def test_reflect_raises_when_no_model_configured(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# LLM invocation shape (system+user, json_object, temperature 0)
+# LLM invocation shape (system+user, json_object)
 # ---------------------------------------------------------------------------
 
 
@@ -431,7 +431,9 @@ def test_reflect_calls_llm_with_system_and_user_messages():
     # reads structured keys, not paraphrased prose.
     assert "AOS-42" in messages[1]["content"]
     assert "wf-42" in messages[1]["content"]
-    assert kwargs["temperature"] == 0
+    # temperature is intentionally omitted so GPT-5-family models
+    # (which only accept the default value) work through the same code path.
+    assert "temperature" not in kwargs
     assert kwargs["response_format"] == {"type": "json_object"}
 
 

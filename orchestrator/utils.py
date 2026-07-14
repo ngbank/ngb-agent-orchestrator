@@ -46,6 +46,7 @@ _AZURE_API_VERSIONS: dict[str, str] = {
     "gpt-4.1": "2024-12-01-preview",
     "gpt-5.3-codex": "2025-04-01-preview",
     "gpt-5.4": "preview",
+    "gpt-5.6-terra": "preview",
     "Kimi-K2.6": "2024-12-01-preview",  # Azure Foundry model
 }
 
