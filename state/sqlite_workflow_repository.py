@@ -247,12 +247,18 @@ class SQLiteWorkflowRepository:
         pr_url: Optional[str] = None,
         actor: str = "system",
         reason: Optional[str] = None,
+        pr_approval_decision: Optional[str] = None,
     ) -> None:
-        """Update workflow status and optionally PR URL.
+        """Update workflow status and optionally PR URL / approval decision.
 
         When *status* is REJECTED, *reason* is also written to the
         `rejection_reason` column, alongside the audit log entry, so callers
         can read it without a JOIN on audit_log (ACE Epic 1, ticket 1.3).
+
+        When *pr_approval_decision* is provided (``"approved"`` / ``"rejected"``
+        / ``"commented"``), it is written to the ``pr_approval_decision``
+        column in the same transaction so downstream readers do not have to
+        replay LangGraph state or the audit log to recover the decision.
 
         The workflow status update and corresponding audit log entry are written
         atomically in a single transaction. If either fails, both are rolled back.
@@ -268,6 +274,9 @@ class SQLiteWorkflowRepository:
                 if pr_url:
                     set_clauses.append("pr_url = ?")
                     params.append(pr_url)
+                if pr_approval_decision:
+                    set_clauses.append("pr_approval_decision = ?")
+                    params.append(pr_approval_decision)
                 if status == WorkflowStatus.REJECTED:
                     set_clauses.append("rejection_reason = ?")
                     params.append(reason)

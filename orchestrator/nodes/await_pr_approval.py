@@ -77,6 +77,7 @@ def await_pr_approval(state: PRApprovalInputState) -> PRApprovalOutputState:
             WorkflowStatus.COMPLETED,
             actor=actor,
             reason="PR approved by reviewer",
+            pr_approval_decision="approved",
         )
         logger.info("PR approved by %s", actor)
         return {"pr_approval_decision": "approved"}
@@ -87,6 +88,7 @@ def await_pr_approval(state: PRApprovalInputState) -> PRApprovalOutputState:
             WorkflowStatus.PR_COMMENTED,
             actor=actor,
             reason="PR commented on by reviewer",
+            pr_approval_decision="commented",
         )
         if comments:
             update_pr_comments(workflow_id, comments, actor=actor)
@@ -99,6 +101,7 @@ def await_pr_approval(state: PRApprovalInputState) -> PRApprovalOutputState:
             WorkflowStatus.REJECTED,
             actor=actor,
             reason=reason or "PR rejected by reviewer",
+            pr_approval_decision="rejected",
         )
         if reason:
             logger.warning("PR rejected by %s: %s", actor, reason)
