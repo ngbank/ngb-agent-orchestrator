@@ -45,8 +45,9 @@ class ContextItemRepository:
                 f"""
                 INSERT INTO {_LIVE_TABLE} (
                     id, pattern_type, scope, scope_value, description,
-                    confidence, occurrence_count, last_validated,
+                    confidence, last_validated,
                     created_at, updated_at, status, provenance,
+                    conflicts_with,
                     project, repo, platform
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -57,12 +58,12 @@ class ContextItemRepository:
                     row["scope_value"],
                     row["description"],
                     row["confidence"],
-                    row["occurrence_count"],
                     row["last_validated"],
                     row["created_at"],
                     row["updated_at"],
                     row["status"],
                     json.dumps(row["provenance"]),
+                    json.dumps(row["conflicts_with"]),
                     row["project"],
                     row["repo"],
                     row["platform"],
@@ -158,8 +159,9 @@ class ContextItemRepository:
                 f"""
                 INSERT INTO {_STAGED_TABLE} (
                     id, pattern_type, scope, scope_value, description,
-                    confidence, occurrence_count, last_validated,
+                    confidence, last_validated,
                     created_at, updated_at, status, provenance,
+                    conflicts_with,
                     review_notes, promoted_at, rejected_at,
                     project, repo, platform
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -171,12 +173,12 @@ class ContextItemRepository:
                     row["scope_value"],
                     row["description"],
                     row["confidence"],
-                    row["occurrence_count"],
                     row["last_validated"],
                     row["created_at"],
                     row["updated_at"],
                     row["status"],
                     json.dumps(row["provenance"]),
+                    json.dumps(row["conflicts_with"]),
                     row["review_notes"],
                     row["promoted_at"],
                     row["rejected_at"],
@@ -215,6 +217,33 @@ class ContextItemRepository:
             conn.close()
         return [ContextItem.from_row(row) for row in rows]
 
+    def list_staged_by_pattern_type(
+        self, pattern_type: str, *, pending_only: bool = True
+    ) -> list[ContextItem]:
+        """List staged items of a given ``pattern_type``, filtered in SQL.
+
+        Used by the Curator's similarity lookup (AOS-273): cross-pattern_type
+        items are orthogonal and can never merge, so pushing the filter into
+        SQL avoids materialising unrelated rows.  Defaults to
+        ``pending_only=True`` because the only in-repo caller — the Curator —
+        is scanning the human review queue.
+        """
+        clauses = ["pattern_type = ?"]
+        params: list = [pattern_type]
+        if pending_only:
+            clauses.append("promoted_at IS NULL")
+            clauses.append("rejected_at IS NULL")
+        where = "WHERE " + " AND ".join(clauses)
+        conn = get_connection()
+        try:
+            rows = conn.execute(
+                f"SELECT * FROM {_STAGED_TABLE} {where} ORDER BY created_at ASC",
+                params,
+            ).fetchall()
+        finally:
+            conn.close()
+        return [ContextItem.from_row(row) for row in rows]
+
     def update_staged_confidence(self, item_id: str, confidence: float) -> None:
         """Overwrite a staged item's confidence score."""
         self._update_confidence(_STAGED_TABLE, item_id, confidence)
@@ -241,49 +270,42 @@ class ContextItemRepository:
         finally:
             conn.close()
 
-    def merge_staged(
-        self,
-        item_id: str,
-        *,
-        new_confidence: float,
-        provenance_entry: ProvenanceEntry,
-    ) -> None:
-        """Atomically update a staged item for a Curator merge operation.
+    def flag_conflict(self, *, staged_id: str, other_id: str) -> None:
+        """Symmetrically record a contradiction between two *staged* items.
 
-        In one transaction: increments ``occurrence_count`` by 1, sets
-        ``confidence`` to *new_confidence*, and appends *provenance_entry* to
-        the JSON provenance array.  ``updated_at`` is refreshed to now.
+        Appends *other_id* to ``staged_id``'s ``conflicts_with`` array and
+        vice versa in a single transaction (AOS-273). Idempotent: an id
+        already present in the target array is not appended twice.
 
-        This is the correct merge primitive — doing the three writes separately
-        would leave the row in an inconsistent intermediate state if a failure
-        occurred between them.
+        Both items are expected to be in the staging table — this is the only
+        place the Curator writes conflict edges. If either id is missing the
+        method is a no-op for that side (the missing row will not appear in
+        retrieval anyway).
         """
         now = datetime.now(UTC).isoformat()
         conn = get_connection()
         try:
             conn.execute("BEGIN IMMEDIATE")
             try:
-                row = conn.execute(
-                    f"SELECT provenance FROM {_STAGED_TABLE} WHERE id = ?", (item_id,)
-                ).fetchone()
-                if row is None:
-                    conn.rollback()
-                    return
-
-                entries = json.loads(row["provenance"]) if row["provenance"] else []
-                entries.append(provenance_entry.to_dict())
-
-                conn.execute(
-                    f"""
-                    UPDATE {_STAGED_TABLE}
-                    SET confidence = ?,
-                        occurrence_count = occurrence_count + 1,
-                        provenance = ?,
-                        updated_at = ?
-                    WHERE id = ?
-                    """,
-                    (new_confidence, json.dumps(entries), now, item_id),
-                )
+                for target_id, added_id in (
+                    (staged_id, other_id),
+                    (other_id, staged_id),
+                ):
+                    row = conn.execute(
+                        f"SELECT conflicts_with FROM {_STAGED_TABLE} WHERE id = ?",
+                        (target_id,),
+                    ).fetchone()
+                    if row is None:
+                        continue
+                    current = json.loads(row["conflicts_with"]) if row["conflicts_with"] else []
+                    if added_id in current:
+                        continue
+                    current.append(added_id)
+                    conn.execute(
+                        f"UPDATE {_STAGED_TABLE} "
+                        "SET conflicts_with = ?, updated_at = ? WHERE id = ?",
+                        (json.dumps(current), now, target_id),
+                    )
                 conn.commit()
             except Exception:
                 conn.rollback()
@@ -330,12 +352,12 @@ class ContextItemRepository:
             scope_value=scope_value if scope_value is not None else staged.scope_value,
             description=staged.description,
             confidence=min(staged.confidence + contributed_confidence, 1.0),
-            occurrence_count=staged.occurrence_count,
             last_validated=staged.last_validated,
             created_at=staged.created_at,
             updated_at=now,
             status="active",
             provenance=[*staged.provenance, approval_entry],
+            conflicts_with=list(staged.conflicts_with),
             project=staged.project,
             repo=staged.repo,
             platform=staged.platform,
@@ -350,8 +372,9 @@ class ContextItemRepository:
                     f"""
                     INSERT INTO {_LIVE_TABLE} (
                         id, pattern_type, scope, scope_value, description,
-                        confidence, occurrence_count, last_validated,
+                        confidence, last_validated,
                         created_at, updated_at, status, provenance,
+                        conflicts_with,
                         project, repo, platform
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
@@ -362,12 +385,12 @@ class ContextItemRepository:
                         row["scope_value"],
                         row["description"],
                         row["confidence"],
-                        row["occurrence_count"],
                         row["last_validated"],
                         row["created_at"],
                         row["updated_at"],
                         row["status"],
                         json.dumps(row["provenance"]),
+                        json.dumps(row["conflicts_with"]),
                         row["project"],
                         row["repo"],
                         row["platform"],

@@ -21,7 +21,7 @@ Two things follow from this:
 
 ## The design shift
 
-**Storage stays fragmented.** Paraphrase variants co-exist as separate staged items, each with `occurrence_count = 1` in most cases. The Reflector's phrasing is preserved verbatim. The curator's remaining responsibilities shrink to quality-gate reformulation, exact-duplicate dedup, and a lightweight contradiction *flag* (a `conflicts_with` list, not a blocking status).
+**Storage stays fragmented.** Paraphrase variants co-exist as separate staged items, each with its own `provenance` chain (typically a single entry per row). The Reflector's phrasing is preserved verbatim. The curator's remaining responsibilities shrink to quality-gate reformulation, exact-duplicate dedup, and a lightweight contradiction *flag* (a `conflicts_with` list, not a blocking status). See AOS-273 for the curator trim.
 
 **Retrieval returns raw items, not a rendered block.** The retrieval adapter (Epic 4 / AOS-235) is refactored to return `list[ContextItem]` filtered by applicability (repo, project, platform — Epic 2 / AOS-268), confidence tier, and top-K. It does not format.
 
@@ -32,7 +32,7 @@ Two things follow from this:
 - **Testing approach** — expectations for how work is verified.
 - **Known pitfalls** — negative patterns worth calling out explicitly.
 
-The synthesizer prompt instructs the model to cite source item IDs inline, prefer higher-confidence and higher-`occurrence_count` inputs when they conflict, preserve alternate phrasings under a "notes" sub-bullet when scope conditions genuinely differ, and surface both sides of any `conflicts_with` pair rather than silently choosing.
+The synthesizer prompt instructs the model to cite source item IDs inline, prefer higher-confidence and higher-`evidence_count` (derived from `len(provenance)`) inputs when they conflict, preserve alternate phrasings under a "notes" sub-bullet when scope conditions genuinely differ, and surface both sides of any `conflicts_with` pair rather than silently choosing.
 
 **Injection consumes the synthesizer output**, not raw items. The planner and code generator recipes receive the synthesized document via the same `context_items_path` temp-file parameter contract already established for the flat-list model — the substitution is transparent at the recipe layer.
 

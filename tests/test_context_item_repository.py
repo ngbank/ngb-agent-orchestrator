@@ -32,7 +32,6 @@ def _make_item(item_id: str = "item-1", **overrides: Any) -> ContextItem:
         scope_value="state/migrations/**",
         description="Use additive migrations, never in-place ALTER for SQLite.",
         confidence=0.6,
-        occurrence_count=1,
         last_validated="2026-05-15T14:32:00Z",
         created_at="2026-05-15T14:32:00Z",
         updated_at="2026-05-15T14:32:00Z",
@@ -192,7 +191,6 @@ def _make_staged_item(item_id: str = "staged-1", **overrides: Any) -> ContextIte
         scope_value=None,
         description="Reviewer flagged missing test coverage on state transitions.",
         confidence=0.55,
-        occurrence_count=1,
         last_validated="2026-06-01T00:00:00Z",
         created_at="2026-06-01T00:00:00Z",
         updated_at="2026-06-01T00:00:00Z",
@@ -379,3 +377,104 @@ def test_promote_preserves_applicability_dimensions(repo):
     assert live.project == "AOS"
     assert live.repo == "ngb-agent-orchestrator"
     assert live.platform == "python"
+
+
+# ---------------------------------------------------------------------------
+# conflicts_with + flag_conflict + list_staged_by_pattern_type (AOS-273)
+# ---------------------------------------------------------------------------
+
+
+def test_evidence_count_derives_from_provenance():
+    """evidence_count is a derived property, not a stored column (AOS-273)."""
+    item = _make_item()  # provenance has one entry
+    assert item.evidence_count == 1
+
+    empty = _make_staged_item()  # provenance = []
+    assert empty.evidence_count == 0
+
+
+def test_create_staged_round_trips_empty_conflicts_with(repo):
+    """Freshly-staged items default to an empty conflicts_with list."""
+    repo.create_staged(_make_staged_item())
+
+    fetched = repo.get_staged("staged-1")
+    assert fetched is not None
+    assert fetched.conflicts_with == []
+
+
+def test_create_live_round_trips_conflicts_with(repo):
+    """A live item preserves any conflicts_with ids across a round trip."""
+    item = _make_item(conflicts_with=["other-a", "other-b"])
+    repo.create(item)
+
+    fetched = repo.get(item.id)
+    assert fetched is not None
+    assert fetched.conflicts_with == ["other-a", "other-b"]
+
+
+def test_flag_conflict_symmetrically_appends_ids(repo):
+    repo.create_staged(_make_staged_item("a"))
+    repo.create_staged(_make_staged_item("b"))
+
+    repo.flag_conflict(staged_id="a", other_id="b")
+
+    a = repo.get_staged("a")
+    b = repo.get_staged("b")
+    assert a is not None and b is not None
+    assert a.conflicts_with == ["b"]
+    assert b.conflicts_with == ["a"]
+
+
+def test_flag_conflict_is_idempotent(repo):
+    repo.create_staged(_make_staged_item("a"))
+    repo.create_staged(_make_staged_item("b"))
+
+    repo.flag_conflict(staged_id="a", other_id="b")
+    repo.flag_conflict(staged_id="a", other_id="b")
+
+    assert repo.get_staged("a").conflicts_with == ["b"]
+    assert repo.get_staged("b").conflicts_with == ["a"]
+
+
+def test_flag_conflict_missing_row_is_noop_for_that_side(repo):
+    repo.create_staged(_make_staged_item("a"))
+
+    repo.flag_conflict(staged_id="a", other_id="ghost")
+
+    assert repo.get_staged("a").conflicts_with == ["ghost"]
+
+
+def test_promote_preserves_conflicts_with(repo):
+    repo.create_staged(_make_staged_item("a"))
+    repo.create_staged(_make_staged_item("b"))
+    repo.flag_conflict(staged_id="a", other_id="b")
+
+    repo.promote("a")
+
+    live = repo.get("a")
+    assert live is not None
+    assert live.conflicts_with == ["b"]
+
+
+def test_list_staged_by_pattern_type_filters_in_sql(repo):
+    repo.create_staged(_make_staged_item("c1", pattern_type="concern"))
+    repo.create_staged(_make_staged_item("c2", pattern_type="concern"))
+    repo.create_staged(_make_staged_item("a1", pattern_type="approach"))
+
+    concerns = repo.list_staged_by_pattern_type("concern")
+    assert {i.id for i in concerns} == {"c1", "c2"}
+
+    approaches = repo.list_staged_by_pattern_type("approach")
+    assert {i.id for i in approaches} == {"a1"}
+
+
+def test_list_staged_by_pattern_type_pending_only_excludes_promoted(repo):
+    repo.create_staged(_make_staged_item("pending", pattern_type="concern"))
+    repo.create_staged(_make_staged_item("promoted", pattern_type="concern"))
+    repo.promote("promoted")
+
+    pending = repo.list_staged_by_pattern_type("concern", pending_only=True)
+    assert {i.id for i in pending} == {"pending"}
+
+    everything = repo.list_staged_by_pattern_type("concern", pending_only=False)
+    assert {i.id for i in everything} == {"pending", "promoted"}

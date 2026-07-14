@@ -22,17 +22,19 @@ CREATE TABLE context_items (
     scope_value      TEXT,                       -- e.g. 'state_machine_change', 'state/migrations/**'
     description      TEXT NOT NULL,             -- The rendered pattern text (human + LLM readable)
     confidence       REAL NOT NULL DEFAULT 0.5, -- 0.0–1.0; drives filtering and tier labelling
-    occurrence_count INTEGER NOT NULL DEFAULT 1,
     last_validated   TEXT NOT NULL,             -- ISO 8601; set to SOURCE DATE, not extraction date
     created_at       TEXT NOT NULL,
     updated_at       TEXT NOT NULL,
     status           TEXT NOT NULL DEFAULT 'active', -- 'active'|'staged'|'deprecated'|'conflicted'
     provenance       TEXT NOT NULL DEFAULT '[]',     -- JSON array of evidence links (see below)
+    conflicts_with   TEXT NOT NULL DEFAULT '[]',     -- JSON array of item ids that give opposing guidance (AOS-273)
     project          TEXT,                       -- applicability: project short-name (typically JIRA project key), or NULL = all
     repo             TEXT,                       -- applicability: repo short name, or NULL = all
     platform         TEXT                        -- applicability: runtime tag (python|dotnet|jvm|...), or NULL = all
 );
 ```
+
+> **Amendment (AOS-273).** The original schema carried an `occurrence_count INTEGER` column intended to be incremented every time a Curator merge fired. Under the trimmed Curator (see [`15-ace-injection-synthesizer.md`](15-ace-injection-synthesizer.md) and [`../ace/README.md`](../../ace/README.md)) merges no longer happen for semantic paraphrase variants — only for exact-dedup on the same pattern subject — so that counter would sit at 1 on almost every row and mislead any consumer that treated it as an evidence-strength signal. Migration 017 drops `occurrence_count` and adds `conflicts_with`; evidence count is now derived from `len(provenance)` via the `ContextItem.evidence_count` property. Any future cross-workflow strength signal (AOS-278, Epic 10) will use a semantically distinct column with its own audit trail.
 
 **`pattern_type` and `scope`/`scope_value`** drive retrieval filtering. A `codebase_wide` item with `pattern_type = 'approach'` is a candidate for every workflow. A `file_pattern` item with `scope_value = 'state/migrations/**'` is only a candidate when `files_likely_affected` overlaps with that pattern.
 
@@ -94,7 +96,7 @@ Human review of staged items is not the only path to promotion. Four automated r
 
 **1. Independent corroboration.** When the Curator processes a new trace and finds a candidate that semantically matches an existing staged item, it promotes the staged item rather than creating a new live item. A single independent corroboration from a different workflow, different ticket, different engineer is sufficient evidence that the pattern generalises. This is the primary automated promotion path — the staging queue is essentially "waiting for a second opinion."
 
-**2. Confidence floor + occurrence count.** Items with `initial_confidence ≥ 0.85` AND `occurrence_count ≥ 3` promote automatically. High initial confidence from a strong single signal (e.g., a direct rejection reason) combined with repetition is sufficient without waiting for an independent trace.
+**2. Confidence floor + evidence count.** Items with `initial_confidence ≥ 0.85` AND `evidence_count ≥ 3` (i.e. `len(provenance) ≥ 3`) promote automatically. High initial confidence from a strong single signal (e.g., a direct rejection reason) combined with repetition is sufficient without waiting for an independent trace.
 
 **3. Non-contradiction window.** If a staged item has been in staging for N days and no workflow has produced contradicting evidence, promote at reduced confidence. Absence of contradiction is weak positive signal — workable for stable codebase conventions.
 

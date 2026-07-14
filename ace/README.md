@@ -27,3 +27,25 @@ ace/
 
 `orchestrator/` may import from `ace/`; `ace/` never imports from `orchestrator/` graph code — it
 reads the workflow DB through its own trace reader and shares only the `state/` migration/DB layer.
+
+## Curator semantics (post AOS-273)
+
+The Curator (`ace/pipeline/curator.py`) is deliberately small and does only three things at
+mine time:
+
+- **quality gate** — reformulate descriptions by stripping run-specific artifacts (ticket keys,
+  branch names, commit hashes); discard if the cleaned text is too short.
+- **exact-dedup safety net** — when a new candidate matches an existing pending item in the same
+  `pattern_type` above the Jaccard threshold with compatible polarity, append a
+  `ProvenanceEntry` to the existing row. **Confidence is not recomputed**; there is no
+  occurrence counter.
+- **contradiction flag** — when polarity is opposing, write both rows as normal pending staged
+  items and populate `conflicts_with` symmetrically. Neither row is blocked with a
+  `status='conflicted'` — the read-time synthesizer decides how to surface the pair.
+
+Semantic consolidation of paraphrase variants moved to read time (see
+[`docs/ACE/15-ace-injection-synthesizer.md`](../docs/ACE/15-ace-injection-synthesizer.md) and
+AOS-274). `confidence` is stable-after-creation modulo human review and time-based decay;
+`provenance` is reserved for workflow-evidence events (never used as a strength counter). Any
+future cross-workflow strength signal (AOS-278, Epic 10) will use a semantically distinct column
+name with its own audit trail.

@@ -71,6 +71,12 @@ class ContextItem:
     lets pre-existing items keep matching every workflow. ``project`` is a
     scope tag (typically a JIRA project short-name like ``"AOS"``), not a
     foreign key.
+
+    ``conflicts_with`` (migration 017 / AOS-273) is a list of ids of other
+    items that give opposing guidance on the same subject. Populated by the
+    Curator when contradiction is detected; consumed by retrieval /
+    synthesizer to present both angles rather than block on ``conflicted``
+    status. Empty list = no known contradictions.
     """
 
     id: str
@@ -82,15 +88,27 @@ class ContextItem:
     updated_at: str
     scope_value: Optional[str] = None
     confidence: float = 0.5
-    occurrence_count: int = 1
     status: Status = "active"
     provenance: list[ProvenanceEntry] = field(default_factory=list)
+    conflicts_with: list[str] = field(default_factory=list)
     review_notes: Optional[str] = None
     promoted_at: Optional[str] = None
     rejected_at: Optional[str] = None
     project: Optional[str] = None
     repo: Optional[str] = None
     platform: Optional[str] = None
+
+    @property
+    def evidence_count(self) -> int:
+        """Number of workflow-evidence events that contributed to this item.
+
+        Derived from ``len(provenance)`` — there is no separate stored counter
+        (see AOS-273: the previous ``occurrence_count`` column was retired
+        because it would be stuck at 1 under the trimmed Curator). Any future
+        cross-workflow strength signal (AOS-278) uses a semantically distinct
+        column name and its own audit trail.
+        """
+        return len(self.provenance)
 
     def to_row(self) -> dict[str, Any]:
         """Column values for an INSERT/UPDATE, keyed by column name."""
@@ -101,12 +119,12 @@ class ContextItem:
             "scope_value": self.scope_value,
             "description": self.description,
             "confidence": self.confidence,
-            "occurrence_count": self.occurrence_count,
             "last_validated": self.last_validated,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "status": self.status,
             "provenance": [entry.to_dict() for entry in self.provenance],
+            "conflicts_with": list(self.conflicts_with),
             "review_notes": self.review_notes,
             "promoted_at": self.promoted_at,
             "rejected_at": self.rejected_at,
@@ -119,15 +137,18 @@ class ContextItem:
     def from_row(cls, row: Mapping[str, Any]) -> "ContextItem":
         """Build a ``ContextItem`` from a ``sqlite3.Row`` (or plain dict).
 
-        ``provenance`` is read as a JSON *string* column and deserialized here;
-        rows from either ``context_items`` or ``context_items_staged`` work —
-        the staged-only keys simply default to ``None`` when absent.
+        ``provenance`` and ``conflicts_with`` are read as JSON *string* columns
+        and deserialized here; rows from either ``context_items`` or
+        ``context_items_staged`` work — the staged-only keys simply default to
+        ``None`` when absent.
         """
         import json
 
         raw_provenance = row["provenance"]
         entries = json.loads(raw_provenance) if raw_provenance else []
         keys = row.keys() if hasattr(row, "keys") else row
+        raw_conflicts = row["conflicts_with"] if "conflicts_with" in keys else None
+        conflicts_with = json.loads(raw_conflicts) if raw_conflicts else []
         return cls(
             id=row["id"],
             pattern_type=row["pattern_type"],
@@ -135,12 +156,12 @@ class ContextItem:
             scope_value=row["scope_value"],
             description=row["description"],
             confidence=row["confidence"],
-            occurrence_count=row["occurrence_count"],
             last_validated=row["last_validated"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
             status=row["status"],
             provenance=[ProvenanceEntry.from_dict(entry) for entry in entries],
+            conflicts_with=conflicts_with,
             review_notes=row["review_notes"] if "review_notes" in keys else None,
             promoted_at=row["promoted_at"] if "promoted_at" in keys else None,
             rejected_at=row["rejected_at"] if "rejected_at" in keys else None,

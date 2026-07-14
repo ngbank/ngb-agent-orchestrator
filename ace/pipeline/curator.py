@@ -1,34 +1,41 @@
-"""Curator: staging writes with create/merge/contradict logic.
+"""Curator: quality gate + exact-dedup safety net + contradiction flag.
 
-Receives :class:`~ace.models.CandidateItem` candidates from the Reflector and
-applies them to ``context_items_staged`` using one of three operations:
+Post-AOS-273 the Curator is deliberately small. Semantic consolidation moved
+to read time (injection-time synthesizer, AOS-274 / Epic 4). At mine time the
+Curator does three things and nothing more:
 
-- **create**     — no existing staged item is sufficiently similar; write a new
-  row with ``occurrence_count = 1``.
-- **merge**      — an existing staged item is semantically similar and its
-  guidance is compatible; increment ``occurrence_count``, append provenance,
-  and recompute confidence as a weighted mean.
-- **contradict** — an existing staged item covers the same subject but with
-  opposing guidance (e.g. one says "always use X", the other says "never use
-  X"); both rows are set to ``status='conflicted'`` for manual review.
-
-Quality gate (applied before similarity search): descriptions that reference
-run-specific artifacts (ticket keys, branch names, commit hashes) are
-reformulated by stripping those references.  If the cleaned text shrinks below
-:data:`_MIN_DESCRIPTION_LENGTH` characters the candidate is discarded.
-
-ALL writes target ``context_items_staged``; the live ``context_items`` store is
-never touched by the Curator.  Promotion to the live store happens via manual
-review (Epic 3) or automated rules (Epic 5).
+- **quality gate** — descriptions that reference run-specific artifacts
+  (ticket keys, branch names, commit hashes) are reformulated by stripping
+  those references. If the cleaned text shrinks below
+  :data:`_MIN_DESCRIPTION_LENGTH` characters the candidate is discarded.
+- **exact-dedup safety net** — for the rare case where an in-flight batch
+  produces a near-duplicate of an already-staged item (Jaccard ≥
+  :data:`MERGE_THRESHOLD` on the same ``pattern_type``, same polarity), the
+  candidate is folded into the existing row by appending a
+  :class:`~ace.models.ProvenanceEntry`. **No confidence recomputation, no
+  counter increment.** Confidence stays whatever the Reflector produced
+  (modulo human review and decay); evidence count is derived from
+  ``len(provenance)`` at read time.
+- **contradiction flag** — same-subject + opposing polarity writes *both*
+  rows to staging and populates ``conflicts_with`` symmetrically. Neither row
+  is blocked with ``status='conflicted'``; the synthesizer decides at read
+  time how to present the conflict pair.
 
 Keyword similarity uses Jaccard coefficient on tokenised word sets — no
-embeddings yet (ticket 2.4 constraint).  Items with Jaccard score ≥
-:data:`MERGE_THRESHOLD` are candidates for merge or contradiction; below the
+embeddings. Items with score ≥ :data:`MERGE_THRESHOLD` in the same
+``pattern_type`` are candidates for merge or contradiction; below the
 threshold a new item is created.
 
+ALL writes target ``context_items_staged``; the live ``context_items`` store
+is never touched by the Curator. Promotion to the live store happens via
+manual review (Epic 3) or automated rules (Epic 5).
+
 ``last_validated`` is always set to ``bundle.created_at`` (the *source*
-workflow date) — not the extraction date.  This is the anchor for the decay
+workflow date) — not the extraction date. This is the anchor for the decay
 model described in ``docs/ACE/05-ace-curation-quality.md``.
+
+See ``docs/ACE/15-ace-injection-synthesizer.md`` for the read-time
+consolidation design that motivates this trim.
 """
 
 from __future__ import annotations
@@ -180,13 +187,20 @@ def curate(
 
     1. Runs the quality gate (strip run-specific references; discard if too
        short).
-    2. Searches existing staged items for the best keyword-similarity match,
-       restricted to the same ``pattern_type``.
+    2. Searches existing pending staged items *of the same pattern_type* for
+       the best keyword-similarity match (SQL-level filter — cross-pattern
+       items are orthogonal by construction).
     3. Decides on an operation based on the best match score and polarity:
 
-       - **create**    — score < :data:`MERGE_THRESHOLD`
-       - **merge**     — score ≥ threshold and polarity is compatible
-       - **contradict**— score ≥ threshold and polarity is opposing
+       - **create**       — score < :data:`MERGE_THRESHOLD`
+       - **merge**        — score ≥ threshold and polarity is compatible;
+         append a :class:`ProvenanceEntry` to the existing row (confidence
+         and other columns are NOT touched, per AOS-273).
+       - **contradict**   — score ≥ threshold and polarity is opposing;
+         write the candidate as a *new* pending staged row and symmetrically
+         populate ``conflicts_with`` on both rows. Neither row is blocked
+         with ``status='conflicted'`` — the read-time synthesizer decides
+         how to present the pair.
 
     Returns a :class:`CurationResult` with per-operation counts.
     """
@@ -194,7 +208,6 @@ def curate(
     if not candidates:
         return result
 
-    existing = repo.list_staged()
     now = datetime.now(UTC).isoformat()
 
     for candidate in candidates:
@@ -218,54 +231,42 @@ def curate(
             platform=candidate.platform,
         )
 
-        best_match, best_score = _best_match(clean_candidate, existing)
+        # SQL-level pattern_type filter (AOS-273) — cross-pattern items are
+        # orthogonal and can never merge, so we push the filter into SQL.
+        peers = repo.list_staged_by_pattern_type(clean_candidate.pattern_type, pending_only=True)
+        best_match, best_score = _best_match(clean_candidate, peers)
         provenance_entry = _build_provenance_entry(clean_candidate, bundle)
 
         if best_score >= MERGE_THRESHOLD and best_match is not None:
             if _is_contradiction(clean_candidate.description, best_match.description):
-                repo.update_staged_status(best_match.id, "conflicted")
+                # Write BOTH rows as normal pending staged items and record
+                # the contradiction symmetrically. The old design blocked the
+                # existing item with status='conflicted' and silently dropped
+                # the candidate; both were latent bugs.
+                new_item = _build_new_staged_item(clean_candidate, bundle, provenance_entry, now)
+                repo.create_staged(new_item)
+                repo.flag_conflict(staged_id=new_item.id, other_id=best_match.id)
                 logger.info(
-                    "Curator: contradiction flagged for staged item %s (score=%.2f)",
+                    "Curator: contradiction pair recorded (new=%s, existing=%s, score=%.2f)",
+                    new_item.id,
                     best_match.id,
                     best_score,
                 )
                 result.contradicted += 1
             else:
-                new_confidence = (
-                    best_match.confidence * best_match.occurrence_count
-                    + clean_candidate.initial_confidence
-                ) / (best_match.occurrence_count + 1)
-                repo.merge_staged(
-                    best_match.id,
-                    new_confidence=new_confidence,
-                    provenance_entry=provenance_entry,
-                )
+                # Exact-dedup safety net: append provenance only. Confidence
+                # is deliberately NOT recomputed — see module docstring and
+                # AOS-273.
+                repo.append_staged_provenance(best_match.id, provenance_entry)
                 logger.debug(
                     "Curator: merged candidate into staged item %s "
-                    "(score=%.2f, new_confidence=%.3f)",
+                    "(score=%.2f, evidence-only append)",
                     best_match.id,
                     best_score,
-                    new_confidence,
                 )
                 result.merged += 1
         else:
-            item = ContextItem(
-                id=str(uuid.uuid4()),
-                pattern_type=clean_candidate.pattern_type,
-                scope=clean_candidate.scope,
-                scope_value=clean_candidate.scope_value,
-                description=clean_candidate.description,
-                confidence=clean_candidate.initial_confidence,
-                occurrence_count=1,
-                last_validated=bundle.created_at,
-                created_at=now,
-                updated_at=now,
-                status="staged",
-                provenance=[provenance_entry],
-                project=clean_candidate.project,
-                repo=clean_candidate.repo,
-                platform=clean_candidate.platform,
-            )
+            item = _build_new_staged_item(clean_candidate, bundle, provenance_entry, now)
             repo.create_staged(item)
             logger.debug(
                 "Curator: created new staged item (pattern_type=%s, confidence=%.2f)",
@@ -275,6 +276,36 @@ def curate(
             result.created += 1
 
     return result
+
+
+def _build_new_staged_item(
+    candidate: CandidateItem,
+    bundle: TraceBundle,
+    provenance_entry: ProvenanceEntry,
+    now: str,
+) -> ContextItem:
+    """Construct a fresh staged :class:`ContextItem` from *candidate*.
+
+    Shared by the create and contradict paths so both produce identical row
+    shapes (differ only in the ``conflicts_with`` population that happens
+    afterwards via :meth:`ContextItemRepository.flag_conflict`).
+    """
+    return ContextItem(
+        id=str(uuid.uuid4()),
+        pattern_type=candidate.pattern_type,
+        scope=candidate.scope,
+        scope_value=candidate.scope_value,
+        description=candidate.description,
+        confidence=candidate.initial_confidence,
+        last_validated=bundle.created_at,
+        created_at=now,
+        updated_at=now,
+        status="staged",
+        provenance=[provenance_entry],
+        project=candidate.project,
+        repo=candidate.repo,
+        platform=candidate.platform,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -321,19 +352,19 @@ def _jaccard(a: frozenset[str], b: frozenset[str]) -> float:
 
 def _best_match(
     candidate: CandidateItem,
-    existing: list[ContextItem],
+    peers: list[ContextItem],
 ) -> tuple[Optional[ContextItem], float]:
-    """Return ``(best_item, score)`` for *candidate* against *existing* staged items.
+    """Return ``(best_item, score)`` for *candidate* against *peers*.
 
-    Only items with the same ``pattern_type`` are considered — lessons of
-    different types are orthogonal and must not be merged.
+    *peers* must already be filtered to the candidate's ``pattern_type`` —
+    the caller does this in SQL via
+    :meth:`ContextItemRepository.list_staged_by_pattern_type` (AOS-273), so
+    this function does not re-check the pattern_type.
     """
     candidate_tokens = _tokenise(candidate.description)
     best: Optional[ContextItem] = None
     best_score = 0.0
-    for item in existing:
-        if item.pattern_type != candidate.pattern_type:
-            continue
+    for item in peers:
         score = _jaccard(candidate_tokens, _tokenise(item.description))
         if score > best_score:
             best_score = score
