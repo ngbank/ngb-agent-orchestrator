@@ -225,6 +225,12 @@ concrete resume-verb hint:
      --approve-pr / --comment-pr / --reject-pr
 ```
 
+The same protection is enforced server-side in remote mode: `POST
+/workflows/{id}/retry` on a gate-paused workflow returns `409 Conflict` with a
+message naming the correct resume endpoint (e.g. `POST
+/workflows/{id}/approve-pr, /comment-pr, or /reject-pr`), so direct HTTP
+callers can't accidentally skip a gate either.
+
 If the retry itself successfully re-runs the failed node and the graph then
 lands at a gate (e.g. a retried `generate_code` finishes and hits
 `await_pr_approval`), the CLI does **not** mark the workflow `completed`. The
