@@ -241,6 +241,38 @@ Goose recipe that implements an approved WorkPlan. Parameters: `ticket_key`, `wo
 
 SQLite persistence layer. See [docs/state-store.md](state-store.md) for schema and API reference.
 
+### `ace/`
+
+Agentic Context Engine — offline mines behavioural context items from
+workflow traces, curates them into a staged store, and (in later epics)
+injects retrieved items into planner/code-generator prompts. The
+`orchestrator/` → `ace/` boundary is one-way: `orchestrator/` may import
+from `ace/`; `ace/` never imports orchestrator graph code and reads the
+workflow DB through its own trace reader.
+
+Submodules:
+
+- `ace/cli/` — the `ace` Click entrypoint (`ace/cli/run.py`) and command
+  handlers under `ace/cli/commands/` (mirrors `dispatcher/run.py` +
+  `dispatcher/commands/`). `ace mine` is the first wired verb; later
+  verbs (`items`, `promote`, `reject`, `stats`) land in tickets 3.2–3.6.
+- `ace/service/` — the `AgentContextEngineService` Protocol (single
+  boundary the CLI/TUI depend on), `LocalAgentContextEngineService`
+  in-process implementation wrapping the pipeline runner, and
+  `build_agent_context_engine_service_from_env()` factory. Mirrors
+  `orchestrator/workflow_service/`; leaves room for a
+  `RemoteAgentContextEngineService` in Epic 9 (AOS-263) without
+  changing command code.
+- `ace/pipeline/` — trace reader, evaluator, reflector, curator, and the
+  offline mining runner invoked by `ace mine`.
+- `ace/repository/` — `ContextItemRepository` over the
+  `context_items` / `context_items_staged` tables.
+- `ace/retrieval/`, `ace/tui/` — placeholders until Epic 4 / 3.4.
+
+See [ace/README.md](../ace/README.md) and [docs/ACE/](ACE/) for the full
+design; ticket ↔ design mapping lives in
+[docs/ACE/ace-implementation-plan.md](ACE/ace-implementation-plan.md).
+
 ### `orchestrator/work_planner/schemas/work_plan_v1.json`
 
 JSON Schema contract for WorkPlan documents. Validated by `dispatcher/work_plan_validator.py` before any WorkPlan is stored or executed. Fields:
