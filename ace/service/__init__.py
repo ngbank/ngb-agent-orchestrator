@@ -20,7 +20,16 @@ program against a single contract rather than reaching into
 command-code change.
 """
 
-from .dtos import MineRequest, MineResult
+from .dtos import (
+    ItemSummaryDTO,
+    ListItemsRequest,
+    ListItemsResult,
+    MineRequest,
+    MineResult,
+    ProvenanceEntryDTO,
+    ShowItemRequest,
+    ShowItemResult,
+)
 from .factory import (
     build_agent_context_engine_service_from_env,
     build_local_agent_context_engine_service,
@@ -30,9 +39,15 @@ from .protocols import AgentContextEngineService
 
 __all__ = [
     "AgentContextEngineService",
+    "ItemSummaryDTO",
+    "ListItemsRequest",
+    "ListItemsResult",
     "LocalAgentContextEngineService",
     "MineRequest",
     "MineResult",
+    "ProvenanceEntryDTO",
+    "ShowItemRequest",
+    "ShowItemResult",
     "build_agent_context_engine_service_from_env",
     "build_local_agent_context_engine_service",
 ]

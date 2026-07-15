@@ -18,9 +18,16 @@ Design rules (mirror :mod:`orchestrator.workflow_service.protocols`):
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Optional, Protocol, runtime_checkable
 
-from .dtos import MineRequest, MineResult
+from .dtos import (
+    ListItemsRequest,
+    ListItemsResult,
+    MineRequest,
+    MineResult,
+    ShowItemRequest,
+    ShowItemResult,
+)
 
 
 @runtime_checkable
@@ -32,5 +39,21 @@ class AgentContextEngineService(Protocol):
 
         Mirrors :func:`ace.pipeline.runner.run_mining` but crosses the service
         boundary with DTOs only.
+        """
+        ...
+
+    def list_items(self, request: ListItemsRequest) -> ListItemsResult:
+        """Return a filtered list of context items (live or staged).
+
+        When ``request.status == "staged"`` the staging table is queried;
+        all other status values query the live ``context_items`` table.
+        """
+        ...
+
+    def show_item(self, request: ShowItemRequest) -> Optional[ShowItemResult]:
+        """Return full detail for one item by id, or ``None`` if not found.
+
+        Searches the live table first; falls back to the staging table when the
+        id is not found in live.
         """
         ...
