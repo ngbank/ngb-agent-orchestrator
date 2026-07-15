@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import List, Optional
 
+from rich.markup import escape
 from textual.widgets import DataTable, Static
 
-from ace.service.dtos import ItemSummaryDTO
+from ace.service.dtos import ItemSummaryDTO, ShowItemResult
 
 _DESC_MAX = 60
 
@@ -134,3 +135,122 @@ def _sort_items(items: List[ItemSummaryDTO], sort_key: str) -> List[ItemSummaryD
     if sort_key == "pattern_type":
         return sorted(items, key=lambda x: (x.pattern_type, -x.confidence))
     return list(items)
+
+
+# ---------------------------------------------------------------------------
+# Item detail pane
+# ---------------------------------------------------------------------------
+
+_TIER_COLOURS: dict[str, str] = {
+    "ESTABLISHED": "green",
+    "PATTERN": "yellow",
+    "TENTATIVE": "cyan",
+}
+
+
+class ItemDetailPane(Static):
+    """Scrollable detail pane for the currently-selected context item.
+
+    Populated via :meth:`update_item` whenever the staging queue cursor moves.
+    Shows the full description, provenance evidence chain, applicability
+    dimensions, and any conflict IDs.
+    """
+
+    DEFAULT_CSS = """
+    ItemDetailPane {
+        height: 100%;
+        width: 45%;
+        padding: 1;
+        border: solid $primary;
+        overflow-y: auto;
+    }
+    ItemDetailPane Static#detail_body {
+        height: auto;
+    }
+    """
+
+    def compose(self):
+        yield Static("Select an item to view details", id="detail_body")
+
+    def update_item(self, item: Optional[ShowItemResult]) -> None:
+        """Re-render the pane with *item*'s detail, or show a placeholder."""
+        try:
+            body = self.query_one("#detail_body", Static)
+        except Exception:
+            return
+        if item is None:
+            body.update("Select an item to view details")
+            return
+        body.update(_format_item_detail(item))
+
+
+def _format_item_detail(item: ShowItemResult) -> str:
+    """Build a Rich-markup string for *item*'s full detail view."""
+    tier = item.confidence_tier or "—"
+    tier_colour = _TIER_COLOURS.get(tier, "white")
+    scope_label = item.scope
+    if item.scope_value:
+        scope_label = f"{item.scope} = {escape(item.scope_value)}"
+
+    lines: list[str] = [
+        f"[bold cyan]Pattern Type:[/bold cyan] {escape(item.pattern_type)}",
+        f"[bold cyan]Scope:[/bold cyan]        {escape(scope_label)}",
+        f"[bold cyan]Confidence:[/bold cyan]   {item.confidence:.2f} "
+        f"[{tier_colour}][{escape(tier)}][/{tier_colour}]",
+        f"[bold cyan]Status:[/bold cyan]       {escape(item.status)}",
+        f"[bold cyan]Created:[/bold cyan]      {escape(item.created_at[:19].replace('T', ' '))}",
+        f"[bold cyan]Updated:[/bold cyan]      {escape(item.updated_at[:19].replace('T', ' '))}",
+        "",
+        "[bold]Description[/bold]",
+        "[dim]" + "─" * 40 + "[/dim]",
+        escape(item.description),
+    ]
+
+    # Provenance chain
+    lines += [
+        "",
+        "[bold]Provenance[/bold] ("
+        + str(len(item.provenance))
+        + (" event" if len(item.provenance) == 1 else " events")
+        + ")",
+        "[dim]" + "─" * 40 + "[/dim]",
+    ]
+    if item.provenance:
+        for ev in item.provenance:
+            date_part = escape(ev.workflow_date[:10]) if ev.workflow_date else "—"
+            source_part = escape(ev.signal_source)
+            conf_part = f"+{ev.contributed_confidence:.2f}"
+            ticket_part = f" [{escape(ev.ticket_key)}]" if ev.ticket_key else ""
+            lines.append(f"  [cyan]{source_part}[/cyan]{ticket_part}  {date_part}  {conf_part}")
+            if ev.signal_detail:
+                lines.append(f"    [dim]{escape(ev.signal_detail[:100])}[/dim]")
+    else:
+        lines.append("  [dim](none)[/dim]")
+
+    # Applicability
+    appl_parts = []
+    if item.project:
+        appl_parts.append(f"project={escape(item.project)}")
+    if item.repo:
+        appl_parts.append(f"repo={escape(item.repo)}")
+    if item.platform:
+        appl_parts.append(f"platform={escape(item.platform)}")
+    if appl_parts:
+        lines += [
+            "",
+            "[bold]Applicability[/bold]",
+            "[dim]" + "─" * 40 + "[/dim]",
+            "  " + "  ".join(appl_parts),
+        ]
+
+    # Conflicts
+    if item.conflicts_with:
+        lines += [
+            "",
+            "[bold]Conflicts With[/bold]",
+            "[dim]" + "─" * 40 + "[/dim]",
+        ]
+        for cid in item.conflicts_with:
+            lines.append(f"  [red]{escape(cid)}[/red]")
+
+    return "\n".join(lines)

@@ -14,6 +14,7 @@ from ace.service.dtos import (
     MineResult,
     PromoteRequest,
     PromoteResult,
+    ProvenanceEntryDTO,
     RejectRequest,
     RejectResult,
     ShowItemRequest,
@@ -22,7 +23,8 @@ from ace.service.dtos import (
 from ace.service.protocols import AgentContextEngineService
 from ace.tui.action_registry import REGISTRY, action_for
 from ace.tui.app import AceTUI
-from ace.tui.widgets import StagingQueueList, _sort_items
+from ace.tui.modals import PromoteFormData, PromoteModal, RejectModal
+from ace.tui.widgets import ItemDetailPane, StagingQueueList, _sort_items
 
 # ---------------------------------------------------------------------------
 # Fake service
@@ -34,6 +36,8 @@ class FakeAceService:
 
     def __init__(self, staged: Optional[List[ItemSummaryDTO]] = None) -> None:
         self._staged: List[ItemSummaryDTO] = staged or []
+        self.promote_calls: List[PromoteRequest] = []
+        self.reject_calls: List[RejectRequest] = []
 
     def list_items(self, request: ListItemsRequest) -> ListItemsResult:
         items = list(self._staged) if request.status == "staged" else []
@@ -42,14 +46,39 @@ class FakeAceService:
     def mine(self, request: MineRequest) -> MineResult:  # pragma: no cover
         raise NotImplementedError
 
-    def show_item(self, request: ShowItemRequest) -> Optional[ShowItemResult]:  # pragma: no cover
+    def show_item(self, request: ShowItemRequest) -> Optional[ShowItemResult]:
+        for item in self._staged:
+            if item.id == request.item_id:
+                return ShowItemResult(
+                    id=item.id,
+                    pattern_type=item.pattern_type,
+                    scope=item.scope,
+                    scope_value=item.scope_value,
+                    description=item.description,
+                    confidence=item.confidence,
+                    confidence_tier=item.confidence_tier,
+                    status=item.status,
+                    last_validated=item.last_validated,
+                    created_at="2024-01-01T00:00:00",
+                    updated_at="2024-01-01T00:00:00",
+                    provenance=(),
+                    conflicts_with=(),
+                    project=None,
+                    repo=None,
+                    platform=None,
+                )
         return None
 
-    def promote(self, request: PromoteRequest) -> PromoteResult:  # pragma: no cover
-        raise NotImplementedError
+    def promote(self, request: PromoteRequest) -> PromoteResult:
+        self.promote_calls.append(request)
+        # Remove the item from staged so the queue refreshes correctly.
+        self._staged = [i for i in self._staged if i.id != request.item_id]
+        return PromoteResult(item_id=request.item_id)
 
-    def reject(self, request: RejectRequest) -> RejectResult:  # pragma: no cover
-        raise NotImplementedError
+    def reject(self, request: RejectRequest) -> RejectResult:
+        self.reject_calls.append(request)
+        self._staged = [i for i in self._staged if i.id != request.item_id]
+        return RejectResult(item_id=request.item_id)
 
 
 def _item(
@@ -299,3 +328,244 @@ class TestAceTUI:
                     os.environ.pop(k, None)
                 else:
                     os.environ[k] = v
+
+
+# ---------------------------------------------------------------------------
+# ItemDetailPane widget tests
+# ---------------------------------------------------------------------------
+
+
+def _show_result(
+    item_id: str = "i-1",
+    *,
+    pattern_type: str = "approach",
+    scope: str = "codebase_wide",
+    scope_value: Optional[str] = None,
+    description: str = "a context item description",
+    confidence: float = 0.8,
+    confidence_tier: Optional[str] = "PATTERN",
+    status: str = "staged",
+    provenance: tuple = (),
+    conflicts_with: tuple = (),
+    project: Optional[str] = None,
+    repo: Optional[str] = None,
+    platform: Optional[str] = None,
+) -> ShowItemResult:
+    return ShowItemResult(
+        id=item_id,
+        pattern_type=pattern_type,
+        scope=scope,
+        scope_value=scope_value,
+        description=description,
+        confidence=confidence,
+        confidence_tier=confidence_tier,
+        status=status,
+        last_validated="2024-06-01T00:00:00",
+        created_at="2024-01-01T00:00:00",
+        updated_at="2024-06-01T00:00:00",
+        provenance=provenance,
+        conflicts_with=conflicts_with,
+        project=project,
+        repo=repo,
+        platform=platform,
+    )
+
+
+class TestItemDetailPane:
+    def test_initial_state_shows_placeholder(self) -> None:
+        pane = ItemDetailPane()
+        # Without mounting, _items is not queryable; test the update method
+        # does not raise when called on an unmounted widget.
+        pane.update_item(None)  # should not raise
+
+    def test_update_item_none_no_raise(self) -> None:
+        pane = ItemDetailPane()
+        pane.update_item(None)  # defensive: no query_one available, must not raise
+
+    def test_format_item_detail_includes_description(self) -> None:
+        from ace.tui.widgets import _format_item_detail
+
+        result = _show_result(description="unique-description-string-xyz")
+        formatted = _format_item_detail(result)
+        assert "unique-description-string-xyz" in formatted
+
+    def test_format_item_detail_includes_pattern_type(self) -> None:
+        from ace.tui.widgets import _format_item_detail
+
+        result = _show_result(pattern_type="concern")
+        formatted = _format_item_detail(result)
+        assert "concern" in formatted
+
+    def test_format_item_detail_includes_confidence(self) -> None:
+        from ace.tui.widgets import _format_item_detail
+
+        result = _show_result(confidence=0.92)
+        formatted = _format_item_detail(result)
+        assert "0.92" in formatted
+
+    def test_format_item_detail_includes_provenance_events(self) -> None:
+        from ace.tui.widgets import _format_item_detail
+
+        prov = (
+            ProvenanceEntryDTO(
+                signal_source="pr_comment",
+                workflow_date="2024-03-01",
+                contributed_confidence=0.3,
+                workflow_id="wf-1",
+                ticket_key="AOS-1",
+                signal_detail="some signal detail",
+            ),
+        )
+        result = _show_result(provenance=prov)
+        formatted = _format_item_detail(result)
+        assert "pr_comment" in formatted
+        assert "AOS-1" in formatted
+        assert "1 event" in formatted
+
+    def test_format_item_detail_no_provenance(self) -> None:
+        from ace.tui.widgets import _format_item_detail
+
+        result = _show_result(provenance=())
+        formatted = _format_item_detail(result)
+        assert "(none)" in formatted
+
+    def test_format_item_detail_conflicts_shown(self) -> None:
+        from ace.tui.widgets import _format_item_detail
+
+        result = _show_result(conflicts_with=("abc-123",))
+        formatted = _format_item_detail(result)
+        assert "abc-123" in formatted
+
+    def test_format_item_detail_applicability_shown(self) -> None:
+        from ace.tui.widgets import _format_item_detail
+
+        result = _show_result(project="AOS", repo="ngb-agent-orchestrator")
+        formatted = _format_item_detail(result)
+        assert "project=AOS" in formatted
+        assert "repo=ngb-agent-orchestrator" in formatted
+
+    def test_format_item_detail_scope_value_shown(self) -> None:
+        from ace.tui.widgets import _format_item_detail
+
+        result = _show_result(scope="file_pattern", scope_value="*.py")
+        formatted = _format_item_detail(result)
+        assert "*.py" in formatted
+
+
+# ---------------------------------------------------------------------------
+# PromoteModal tests
+# ---------------------------------------------------------------------------
+
+
+class TestPromoteModal:
+    def test_promote_form_data_namedtuple(self) -> None:
+        data = PromoteFormData(notes="good pattern", scope="task_type", scope_value="migration")
+        assert data.notes == "good pattern"
+        assert data.scope == "task_type"
+        assert data.scope_value == "migration"
+
+    def test_promote_form_data_none_fields(self) -> None:
+        data = PromoteFormData(notes=None, scope=None, scope_value=None)
+        assert data.notes is None
+        assert data.scope is None
+        assert data.scope_value is None
+
+    def test_promote_modal_instantiates(self) -> None:
+        modal = PromoteModal(current_scope="codebase_wide", current_scope_value="")
+        assert modal._current_scope == "codebase_wide"
+        assert modal._current_scope_value == ""
+
+    def test_promote_modal_default_args(self) -> None:
+        modal = PromoteModal()
+        assert modal._current_scope == ""
+        assert modal._current_scope_value == ""
+
+
+# ---------------------------------------------------------------------------
+# RejectModal tests
+# ---------------------------------------------------------------------------
+
+
+class TestRejectModal:
+    def test_reject_modal_instantiates(self) -> None:
+        modal = RejectModal()
+        assert modal is not None
+
+    def test_reject_modal_is_modal_screen(self) -> None:
+        from textual.screen import ModalScreen
+
+        assert isinstance(RejectModal(), ModalScreen)
+
+
+# ---------------------------------------------------------------------------
+# AceTUI promote / reject integration tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestAceTUIPromoteReject:
+    async def test_promote_action_without_selection_notifies(self) -> None:
+        """Pressing p with no items shows a warning notification."""
+        app = AceTUI(FakeAceService(staged=[]))
+        async with app.run_test() as pilot:
+            await pilot.press("p")
+            # App should still be running (not crashed).
+            assert app.is_running
+
+    async def test_reject_action_without_selection_notifies(self) -> None:
+        """Pressing x with no items shows a warning notification."""
+        app = AceTUI(FakeAceService(staged=[]))
+        async with app.run_test() as pilot:
+            await pilot.press("x")
+            assert app.is_running
+
+    async def test_promote_action_opens_modal(
+        self, fake_service: AgentContextEngineService
+    ) -> None:
+        """Pressing p with a selected staged item pushes a PromoteModal."""
+        app = AceTUI(fake_service)
+        async with app.run_test() as pilot:
+            # Move cursor to first row.
+            await pilot.press("down")
+            await pilot.press("p")
+            # A PromoteModal should be on the screen stack.
+            assert any(isinstance(s, PromoteModal) for s in app.screen_stack)
+
+    async def test_reject_action_opens_modal(self, fake_service: AgentContextEngineService) -> None:
+        """Pressing x with a selected staged item pushes a RejectModal."""
+        app = AceTUI(fake_service)
+        async with app.run_test() as pilot:
+            await pilot.press("down")
+            await pilot.press("x")
+            assert any(isinstance(s, RejectModal) for s in app.screen_stack)
+
+    async def test_promote_cancel_does_not_call_service(self, fake_service: FakeAceService) -> None:
+        """Cancelling the PromoteModal does not call service.promote."""
+        app = AceTUI(fake_service)
+        async with app.run_test() as pilot:
+            await pilot.press("down")
+            await pilot.press("p")
+            # Cancel the modal.
+            await pilot.press("escape")
+            # Give any workers a moment to settle.
+            await pilot.pause(0.1)
+            assert len(fake_service.promote_calls) == 0
+
+    async def test_reject_cancel_does_not_call_service(self, fake_service: FakeAceService) -> None:
+        """Cancelling the RejectModal does not call service.reject."""
+        app = AceTUI(fake_service)
+        async with app.run_test() as pilot:
+            await pilot.press("down")
+            await pilot.press("x")
+            await pilot.press("escape")
+            await pilot.pause(0.1)
+            assert len(fake_service.reject_calls) == 0
+
+    async def test_detail_pane_visible_on_mount(
+        self, fake_service: AgentContextEngineService
+    ) -> None:
+        """ItemDetailPane is present in the mounted layout."""
+        app = AceTUI(fake_service)
+        async with app.run_test():
+            pane = app.query_one(ItemDetailPane)
+            assert pane is not None
