@@ -27,6 +27,7 @@ Usage::
     ace promote <item-id> --notes "Looks good" --scope task_type --scope-value migration
     ace reject <item-id>
     ace reject <item-id> --notes "Insufficient evidence"
+    ace stats
 """
 
 from __future__ import annotations
@@ -261,6 +262,25 @@ def reject(
     from ace.cli.commands.promote import _handle_reject
 
     _handle_reject(service, item_id=item_id, notes=notes)
+
+
+# ---------------------------------------------------------------------------
+# ace stats
+# ---------------------------------------------------------------------------
+
+
+@run.command("stats")
+@click.pass_context
+def stats(ctx: click.Context) -> None:
+    """Print aggregate ACE store health metrics.
+
+    Reports live-item counts by status, tier, and pattern_type; staging queue
+    age; and the item generation rate per mined workflow.
+    """
+    service = _resolve_service(ctx)
+    from ace.cli.commands.stats import _handle_stats
+
+    _handle_stats(service)
 
 
 if __name__ == "__main__":

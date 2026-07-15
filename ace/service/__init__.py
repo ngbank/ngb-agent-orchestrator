@@ -33,6 +33,7 @@ from .dtos import (
     RejectResult,
     ShowItemRequest,
     ShowItemResult,
+    StatsResult,
 )
 from .factory import (
     build_agent_context_engine_service_from_env,
@@ -56,6 +57,7 @@ __all__ = [
     "RejectResult",
     "ShowItemRequest",
     "ShowItemResult",
+    "StatsResult",
     "build_agent_context_engine_service_from_env",
     "build_local_agent_context_engine_service",
 ]

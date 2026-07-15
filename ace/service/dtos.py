@@ -224,3 +224,47 @@ class RejectResult:
 
     item_id: str
     """The id of the rejected staged item."""
+
+
+# ---------------------------------------------------------------------------
+# ace stats
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class StatsResult:
+    """Outcome of :meth:`AgentContextEngineService.stats`.
+
+    All counts reflect the state of the DB at query time.  Tuple pairs are
+    ``(label, count)`` in descending-count order so callers can render them
+    without additional sorting.
+    """
+
+    by_status: Tuple[Tuple[str, int], ...]
+    """Live context_items counts grouped by status, e.g.
+    ``(("active", 12), ("deprecated", 2))``."""
+
+    by_tier: Tuple[Tuple[str, int], ...]
+    """Live context_items counts grouped by confidence tier
+    (``ESTABLISHED`` / ``PATTERN`` / ``TENTATIVE`` / ``BELOW_THRESHOLD``)."""
+
+    by_pattern_type: Tuple[Tuple[str, int], ...]
+    """Live context_items counts grouped by pattern_type."""
+
+    staged_pending: int
+    """Items in the staging queue not yet promoted or rejected."""
+
+    staged_queue_age_days_p50: Optional[float]
+    """Median age in days of pending staged items.  ``None`` when the queue is
+    empty."""
+
+    staged_queue_age_days_max: Optional[float]
+    """Age in days of the oldest pending staged item.  ``None`` when the queue
+    is empty."""
+
+    mined_workflows: int
+    """Total workflows that have completed the mining pipeline at least once."""
+
+    generation_rate: Optional[float]
+    """Average staged items created per mined workflow (total staged rows /
+    mined_workflows).  ``None`` when no workflows have been mined."""
