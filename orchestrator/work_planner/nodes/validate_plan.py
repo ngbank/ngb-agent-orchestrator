@@ -2,6 +2,7 @@
 
 import click
 
+from orchestrator.failure import mark_failure
 from orchestrator.work_planner.state import (
     ValidatePlanInputState,
     ValidatePlanOutputState,
@@ -23,7 +24,7 @@ def validate_plan(state: ValidatePlanInputState) -> ValidatePlanOutputState:
     except WorkPlanValidationError as e:
         error = str(e)
         click.echo(f"❌ {error}", err=True)
-        return {"error": error, "failed_node": "validate_plan"}
+        return mark_failure("validate_plan", error)
 
     status = work_plan.status
     needs_clarification = status in ("concerns", "blocked")

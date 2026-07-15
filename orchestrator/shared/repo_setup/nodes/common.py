@@ -1,5 +1,6 @@
 """Shared helpers for repo_setup subgraph nodes."""
 
+from orchestrator.failure import mark_failure
 from orchestrator.shared.repo_setup.state import RepoSetupState
 
 
@@ -29,7 +30,4 @@ def failure_update(state: RepoSetupState, message: str, mode: str) -> dict:
             "failed_node": "generate_code",
         }
 
-    return {
-        "error": message,
-        "failed_node": "repo_setup",
-    }
+    return mark_failure("repo_setup", message)

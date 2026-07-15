@@ -190,6 +190,8 @@ LangGraph state machine. Two levels:
 
 State is defined in `graph/state.py` (`OrchestratorState`) and `graph/work_planner/state.py` (`WorkPlannerState`).
 
+Node failure state (`state.error` + `state.failed_node`) is written and read through the helpers in `orchestrator/failure.py` — `mark_failure(node, msg)` for producers, `has_failure(state)` for routers, `clear_failure()` on retry rewind. Concentrating the shape in one module keeps the two fields in sync so retry can always find the rewind point, and prevents the historical asymmetry where different top-level routers checked different fields.
+
 ### `otel/`
 
 Cross-cutting OpenTelemetry instrumentation. Provides ContextVar-based correlation (`otel/context.py`), span exporters (`otel/exporters.py`), the stream-based LangGraph interceptor (`otel/instrumentation.py`), the LiteLLM callback emitting `llm.call` child spans (`otel/litellm_callback.py`), and payload redaction (`otel/redaction.py`). Imported by `dispatcher/`, `graph/`, and `state/`. Configuration via `OTEL_*` env vars — see [docs/configuration.md](configuration.md). For reading and reconstructing the per-workflow `otel.jsonl`, see [docs/trace-reconstruction.md](trace-reconstruction.md).

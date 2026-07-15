@@ -2,6 +2,7 @@
 
 import click
 
+from orchestrator.failure import mark_failure
 from orchestrator.work_planner.state import (
     CheckDuplicateInputState,
     CheckDuplicateOutputState,
@@ -26,7 +27,7 @@ def check_duplicate(state: CheckDuplicateInputState) -> CheckDuplicateOutputStat
             click.echo(f"❌ {error}", err=True)
             click.echo("   Cannot start a new workflow while one is active.", err=True)
             click.echo("   Wait for the current workflow to complete or fail.", err=True)
-            return {"error": error, "failed_node": "check_duplicate"}
+            return mark_failure("check_duplicate", error)
         if workflow["status"].value == "completed":
             completed_count += 1
 
