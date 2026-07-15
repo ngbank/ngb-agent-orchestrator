@@ -9,6 +9,7 @@ from typing import Any
 
 import click
 
+from orchestrator.failure import mark_failure
 from orchestrator.litellm_callbacks import aggregate_token_usage
 from orchestrator.utils import goose_session, run_and_tee
 from orchestrator.work_planner.state import (
@@ -80,10 +81,10 @@ def generate_plan(state: GeneratePlanInputState) -> GeneratePlanOutputState:
             cmd.extend(["--params", f"clarifications_path={clarifications_path}"])
 
         if working_dir and not os.path.isdir(working_dir):
-            return {
-                "error": f"Working directory does not exist: {working_dir}",
-                "failed_node": "generate_plan",
-            }
+            return mark_failure(
+                "generate_plan",
+                f"Working directory does not exist: {working_dir}",
+            )
 
         logger.info("=== goose run plan recipe ===")
         with goose_session(
@@ -102,30 +103,30 @@ def generate_plan(state: GeneratePlanInputState) -> GeneratePlanOutputState:
             click.echo(f"⚠️  Failed to store usage summary: {exc}", err=True)
 
         if result.returncode != 0:
-            return {
-                "error": f"Goose plan recipe exited with code {result.returncode}",
-                "failed_node": "generate_plan",
-            }
+            return mark_failure(
+                "generate_plan",
+                f"Goose plan recipe exited with code {result.returncode}",
+            )
 
         try:
             with open(output_path, "r") as f:
                 work_plan_data = json.load(f)
         except FileNotFoundError:
-            return {
-                "error": "Goose plan recipe did not write output file",
-                "failed_node": "generate_plan",
-            }
+            return mark_failure(
+                "generate_plan",
+                "Goose plan recipe did not write output file",
+            )
         except json.JSONDecodeError as exc:
-            return {
-                "error": f"Goose plan recipe wrote invalid JSON: {exc}",
-                "failed_node": "generate_plan",
-            }
+            return mark_failure(
+                "generate_plan",
+                f"Goose plan recipe wrote invalid JSON: {exc}",
+            )
 
         if not work_plan_data:
-            return {
-                "error": "Goose plan recipe wrote empty WorkPlan",
-                "failed_node": "generate_plan",
-            }
+            return mark_failure(
+                "generate_plan",
+                "Goose plan recipe wrote empty WorkPlan",
+            )
 
         click.echo(f"✅ WorkPlan generated for {ticket_key}")
         return {"work_plan_data": work_plan_data}

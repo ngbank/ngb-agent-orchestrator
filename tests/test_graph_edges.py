@@ -4,7 +4,11 @@ All routing functions are pure: they inspect state and return a string
 destination — no I/O, no side-effects.
 """
 
-from orchestrator.builder import _route_after_pr_approval
+from orchestrator.builder import (
+    _route_after_generate_code,
+    _route_after_pr_approval,
+    _route_after_work_planner,
+)
 from orchestrator.work_planner.edges import (
     route_after_check_duplicate,
     route_after_cleanup,
@@ -292,3 +296,57 @@ def test_route_after_pr_approval_missing():
     """Missing pr_approval_decision must route to END."""
     state = {"ticket_key": "AOS-50"}
     assert _route_after_pr_approval(state) == "__end__"
+
+
+# ---------------------------------------------------------------------------
+# Top-level failure routing symmetry
+#
+# Regression tests for the asymmetry between _route_after_work_planner and
+# _route_after_generate_code. Historically the former checked only ``error``
+# and the latter only ``failed_node``; a node that populated only one field
+# would either short-circuit or fall through depending on which parent edge
+# fired. Both routers now go through orchestrator.failure.has_failure, so
+# either field alone must end the graph.
+# ---------------------------------------------------------------------------
+
+
+def test_route_after_work_planner_no_failure():
+    state = {"ticket_key": "AOS-50"}
+    assert _route_after_work_planner(state) == "await_approval"
+
+
+def test_route_after_work_planner_error_only():
+    state = {"ticket_key": "AOS-50", "error": "boom"}
+    assert _route_after_work_planner(state) == "__end__"
+
+
+def test_route_after_work_planner_failed_node_only():
+    """Regression: previously slipped through to await_approval."""
+    state = {"ticket_key": "AOS-50", "failed_node": "validate_input"}
+    assert _route_after_work_planner(state) == "__end__"
+
+
+def test_route_after_work_planner_both():
+    state = {"ticket_key": "AOS-50", "error": "boom", "failed_node": "validate_input"}
+    assert _route_after_work_planner(state) == "__end__"
+
+
+def test_route_after_generate_code_no_failure():
+    state = {"ticket_key": "AOS-50"}
+    assert _route_after_generate_code(state) == "await_pr_approval"
+
+
+def test_route_after_generate_code_error_only():
+    """Regression: previously slipped through to await_pr_approval."""
+    state = {"ticket_key": "AOS-50", "error": "boom"}
+    assert _route_after_generate_code(state) == "__end__"
+
+
+def test_route_after_generate_code_failed_node_only():
+    state = {"ticket_key": "AOS-50", "failed_node": "generate_code"}
+    assert _route_after_generate_code(state) == "__end__"
+
+
+def test_route_after_generate_code_both():
+    state = {"ticket_key": "AOS-50", "error": "boom", "failed_node": "generate_code"}
+    assert _route_after_generate_code(state) == "__end__"

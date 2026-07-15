@@ -2,6 +2,7 @@
 
 import click
 
+from orchestrator.failure import mark_failure
 from orchestrator.work_planner.state import (
     ValidateInputInputState,
     ValidateInputOutputState,
@@ -13,5 +14,5 @@ def validate_input(state: ValidateInputInputState) -> ValidateInputOutputState:
     if not ticket_key or "-" not in ticket_key:
         error = f"Invalid ticket format: '{ticket_key}'. Expected format: PROJECT-123"
         click.echo(f"❌ {error}", err=True)
-        return {"error": error, "failed_node": "validate_input"}
+        return mark_failure("validate_input", error)
     return {}

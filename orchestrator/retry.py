@@ -15,6 +15,8 @@ from typing import Optional
 
 from langchain_core.runnables import RunnableConfig
 
+from orchestrator.failure import clear_failure
+
 # Node names that live INSIDE the ``work_planner`` compiled subgraph.  A
 # failure in any of them collapses to the top-level ``work_planner`` node
 # for rewind purposes, because the subgraph runs atomically inside the
@@ -86,5 +88,5 @@ def prepare_retry(graph, thread_config: RunnableConfig, failed_node: str) -> Run
             f"No checkpoint found before node '{parent_node}' "
             f"(failed_node='{failed_node}'); cannot retry."
         )
-    graph.update_state(rewind_config, {"error": None, "failed_node": None})
+    graph.update_state(rewind_config, clear_failure())
     return thread_config

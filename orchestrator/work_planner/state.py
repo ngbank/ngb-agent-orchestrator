@@ -108,6 +108,7 @@ class AwaitClarificationOutputState(TypedDict, total=False):
     clarifications: Optional[list]
     work_plan_data: Optional[dict]
     error: Optional[str]
+    failed_node: Optional[str]
 
 
 class StorePlanInputState(TypedDict, total=False):

@@ -3,6 +3,7 @@
 import click
 from langgraph.types import interrupt
 
+from orchestrator.failure import mark_failure
 from orchestrator.utils import _get_actor
 from orchestrator.work_planner.state import (
     AwaitClarificationInputState,
@@ -38,12 +39,13 @@ def await_workplan_clarification(
     current_round = len(clarifications) + 1
 
     if current_round > MAX_CLARIFICATION_ROUNDS:
-        return {
-            "error": (
+        return mark_failure(
+            "await_workplan_clarification",
+            (
                 f"Maximum clarification rounds ({MAX_CLARIFICATION_ROUNDS}) exceeded. "
                 "Please create a new workflow with a clearer ticket description."
             ),
-        }
+        )
 
     concerns = work_plan_data.get("concerns", [])
     status = work_plan_data.get("status", "")
@@ -125,8 +127,11 @@ def await_workplan_clarification(
 
     click.echo(f"📝 Clarification received (round {current_round}) — regenerating plan...")
 
+    # Equivalent to clear_failure(); expanded inline so pyright sees the
+    # keys and can type-check against AwaitClarificationOutputState.
     return {
         "clarifications": clarifications,
         "work_plan_data": None,  # clear so generate_plan runs fresh
-        "error": None,  # clear any previous error
+        "error": None,
+        "failed_node": None,
     }

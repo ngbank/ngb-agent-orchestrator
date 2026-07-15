@@ -35,6 +35,7 @@ from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor
 from opentelemetry.trace import Span, Status, StatusCode
 
+from orchestrator.failure import get_failure
 from otel.context import OtelContext, set_node_context
 from otel.exporters import create_exporter
 
@@ -224,12 +225,12 @@ def _record_node_output(span: Span, node_name: str, output: Any) -> None:
         # Non-serialisable output is rare but should not break instrumentation.
         pass
 
-    error = output.get("error")
-    if error:
-        span.set_status(Status(StatusCode.ERROR, str(error)))
-        span.set_attribute("graph.node.error", str(error))
-
-        failed_node = output.get("failed_node")
+    error, failed_node = get_failure(output)
+    if error or failed_node:
+        message = error or f"failure in {failed_node}"
+        span.set_status(Status(StatusCode.ERROR, str(message)))
+        if error:
+            span.set_attribute("graph.node.error", str(error))
         if failed_node:
             span.set_attribute("graph.node.failed_node", str(failed_node))
     else:

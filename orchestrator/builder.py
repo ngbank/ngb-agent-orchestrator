@@ -21,6 +21,7 @@ from typing import Literal
 from langgraph.graph import END, StateGraph
 
 from orchestrator.code_generator.builder import build_code_generator
+from orchestrator.failure import has_failure
 from orchestrator.nodes.await_approval import await_approval
 from orchestrator.nodes.await_pr_approval import await_pr_approval
 from orchestrator.state import OrchestratorState
@@ -32,8 +33,13 @@ from state.workflow_repository import get_db_path
 def _route_after_work_planner(
     state: OrchestratorState,
 ) -> Literal["await_approval", "__end__"]:
-    """Skip approval gate if the work_planner subgraph ended with an error."""
-    if state.get("error"):
+    """Skip approval gate if the work_planner subgraph ended with an error.
+
+    Uses ``has_failure`` so a node that populated only ``failed_node`` (or
+    only ``error``) still routes to END — the alternative was to check one
+    field and silently drop the other's failures on the floor.
+    """
+    if has_failure(state):
         return "__end__"
     return "await_approval"
 
@@ -49,8 +55,13 @@ def _route_after_approval(
 def _route_after_generate_code(
     state: OrchestratorState,
 ) -> Literal["await_pr_approval", "__end__"]:
-    """Skip PR approval gate when code generation failed (no PR was created)."""
-    if state.get("failed_node"):
+    """Skip PR approval gate when code generation failed (no PR was created).
+
+    Uses ``has_failure`` for symmetry with ``_route_after_work_planner`` —
+    both fields count as "failure", regardless of which subgraph node
+    populated which key.
+    """
+    if has_failure(state):
         return "__end__"
     return "await_pr_approval"
 
