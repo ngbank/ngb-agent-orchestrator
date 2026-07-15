@@ -9,13 +9,29 @@ service boundary.
 
 from __future__ import annotations
 
-from ace.pipeline.runner import RunnerResult, run_mining
+from typing import Optional
 
-from .dtos import MineRequest, MineResult
+from ace.config import confidence_to_tier, tier_to_confidence_range
+from ace.pipeline.runner import RunnerResult, run_mining
+from ace.repository.context_item_repository import ContextItemRepository
+
+from .dtos import (
+    ItemSummaryDTO,
+    ListItemsRequest,
+    ListItemsResult,
+    MineRequest,
+    MineResult,
+    ProvenanceEntryDTO,
+    ShowItemRequest,
+    ShowItemResult,
+)
 
 
 class LocalAgentContextEngineService:
     """Runs the ACE mining pipeline in-process."""
+
+    def __init__(self, repo: Optional[ContextItemRepository] = None) -> None:
+        self._repo = repo or ContextItemRepository()
 
     def mine(self, request: MineRequest) -> MineResult:
         result = run_mining(
@@ -24,6 +40,81 @@ class LocalAgentContextEngineService:
             workflow_id=request.workflow_id,
         )
         return _to_mine_result(result)
+
+    def list_items(self, request: ListItemsRequest) -> ListItemsResult:
+        if request.status == "staged":
+            raw = self._repo.list_staged()
+        else:
+            min_confidence: Optional[float] = None
+            if request.confidence_tier is not None:
+                lo, _ = tier_to_confidence_range(request.confidence_tier)  # type: ignore[arg-type]
+                min_confidence = lo
+            raw = self._repo.list_items(
+                pattern_type=request.pattern_type,
+                scope=request.scope,
+                status=request.status,
+                min_confidence=min_confidence,
+            )
+
+        items = []
+        for item in raw:
+            tier = confidence_to_tier(item.confidence)
+            if request.confidence_tier is not None and tier != request.confidence_tier:
+                continue
+            if request.status == "staged" and request.pattern_type is not None:
+                if item.pattern_type != request.pattern_type:
+                    continue
+            if request.status == "staged" and request.scope is not None:
+                if item.scope != request.scope:
+                    continue
+            items.append(
+                ItemSummaryDTO(
+                    id=item.id,
+                    pattern_type=item.pattern_type,
+                    scope=item.scope,
+                    scope_value=item.scope_value,
+                    description=item.description,
+                    confidence=item.confidence,
+                    confidence_tier=tier,
+                    status=item.status,
+                    last_validated=item.last_validated,
+                )
+            )
+        return ListItemsResult(items=tuple(items))
+
+    def show_item(self, request: ShowItemRequest) -> Optional[ShowItemResult]:
+        item = self._repo.get(request.item_id) or self._repo.get_staged(request.item_id)
+        if item is None:
+            return None
+        provenance = tuple(
+            ProvenanceEntryDTO(
+                signal_source=e.signal_source,
+                workflow_date=e.workflow_date,
+                contributed_confidence=e.contributed_confidence,
+                workflow_id=e.workflow_id,
+                ticket_key=e.ticket_key,
+                signal_detail=e.signal_detail,
+            )
+            for e in item.provenance
+        )
+        return ShowItemResult(
+            id=item.id,
+            pattern_type=item.pattern_type,
+            scope=item.scope,
+            scope_value=item.scope_value,
+            description=item.description,
+            confidence=item.confidence,
+            confidence_tier=confidence_to_tier(item.confidence),
+            status=item.status,
+            last_validated=item.last_validated,
+            created_at=item.created_at,
+            updated_at=item.updated_at,
+            provenance=provenance,
+            conflicts_with=tuple(item.conflicts_with),
+            project=item.project,
+            repo=item.repo,
+            platform=item.platform,
+        )
 
 
 def _to_mine_result(result: RunnerResult) -> MineResult:
@@ -47,8 +138,8 @@ def _to_mine_result(result: RunnerResult) -> MineResult:
 def build_local_agent_context_engine_service() -> LocalAgentContextEngineService:
     """Return a :class:`LocalAgentContextEngineService` wired with defaults.
 
-    The mining runner owns its own :class:`ContextItemRepository` instance —
-    this factory exists to give callers a stable construction point and to
-    parallel :func:`orchestrator.workflow_service.build_local_workflow_service`.
+    The service owns a :class:`ContextItemRepository` instance and delegates to
+    the mining runner.  This factory gives callers a stable construction point
+    and mirrors :func:`orchestrator.workflow_service.build_local_workflow_service`.
     """
     return LocalAgentContextEngineService()

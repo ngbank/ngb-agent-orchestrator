@@ -20,6 +20,9 @@ Usage::
     ace mine --dry-run
     ace mine --limit 5
     ace mine --workflow-id <uuid>
+    ace items list
+    ace items list --status staged --tier ESTABLISHED
+    ace items show <item-id>
 """
 
 from __future__ import annotations
@@ -106,6 +109,78 @@ def mine(
     from ace.cli.commands.mine import _handle_mine
 
     _handle_mine(service, limit=limit, dry_run=dry_run, workflow_id=workflow_id)
+
+
+# ---------------------------------------------------------------------------
+# ace items
+# ---------------------------------------------------------------------------
+
+
+@run.group("items")
+@click.pass_context
+def items(ctx: click.Context) -> None:
+    """Inspect context items (live and staged)."""
+
+
+@items.command("list")
+@click.pass_context
+@click.option(
+    "--status",
+    default=None,
+    type=click.Choice(["active", "staged", "deprecated", "conflicted"], case_sensitive=False),
+    help="Filter by item status.  Omit to show all live items.",
+)
+@click.option(
+    "--pattern-type",
+    "pattern_type",
+    default=None,
+    type=click.Choice(
+        ["approach", "concern", "test_coverage", "implementation"], case_sensitive=False
+    ),
+    help="Filter by pattern type.",
+)
+@click.option(
+    "--scope",
+    default=None,
+    type=click.Choice(["task_type", "file_pattern", "codebase_wide"], case_sensitive=False),
+    help="Filter by scope dimension.",
+)
+@click.option(
+    "--tier",
+    "confidence_tier",
+    default=None,
+    type=click.Choice(["ESTABLISHED", "PATTERN", "TENTATIVE"], case_sensitive=False),
+    help="Filter by confidence tier.",
+)
+def items_list(
+    ctx: click.Context,
+    status: Optional[str],
+    pattern_type: Optional[str],
+    scope: Optional[str],
+    confidence_tier: Optional[str],
+) -> None:
+    """List context items, optionally filtered."""
+    service = _resolve_service(ctx)
+    from ace.cli.commands.items import _handle_items_list
+
+    _handle_items_list(
+        service,
+        status=status,
+        pattern_type=pattern_type,
+        scope=scope,
+        confidence_tier=confidence_tier.upper() if confidence_tier else None,
+    )
+
+
+@items.command("show")
+@click.pass_context
+@click.argument("item_id", metavar="ITEM_ID")
+def items_show(ctx: click.Context, item_id: str) -> None:
+    """Show full detail for one context item including its provenance chain."""
+    service = _resolve_service(ctx)
+    from ace.cli.commands.items import _handle_items_show
+
+    _handle_items_show(service, item_id=item_id)
 
 
 if __name__ == "__main__":

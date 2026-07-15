@@ -9,7 +9,7 @@ them primitive.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -77,3 +77,96 @@ class MineResult:
 
     comment_units_cited: int
     """Distinct PR-comment units cited in candidate evidence (recall numerator)."""
+
+
+# ---------------------------------------------------------------------------
+# ace items list
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ListItemsRequest:
+    """Inputs for :meth:`AgentContextEngineService.list_items`."""
+
+    status: Optional[str] = None
+    """Filter by item status (``active``, ``staged``, ``deprecated``, ``conflicted``).
+    When ``staged``, the staging table is queried instead of the live table."""
+
+    pattern_type: Optional[str] = None
+    """Filter by pattern type (``approach``, ``concern``, ``test_coverage``, ``implementation``)."""
+
+    scope: Optional[str] = None
+    """Filter by scope dimension (``task_type``, ``file_pattern``, ``codebase_wide``)."""
+
+    confidence_tier: Optional[str] = None
+    """Filter by named confidence tier (``ESTABLISHED``, ``PATTERN``, ``TENTATIVE``).
+    Translates to an exact confidence band — items outside the tier are excluded."""
+
+
+@dataclass(frozen=True)
+class ItemSummaryDTO:
+    """Compact view of one context item, suitable for tabular list output."""
+
+    id: str
+    pattern_type: str
+    scope: str
+    scope_value: Optional[str]
+    description: str
+    confidence: float
+    confidence_tier: Optional[str]
+    status: str
+    last_validated: str
+
+
+@dataclass(frozen=True)
+class ListItemsResult:
+    """Outcome of :meth:`AgentContextEngineService.list_items`."""
+
+    items: Tuple[ItemSummaryDTO, ...]
+
+
+# ---------------------------------------------------------------------------
+# ace items show
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ShowItemRequest:
+    """Inputs for :meth:`AgentContextEngineService.show_item`."""
+
+    item_id: str
+    """The UUID of the item to retrieve."""
+
+
+@dataclass(frozen=True)
+class ProvenanceEntryDTO:
+    """One evidence event in a context item's provenance chain."""
+
+    signal_source: str
+    workflow_date: str
+    contributed_confidence: float
+    workflow_id: Optional[str]
+    ticket_key: Optional[str]
+    signal_detail: Optional[str]
+
+
+@dataclass(frozen=True)
+class ShowItemResult:
+    """Full detail for one context item, including its provenance chain."""
+
+    id: str
+    pattern_type: str
+    scope: str
+    scope_value: Optional[str]
+    description: str
+    confidence: float
+    confidence_tier: Optional[str]
+    status: str
+    last_validated: str
+    created_at: str
+    updated_at: str
+    provenance: Tuple[ProvenanceEntryDTO, ...]
+    conflicts_with: Tuple[str, ...]
+    project: Optional[str]
+    repo: Optional[str]
+    platform: Optional[str]
