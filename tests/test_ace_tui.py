@@ -19,6 +19,7 @@ from ace.service.dtos import (
     RejectResult,
     ShowItemRequest,
     ShowItemResult,
+    StatsResult,
 )
 from ace.service.protocols import AgentContextEngineService
 from ace.tui.action_registry import REGISTRY, action_for
@@ -79,6 +80,9 @@ class FakeAceService:
         self.reject_calls.append(request)
         self._staged = [i for i in self._staged if i.id != request.item_id]
         return RejectResult(item_id=request.item_id)
+
+    def stats(self) -> StatsResult:  # pragma: no cover
+        raise NotImplementedError
 
 
 def _item(

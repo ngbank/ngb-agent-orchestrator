@@ -31,6 +31,7 @@ from .dtos import (
     RejectResult,
     ShowItemRequest,
     ShowItemResult,
+    StatsResult,
 )
 
 
@@ -77,5 +78,14 @@ class AgentContextEngineService(Protocol):
 
         Sets ``rejected_at`` on the staged row for audit; *notes* are stored in
         ``review_notes``.
+        """
+        ...
+
+    def stats(self) -> StatsResult:
+        """Return a snapshot of aggregate store health metrics.
+
+        Covers live-item breakdowns (by status, tier, pattern_type), staging
+        queue age, and the item generation rate per mined workflow.  No request
+        DTO is needed because the query has no parameters.
         """
         ...

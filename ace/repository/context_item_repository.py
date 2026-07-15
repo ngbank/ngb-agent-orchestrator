@@ -9,6 +9,7 @@ these two tables but never touches the ``workflows`` schema.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Optional
 
@@ -436,6 +437,44 @@ class ContextItemRepository:
             conn.close()
 
     # ------------------------------------------------------------------
+    # Stats aggregation
+    # ------------------------------------------------------------------
+
+    def get_stats(self) -> "ContextStoreRawStats":
+        """Return raw aggregate counts from both the live and staging tables.
+
+        All queries run in a single connection to give a consistent snapshot.
+        The caller (service layer) is responsible for converting confidence
+        values to tier labels and computing derived metrics such as queue age.
+        """
+        conn = get_connection()
+        try:
+            status_rows = conn.execute(
+                f"SELECT status, COUNT(*) AS cnt FROM {_LIVE_TABLE} GROUP BY status"
+            ).fetchall()
+            confidence_rows = conn.execute(f"SELECT confidence FROM {_LIVE_TABLE}").fetchall()
+            pattern_rows = conn.execute(
+                f"SELECT pattern_type, COUNT(*) AS cnt FROM {_LIVE_TABLE} GROUP BY pattern_type"
+            ).fetchall()
+            pending_rows = conn.execute(
+                f"SELECT created_at FROM {_STAGED_TABLE} "
+                "WHERE promoted_at IS NULL AND rejected_at IS NULL"
+            ).fetchall()
+            mined_count = conn.execute("SELECT COUNT(*) FROM context_extraction_log").fetchone()[0]
+            staged_total = conn.execute(f"SELECT COUNT(*) FROM {_STAGED_TABLE}").fetchone()[0]
+        finally:
+            conn.close()
+
+        return ContextStoreRawStats(
+            status_counts=[(r["status"], r["cnt"]) for r in status_rows],
+            live_confidence_values=[r["confidence"] for r in confidence_rows],
+            pattern_type_counts=[(r["pattern_type"], r["cnt"]) for r in pattern_rows],
+            staged_pending_created_at=[r["created_at"] for r in pending_rows],
+            mined_workflows=mined_count,
+            staged_total=staged_total,
+        )
+
+    # ------------------------------------------------------------------
     # Shared helpers (table name always one of the two module constants above)
     # ------------------------------------------------------------------
 
@@ -479,7 +518,35 @@ class ContextItemRepository:
             conn.close()
 
 
+@dataclass
+class ContextStoreRawStats:
+    """Raw aggregate data returned by :meth:`ContextItemRepository.get_stats`.
+
+    Fields hold the minimal data the service layer needs to compute the
+    :class:`~ace.service.dtos.StatsResult` DTO without any further DB access.
+    """
+
+    status_counts: list[tuple[str, int]]
+    """``[(status, count), ...]`` from ``context_items``."""
+
+    live_confidence_values: list[float]
+    """All confidence scores from ``context_items`` (needed for tier bucketing)."""
+
+    pattern_type_counts: list[tuple[str, int]]
+    """``[(pattern_type, count), ...]`` from ``context_items``."""
+
+    staged_pending_created_at: list[str]
+    """ISO 8601 ``created_at`` timestamps for pending staging-queue items."""
+
+    mined_workflows: int
+    """Total rows in ``context_extraction_log``."""
+
+    staged_total: int
+    """Total rows in ``context_items_staged`` (all time, including promoted/rejected)."""
+
+
 __all__ = [
     "ContextItemRepository",
+    "ContextStoreRawStats",
     "PROMOTION_CONFIDENCE_BOOST",
 ]

@@ -9,11 +9,13 @@ service boundary.
 
 from __future__ import annotations
 
+import statistics
+from datetime import UTC, datetime
 from typing import Optional
 
 from ace.config import confidence_to_tier, tier_to_confidence_range
 from ace.pipeline.runner import RunnerResult, run_mining
-from ace.repository.context_item_repository import ContextItemRepository
+from ace.repository.context_item_repository import ContextItemRepository, ContextStoreRawStats
 
 from .dtos import (
     ItemSummaryDTO,
@@ -28,6 +30,7 @@ from .dtos import (
     RejectResult,
     ShowItemRequest,
     ShowItemResult,
+    StatsResult,
 )
 
 
@@ -133,6 +136,10 @@ class LocalAgentContextEngineService:
         self._repo.reject(request.item_id, review_notes=request.notes)
         return RejectResult(item_id=request.item_id)
 
+    def stats(self) -> StatsResult:
+        raw = self._repo.get_stats()
+        return _to_stats_result(raw)
+
 
 def _to_mine_result(result: RunnerResult) -> MineResult:
     """Flatten a :class:`RunnerResult` into the immutable :class:`MineResult`."""
@@ -149,6 +156,53 @@ def _to_mine_result(result: RunnerResult) -> MineResult:
         discarded=result.curation.discarded,
         comment_units=result.comment_units,
         comment_units_cited=result.comment_units_cited,
+    )
+
+
+def _to_stats_result(raw: ContextStoreRawStats) -> StatsResult:
+    """Translate repository raw stats into the frozen :class:`StatsResult` DTO."""
+    # --- by_status ---
+    by_status = tuple(sorted(raw.status_counts, key=lambda x: x[1], reverse=True))
+
+    # --- by_tier ---
+    tier_buckets: dict[str, int] = {}
+    for conf in raw.live_confidence_values:
+        tier = confidence_to_tier(conf) or "BELOW_THRESHOLD"
+        tier_buckets[tier] = tier_buckets.get(tier, 0) + 1
+    tier_order = ["ESTABLISHED", "PATTERN", "TENTATIVE", "BELOW_THRESHOLD"]
+    by_tier = tuple((t, tier_buckets[t]) for t in tier_order if t in tier_buckets)
+
+    # --- by_pattern_type ---
+    by_pattern_type = tuple(sorted(raw.pattern_type_counts, key=lambda x: x[1], reverse=True))
+
+    # --- staging queue age ---
+    staged_pending = len(raw.staged_pending_created_at)
+    if staged_pending:
+        now = datetime.now(UTC)
+        ages = [
+            (now - datetime.fromisoformat(ts)).total_seconds() / 86400
+            for ts in raw.staged_pending_created_at
+        ]
+        staged_queue_age_days_p50: Optional[float] = statistics.median(ages)
+        staged_queue_age_days_max: Optional[float] = max(ages)
+    else:
+        staged_queue_age_days_p50 = None
+        staged_queue_age_days_max = None
+
+    # --- generation rate ---
+    generation_rate: Optional[float] = (
+        raw.staged_total / raw.mined_workflows if raw.mined_workflows > 0 else None
+    )
+
+    return StatsResult(
+        by_status=by_status,
+        by_tier=by_tier,
+        by_pattern_type=by_pattern_type,
+        staged_pending=staged_pending,
+        staged_queue_age_days_p50=staged_queue_age_days_p50,
+        staged_queue_age_days_max=staged_queue_age_days_max,
+        mined_workflows=raw.mined_workflows,
+        generation_rate=generation_rate,
     )
 
 

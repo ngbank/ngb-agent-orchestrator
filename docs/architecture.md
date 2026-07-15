@@ -254,8 +254,8 @@ Submodules:
 
 - `ace/cli/` — the `ace` Click entrypoint (`ace/cli/run.py`) and command
   handlers under `ace/cli/commands/` (mirrors `dispatcher/run.py` +
-  `dispatcher/commands/`). `ace mine` is the first wired verb; later
-  verbs (`items`, `promote`, `reject`, `stats`) land in tickets 3.2–3.6.
+  `dispatcher/commands/`). Wired verbs: `mine`, `items`, `promote`,
+  `reject`, `stats`.
 - `ace/service/` — the `AgentContextEngineService` Protocol (single
   boundary the CLI/TUI depend on), `LocalAgentContextEngineService`
   in-process implementation wrapping the pipeline runner, and
