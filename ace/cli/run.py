@@ -2,18 +2,21 @@
 ACE CLI entrypoint.
 
 Thin scaffold mirroring ``dispatcher/run.py``. Subcommands (``mine``,
-``items``, ``promote``, ``reject``, ``stats``, ``ontology``) will be wired
+``items``, ``promote``, ``reject``, ``stats``, ``ontology``) are wired
 up as the mining/review pipeline lands.
 """
 
 import click
 
-
-@click.command()
-def run() -> None:
-    """Entry point for the ``ace`` CLI; subcommands not yet implemented."""
-    click.echo("ace: no commands implemented yet")
+run = click.Group()
 
 
-if __name__ == "__main__":
-    run()
+@click.command(name="stats")
+def stats_cmd() -> None:
+    """Print read-only mining summary from ACE tables."""
+    from ace.cli.commands.stats import handle_stats
+
+    handle_stats()
+
+
+run.add_command(stats_cmd)
