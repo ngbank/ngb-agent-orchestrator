@@ -23,6 +23,10 @@ Usage::
     ace items list
     ace items list --status staged --tier ESTABLISHED
     ace items show <item-id>
+    ace promote <item-id>
+    ace promote <item-id> --notes "Looks good" --scope task_type --scope-value migration
+    ace reject <item-id>
+    ace reject <item-id> --notes "Insufficient evidence"
 """
 
 from __future__ import annotations
@@ -181,6 +185,82 @@ def items_show(ctx: click.Context, item_id: str) -> None:
     from ace.cli.commands.items import _handle_items_show
 
     _handle_items_show(service, item_id=item_id)
+
+
+# ---------------------------------------------------------------------------
+# ace promote
+# ---------------------------------------------------------------------------
+
+
+@run.command("promote")
+@click.pass_context
+@click.argument("item_id", metavar="ITEM_ID")
+@click.option(
+    "--notes",
+    default=None,
+    metavar="TEXT",
+    help="Optional reviewer annotations stored alongside the promoted item.",
+)
+@click.option(
+    "--scope",
+    default=None,
+    type=click.Choice(["task_type", "file_pattern", "codebase_wide"], case_sensitive=False),
+    help="Narrow the item's scope dimension at promotion time.",
+)
+@click.option(
+    "--scope-value",
+    "scope_value",
+    default=None,
+    metavar="VALUE",
+    help="Narrow the item's scope value at promotion time.",
+)
+def promote(
+    ctx: click.Context,
+    item_id: str,
+    notes: Optional[str],
+    scope: Optional[str],
+    scope_value: Optional[str],
+) -> None:
+    """Promote a staged context item into the live store.
+
+    Appends a human_review evidence event (+0.20 confidence, capped at 1.0).
+    Use --notes to capture review annotations; use --scope / --scope-value to
+    narrow the item's applicability before promoting.
+    """
+    service = _resolve_service(ctx)
+    from ace.cli.commands.promote import _handle_promote
+
+    _handle_promote(service, item_id=item_id, notes=notes, scope=scope, scope_value=scope_value)
+
+
+# ---------------------------------------------------------------------------
+# ace reject
+# ---------------------------------------------------------------------------
+
+
+@run.command("reject")
+@click.pass_context
+@click.argument("item_id", metavar="ITEM_ID")
+@click.option(
+    "--notes",
+    default=None,
+    metavar="TEXT",
+    help="Optional reviewer annotations stored alongside the rejected item.",
+)
+def reject(
+    ctx: click.Context,
+    item_id: str,
+    notes: Optional[str],
+) -> None:
+    """Mark a staged context item as rejected (no hard delete).
+
+    Sets rejected_at on the staged row for audit.  Use --notes to capture
+    the reason for rejection.
+    """
+    service = _resolve_service(ctx)
+    from ace.cli.commands.promote import _handle_reject
+
+    _handle_reject(service, item_id=item_id, notes=notes)
 
 
 if __name__ == "__main__":
