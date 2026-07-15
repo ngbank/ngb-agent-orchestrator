@@ -26,7 +26,7 @@ shape:
       "description": "<one-sentence generalisable rule>",
       "evidence": [
         {
-          "signal_source": "<clarification_round_N | pr_comment | rejection_reason | plan_concern | execution_outcome>",
+          "signal_source": "<clarification_round_N | pr_comment_N | rejection_reason | plan_concern | execution_outcome>",
           "detail": "<short quote or paraphrase from the trace>"
         }
       ],
@@ -49,11 +49,21 @@ from the plan. Concretely:
 - A clarification round: the agent asked a question, meaning it lacked context
   a future run should have.
 - A PR comment: a reviewer pointed at something the agent missed or got wrong.
+- A reviewer critique about **repository or tooling hygiene**: a file that
+  should never have been committed (a virtualenv, a symlink, a build
+  artefact), a `.gitignore` regression, a hard-coded local path, a pre-commit
+  hook or CI assumption that broke. These critiques are often short — a single
+  filename or one line about `.gitignore` — but they are among the
+  highest-value lessons because the same mistake tends to recur verbatim.
+  Never drop one for being brief; brevity is not lack of substance.
 - A rejection reason: the whole approach was wrong; there is a lesson here.
 - A `plan.status = "concerns"` or `"blocked"` that was later resolved: the
   resolution path is the lesson.
-- An execution failure that reflects agent reasoning (not infrastructure):
-  wrong file changed, missing test, wrong assumption about a schema.
+- An execution failure that reflects agent reasoning (not a transient
+  infrastructure outage like a network error or runner crash): wrong file
+  changed, missing test, wrong assumption about a schema. Note this excludes
+  only *transient environment failures* — a lesson about build/repo/tooling
+  hygiene that the agent got wrong is squarely in scope.
 
 ## The single hardest rule: generalise, do not memorise
 
@@ -72,6 +82,10 @@ This is the single most important quality bar.
   the pre-commit hook enforces this on the pre-commit stage."
 - "Reviewers in this codebase consistently prefer descriptive variable names
   over single letters; rename before pushing."
+- "Never commit virtualenv directories or symlinks to them (`.venv`, `venv`);
+  verify `.gitignore` covers them and run `git status` before committing."
+- "Pre-commit hooks must not assume a specific interpreter location; resolve
+  the Python binary from the environment, not a hard-coded path."
 
 If you cannot state the pattern without a ticket key, branch name, PR number,
 file specific to one run, or engineer name, **drop it** — the Curator will
@@ -90,7 +104,11 @@ for). Descriptions **may not**.
 - `test_coverage` — a testing rule (e.g., "any new node in the orchestrator
   graph requires a corresponding test in `tests/test_<node>.py`").
 - `implementation` — a concrete coding rule (e.g., "async LLM callbacks must be
-  registered in both the sync and async callback lists").
+  registered in both the sync and async callback lists"). Repository and
+  tooling hygiene rules (what must never be committed, `.gitignore` coverage,
+  pre-commit/CI assumptions) also file here — or under `concern` when the
+  lesson is a risk to check during planning rather than a rule to follow while
+  coding.
 
 **`scope` and `scope_value`:**
 - `codebase_wide` — applies everywhere; `scope_value = null`.
@@ -138,7 +156,11 @@ characters. State the rule, not the anecdote.
 **`evidence`** — one entry per distinct source in the trace that supports the
 pattern. Signal sources:
 - `clarification_round_N` — where N is the 1-indexed round number.
-- `pr_comment` — a review comment.
+- `pr_comment_N` — a review comment unit. The trace's `pr_comments` array
+  presents each reviewer comment paragraph as a numbered unit with an `id`
+  like `pr_comment_3`; cite that exact id. This is how the pipeline measures
+  which reviewer feedback was heard — an uncited unit counts as missed, so
+  cite every unit that supports the pattern.
 - `rejection_reason` — the terminal rejection reason.
 - `plan_concern` — a concern the planner raised in `work_plan.concerns`.
 - `execution_outcome` — the code_generation_summary's status/error field.
@@ -174,6 +196,10 @@ Never emit a candidate with `initial_confidence < 0.50`.
 3. **Do not restate common software engineering advice.** "Write tests before
    pushing" is not useful — the agent already knows that. Extract only patterns
    *specific to this codebase* or *specific to the mistake in this trace*.
+   Exception: if a reviewer flagged it in **this** trace, the agent demonstrably
+   did not follow it, so it is worth extracting — "don't commit `.venv`" sounds
+   like common advice, but a trace where it actually happened makes it a
+   recurrence guard, not a platitude.
 4. **Do not produce more than 5 candidates from one trace.** If the trace
    contains more signal than that, pick the 5 highest-confidence ones. Volume
    is not the goal; signal-to-noise is.

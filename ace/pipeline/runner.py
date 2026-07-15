@@ -34,7 +34,7 @@ from typing import Optional
 
 from ace.pipeline.curator import CurationResult, curate
 from ace.pipeline.evaluator import Verdict, evaluate
-from ace.pipeline.reflector import reflect
+from ace.pipeline.reflector import comment_recall, reflect
 from ace.pipeline.trace_reader import fetch_eligible_traces, fetch_trace_by_id
 from ace.repository.context_item_repository import ContextItemRepository
 from state.sqlite_state_store import _create_audit_log, get_connection
@@ -71,6 +71,12 @@ class RunnerResult:
 
     curation: CurationResult = field(default_factory=CurationResult)
     """Cumulative Curator counts across all succeeded ``proceed`` workflows."""
+
+    comment_units: int = 0
+    """Total PR-comment units shown to the Reflector across ``proceed`` workflows."""
+
+    comment_units_cited: int = 0
+    """Distinct PR-comment units cited in candidate evidence (recall numerator)."""
 
 
 # ---------------------------------------------------------------------------
@@ -159,10 +165,15 @@ def run_mining(
 
             # verdict == "proceed"
             candidates = reflect(bundle)
+            units_total, units_cited = comment_recall(bundle, candidates)
+            result.comment_units += units_total
+            result.comment_units_cited += units_cited
             logger.debug(
-                "Runner: workflow %s reflector returned %d candidate(s)",
+                "Runner: workflow %s reflector returned %d candidate(s), " "comment recall %d/%d",
                 bundle.workflow_id,
                 len(candidates),
+                units_cited,
+                units_total,
             )
 
             if not dry_run:
@@ -171,7 +182,11 @@ def run_mining(
                 result.curation.merged += curation_result.merged
                 result.curation.contradicted += curation_result.contradicted
                 result.curation.discarded += curation_result.discarded
-                _mark_extracted(bundle.workflow_id)
+                _mark_extracted(
+                    bundle.workflow_id,
+                    comment_units=units_total,
+                    comment_units_cited=units_cited,
+                )
             else:
                 logger.info(
                     "Runner: [dry-run] would curate %d candidate(s) for workflow %s",
@@ -192,13 +207,20 @@ def run_mining(
             if not dry_run:
                 _write_pipeline_failure(bundle.workflow_id, exc)
 
+    recall_note = ""
+    if result.comment_units:
+        recall_note = (
+            f" comment_recall={result.comment_units_cited}/{result.comment_units}"
+            f" ({result.comment_units_cited / result.comment_units:.0%})"
+        )
     logger.info(
-        "Runner: done — processed=%d succeeded=%d skipped=%d flagged=%d failed=%d%s",
+        "Runner: done — processed=%d succeeded=%d skipped=%d flagged=%d failed=%d%s%s",
         result.processed,
         result.succeeded,
         result.skipped,
         result.flagged,
         result.failed,
+        recall_note,
         " [dry-run]" if dry_run else "",
     )
     return result
@@ -209,19 +231,31 @@ def run_mining(
 # ---------------------------------------------------------------------------
 
 
-def _mark_extracted(workflow_id: str) -> None:
+def _mark_extracted(
+    workflow_id: str,
+    *,
+    comment_units: Optional[int] = None,
+    comment_units_cited: Optional[int] = None,
+) -> None:
     """Insert a ``context_extraction_log`` row for *workflow_id*.
 
-    Uses ``INSERT OR IGNORE`` so a concurrent run or a re-invocation with
-    ``--workflow-id`` doesn't raise on a duplicate.
+    ``comment_units`` / ``comment_units_cited`` carry the per-comment recall
+    metric (migration 018); both stay ``NULL`` when the Reflector never ran
+    (skip/flag verdicts). Uses an upsert so a re-invocation with
+    ``--workflow-id`` refreshes the metric instead of raising on a duplicate.
     """
     now = datetime.now(UTC).isoformat()
     conn = get_connection()
     try:
         conn.execute(
-            "INSERT OR IGNORE INTO context_extraction_log"
-            " (workflow_id, extracted_at) VALUES (?, ?)",
-            (workflow_id, now),
+            "INSERT INTO context_extraction_log"
+            " (workflow_id, extracted_at, comment_units, comment_units_cited)"
+            " VALUES (?, ?, ?, ?)"
+            " ON CONFLICT(workflow_id) DO UPDATE SET"
+            "   extracted_at = excluded.extracted_at,"
+            "   comment_units = excluded.comment_units,"
+            "   comment_units_cited = excluded.comment_units_cited",
+            (workflow_id, now, comment_units, comment_units_cited),
         )
         conn.commit()
     finally:
