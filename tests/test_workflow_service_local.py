@@ -630,3 +630,147 @@ class TestRetry:
         assert result.final_status == WorkflowStatus.COMPLETED
         # increment_retry_count bumped retry_count to 1
         assert repo.get_workflow(wf_id)["retry_count"] == 1
+
+    def test_retry_landing_at_pr_gate_marks_interrupted_not_completed(self, temp_db, repo):
+        """AOS-280 regression at the service layer.
+
+        A retry that re-runs ``generate_code`` successfully and then lands
+        at the ``await_pr_approval`` gate must:
+
+        * Return ``interrupted=True``.
+        * Preserve the ``PENDING_PR_APPROVAL`` status written by the gate
+          node (never overwrite to ``COMPLETED``).
+        * Skip the retry post_processor entirely.
+
+        We simulate the gate's DB write by having ``FakeGraph.stream``
+        update the row to ``PENDING_PR_APPROVAL`` mid-run, then terminate
+        cleanly (as LangGraph ≥1.x does for ``interrupt()``).
+        """
+        wf_id = repo.create_workflow(
+            ticket_key="AOS-280-svc",
+            status=WorkflowStatus.FAILED,
+        )
+
+        initial = _FakeStateSnapshot(
+            values={"failed_node": "generate_code"},
+            next_nodes=("generate_code",),
+        )
+        history = [
+            _FakeStateSnapshot(
+                values={},
+                next_nodes=("generate_code",),
+                config={"configurable": {"thread_id": wf_id, "checkpoint_id": "ck-1"}},
+            )
+        ]
+        # Post-stream state carries a successful code_generation_summary
+        # AND the gate node's ``next=("await_pr_approval",)`` marker.
+        post = _FakeStateSnapshot(
+            values={
+                "workflow_id": wf_id,
+                "ticket_key": "AOS-280-svc",
+                "code_generation_summary": {
+                    "status": "success",
+                    "pr_url": "http://pr/280",
+                },
+                # Critically: no pr_approval_decision yet — human hasn't
+                # decided.
+            },
+            next_nodes=("await_pr_approval",),
+        )
+
+        class GateWritingGraph(FakeGraph):
+            """FakeGraph whose ``stream`` also performs the gate node's DB
+            write, mirroring what ``await_pr_approval`` does immediately
+            before its ``interrupt()`` call in production."""
+
+            def stream(self, *args, **kwargs):
+                # Simulate the gate node updating the row before pausing.
+                repo.update_status(
+                    wf_id,
+                    WorkflowStatus.PENDING_PR_APPROVAL,
+                    actor="await_pr_approval",
+                    reason="Awaiting PR review",
+                )
+                return super().stream(*args, **kwargs)
+
+        graph = GateWritingGraph(state=initial, history=history, post_stream_state=post)
+        svc = _make_service(repo, graph)
+        result = svc.retry(wf_id)
+
+        assert result.interrupted is True
+        assert result.final_status == WorkflowStatus.PENDING_PR_APPROVAL
+        # The DB row must remain at the gate — NOT overwritten to COMPLETED.
+        assert repo.get_workflow(wf_id)["status"] == WorkflowStatus.PENDING_PR_APPROVAL
+        # pr_url should surface for the CLI banner.
+        assert result.pr_url == "http://pr/280"
+        # retry_count was still bumped.
+        assert repo.get_workflow(wf_id)["retry_count"] == 1
+
+
+class TestInterruptDetection:
+    """Unified interrupt-detection contract for _run_graph.
+
+    Two prongs must both be honoured:
+    * Legacy path: GraphInterrupt raised by the stream.
+    * Event path: stream terminates cleanly but the gate node has written
+      a PENDING_* status to the DB (LangGraph ≥1.x behaviour).
+    """
+
+    def test_event_path_pending_pr_approval_transition_is_interrupted(self, temp_db, repo):
+        """Row transitioning from a non-paused status into ``PENDING_PR_APPROVAL``
+        during a run is treated as ``interrupted=True`` even though no
+        ``GraphInterrupt`` was raised."""
+        wf_id = repo.create_workflow(
+            ticket_key="AOS-280-detect",
+            status=WorkflowStatus.PENDING_APPROVAL,
+        )
+
+        class GateWritingGraph(FakeGraph):
+            def stream(self, *args, **kwargs):
+                repo.update_status(
+                    wf_id,
+                    WorkflowStatus.PENDING_PR_APPROVAL,
+                    actor="await_pr_approval",
+                    reason="Awaiting PR review",
+                )
+                return super().stream(*args, **kwargs)
+
+        graph = GateWritingGraph(
+            post_stream_state=_FakeStateSnapshot(
+                values={"workflow_id": wf_id, "ticket_key": "AOS-280-detect"}
+            )
+        )
+        svc = _make_service(repo, graph)
+        result = svc.approve_plan(wf_id)
+
+        assert result.interrupted is True
+        assert result.final_status == WorkflowStatus.PENDING_PR_APPROVAL
+
+    def test_event_path_no_status_change_is_not_interrupted(self, temp_db, repo):
+        """A row that stays at the same paused status across a run (fake
+        stream fires no gate node) must fall through to post_process — this
+        guards the invariant used by existing FakeGraph tests where a stream
+        that does nothing should not spuriously signal interrupt."""
+        wf_id = repo.create_workflow(
+            ticket_key="AOS-280-noop",
+            status=WorkflowStatus.PENDING_APPROVAL,
+        )
+        graph = FakeGraph(
+            post_stream_state=_FakeStateSnapshot(
+                values={
+                    "workflow_id": wf_id,
+                    "ticket_key": "AOS-280-noop",
+                    "code_generation_summary": {
+                        "status": "success",
+                        "pr_url": "http://pr/noop",
+                    },
+                }
+            )
+        )
+        svc = _make_service(repo, graph)
+        result = svc.approve_plan(wf_id)
+
+        # approve_plan's post_process is invoked; it maps success to
+        # PENDING_PR_APPROVAL (the "graph paused at PR gate" mapping).
+        assert result.interrupted is False
+        assert result.final_status == WorkflowStatus.PENDING_PR_APPROVAL

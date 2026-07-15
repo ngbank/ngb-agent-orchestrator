@@ -594,6 +594,151 @@ def test_retry_still_rejects_completed_workflow(test_db, cli_runner):
     assert "not retryable" in result.output
 
 
+# ---------------------------------------------------------------------------
+# --retry must refuse gate-paused workflows (AOS-280 hardening)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "gate_status,expected_verb_hint",
+    [
+        (WorkflowStatus.PENDING_APPROVAL, "--approve-plan"),
+        (WorkflowStatus.PENDING_PR_APPROVAL, "--approve-pr"),
+        (WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION, "--submit-clarification"),
+    ],
+)
+def test_retry_rejects_gate_paused_workflow(test_db, cli_runner, gate_status, expected_verb_hint):
+    """A workflow paused at a human gate must not be resumable via --retry.
+
+    Retry rewinds through the graph; using it on a gate-paused workflow can
+    bypass the human decision.  The CLI must refuse and point the operator
+    at the correct resume verb.
+    """
+    wf_id = state_store.create_workflow("TEST-1", status=gate_status)
+    service = _make_test_service(graph=Mock())
+    result = cli_runner.invoke(run, ["--retry", "--workflow-id", wf_id], obj=service)
+
+    assert result.exit_code != 0, result.output
+    assert "paused at a human-decision gate" in result.output
+    assert gate_status.value in result.output
+    assert expected_verb_hint in result.output
+    # Row must be untouched.
+    assert state_store.get_workflow(wf_id)["status"] == gate_status
+    assert state_store.get_workflow(wf_id)["retry_count"] == 0
+
+
+# ---------------------------------------------------------------------------
+# AOS-280 regression — retry that lands at await_pr_approval must NOT
+# mark the workflow COMPLETED and must print the gate resume verb.
+# ---------------------------------------------------------------------------
+
+
+def test_retry_landing_at_pr_gate_does_not_complete_workflow(test_db, cli_runner):
+    """Regression for AOS-280.
+
+    Scenario: prior generate_code failure left the workflow FAILED with
+    failed_node='generate_code'.  --retry rewinds, generate_code now
+    succeeds, push_and_create_pr opens a PR, and the graph pauses at
+    await_pr_approval — which updates the DB row to PENDING_PR_APPROVAL
+    before its interrupt().  The dispatcher must:
+
+    * NOT overwrite the row to COMPLETED.
+    * NOT print the "🎉 Workflow completed successfully" banner.
+    * Print the paused-at-gate banner pointing to --approve-pr / --reject-pr.
+    * Exit 0 (paused is a soft-terminal state, not an error).
+    """
+    wf_id = _failed_workflow("TEST-1", "generate_code")
+    success_summary = {
+        "status": "success",
+        "branch": "feature/TEST-1+x",
+        "build": "pass",
+        "tests": "pass",
+        "pr_url": "https://pr/280",
+    }
+
+    # Simulate the gate node updating the row to PENDING_PR_APPROVAL
+    # during the graph run — that DB write is what await_pr_approval does
+    # immediately before calling ``interrupt()``.
+    def fake_stream(*_args, **_kwargs):
+        state_store.update_status(
+            wf_id,
+            WorkflowStatus.PENDING_PR_APPROVAL,
+            actor="await_pr_approval",
+            reason="Awaiting PR review",
+        )
+        return iter([])
+
+    mock_graph = _mock_graph_with_failed_node(
+        "generate_code",
+        {
+            "workflow_id": wf_id,
+            "ticket_key": "TEST-1",
+            "code_generation_summary": success_summary,
+            # pr_approval_decision must remain unset — the human hasn't
+            # decided yet.
+        },
+    )
+    mock_graph.stream.side_effect = fake_stream
+
+    service = _make_test_service(graph=mock_graph)
+    with patch("dispatcher.commands.common._post_execution_comment") as post_comment:
+        result = cli_runner.invoke(run, ["--retry", "--workflow-id", wf_id], obj=service)
+
+    assert result.exit_code == 0, result.output
+    wf = state_store.get_workflow(wf_id)
+    # The critical assertion: gate status is preserved, not overwritten.
+    assert wf["status"] == WorkflowStatus.PENDING_PR_APPROVAL, (
+        f"Retry silently overwrote gate status to {wf['status']} — " "AOS-280 regression"
+    )
+    assert wf["retry_count"] == 1
+
+    # The success banner and JIRA post must NOT fire while the human
+    # decision is still pending.
+    assert "🎉 Workflow completed successfully" not in result.output
+    post_comment.assert_not_called()
+
+    # The paused-at-gate banner must appear with the concrete resume verb.
+    assert "stopped at human-decision gate" in result.output
+    assert WorkflowStatus.PENDING_PR_APPROVAL.value in result.output
+    assert "--approve-pr" in result.output
+
+
+# ---------------------------------------------------------------------------
+# WORK_PLANNER_NODES must stay in sync with the compiled subgraph
+# (AOS-280 architectural hardening — prevents silent retry mis-classification
+# when subgraph nodes are added or renamed.)
+# ---------------------------------------------------------------------------
+
+
+def test_work_planner_nodes_in_sync_with_compiled_subgraph():
+    """``WORK_PLANNER_NODES`` must list every node in the work_planner subgraph.
+
+    If a new node is added to ``build_work_planner`` without being added
+    here, retry misclassifies a failure in that node (fails to collapse
+    to the parent ``work_planner`` node) and raises
+    "No checkpoint found before node 'X'" — silently unrecoverable.
+    """
+    from orchestrator.retry import WORK_PLANNER_NODES
+    from orchestrator.work_planner.builder import build_work_planner
+
+    subgraph = build_work_planner()
+    # LangGraph internal nodes (start/end sentinels) must be excluded.
+    internal = {"__start__", "__end__"}
+    actual_nodes = {n for n in subgraph.nodes.keys() if n not in internal}
+
+    missing = actual_nodes - WORK_PLANNER_NODES
+    extra = WORK_PLANNER_NODES - actual_nodes
+    assert not missing, (
+        f"WORK_PLANNER_NODES is missing subgraph nodes: {sorted(missing)}. "
+        f"Add them to orchestrator/retry.py so --retry can rewind failures "
+        f"in those nodes to the parent work_planner node."
+    )
+    assert not extra, (
+        f"WORK_PLANNER_NODES lists nodes that no longer exist in the "
+        f"subgraph: {sorted(extra)}. Remove them from orchestrator/retry.py."
+    )
+
+
 # The legacy ``_mark_workflow_interrupted`` helper has been folded into
 # ``LocalWorkflowService.mark_interrupted``. Its behavior is now covered by
 # ``tests/test_workflow_service_local.py::TestAdminMutations``

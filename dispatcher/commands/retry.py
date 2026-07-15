@@ -13,6 +13,16 @@ if TYPE_CHECKING:
     from orchestrator.workflow_service import WorkflowService
 
 
+# Map a paused-at-gate status to the resume verb the operator should
+# use instead of ``--retry``.  Retry is for failed / stuck runs, not for
+# workflows that correctly stopped at a human decision point.
+_GATE_RESUME_VERB = {
+    WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION: "--submit-clarification",
+    WorkflowStatus.PENDING_APPROVAL: "--approve-plan / --reject",
+    WorkflowStatus.PENDING_PR_APPROVAL: "--approve-pr / --comment-pr / --reject-pr",
+}
+
+
 def _handle_retry(
     service: "WorkflowService",
     ticket_key: Optional[str],
@@ -42,6 +52,17 @@ def _handle_retry(
     detail = service.get(resolved_id)
     if detail is None:
         click.echo(f"❌ Workflow not found: {resolved_id}", err=True)
+        sys.exit(1)
+
+    if detail.status.is_paused_at_gate():
+        resume_verb = _GATE_RESUME_VERB.get(detail.status, "the appropriate resume verb")
+        click.echo(
+            f"❌ Workflow {resolved_id} is paused at a human-decision gate "
+            f"(status: {detail.status.value}).\n"
+            f"   --retry is for failed / stuck runs.  Resume this workflow with: "
+            f"{resume_verb}",
+            err=True,
+        )
         sys.exit(1)
 
     if not detail.status.is_retryable():
@@ -103,7 +124,19 @@ def _handle_retry(
     )
 
     if result.interrupted:
-        click.echo("⏸️  Graph paused at approval gate after retry.")
+        # Prefer the concrete gate status from the DB (set by the gate
+        # node before its ``interrupt()``) so the operator knows exactly
+        # which resume verb to run next.
+        gate_status = refreshed.status
+        gate_verb = _GATE_RESUME_VERB.get(gate_status)
+        if gate_verb:
+            click.echo(
+                f"⏸️  Retry stopped at human-decision gate "
+                f"(status: {gate_status.value}).\n"
+                f"   Resume this workflow with: {gate_verb}"
+            )
+        else:
+            click.echo("⏸️  Graph paused at approval gate after retry.")
         return
 
     code_generation_summary = result.code_generation_summary or {}

@@ -212,6 +212,29 @@ an error. Workflows that ended with `partial` execution status (build pass, test
 are marked `completed`, not `failed`, and are NOT considered retryable — they should be
 finished manually.
 
+### Retry vs. Human-Decision Gates
+
+Workflows paused at a human-decision gate (`pending_approval`,
+`pending_pr_approval`, `pending_workplan_clarification`) are **not** retryable —
+they aren't stuck, they are waiting on a human. `--retry` refuses these with a
+concrete resume-verb hint:
+
+```
+❌ Workflow <uuid> is paused at a human-decision gate (status: pending_pr_approval).
+   Use the matching decision command instead of --retry:
+     --approve-pr / --comment-pr / --reject-pr
+```
+
+If the retry itself successfully re-runs the failed node and the graph then
+lands at a gate (e.g. a retried `generate_code` finishes and hits
+`await_pr_approval`), the CLI does **not** mark the workflow `completed`. The
+gate's status write is preserved and the banner tells you the exact resume verb:
+
+```
+⏸️  Retry stopped at human-decision gate (status: pending_pr_approval).
+   Resume this workflow with: --approve-pr / --comment-pr / --reject-pr
+```
+
 ### Guard-Failure Recovery Hint
 
 The human-in-the-loop commands (`--clarify`, `--approve-plan`, `--reject`, `--approve-pr`,

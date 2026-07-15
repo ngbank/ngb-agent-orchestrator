@@ -512,6 +512,35 @@ class LocalWorkflowService:
         row = self._repo.get_workflow(workflow_id)
         return (row or {}).get("ticket_key", "") if row else ""
 
+    def _build_interrupted_result(
+        self,
+        runnable: Any,
+        *,
+        workflow_id: str,
+        ticket_key: str,
+        thread_config: RunnableConfig,
+    ) -> WorkflowRunResult:
+        """Assemble a WorkflowRunResult for a graph paused at a human gate.
+
+        Reads the graph's final state and the DB row so ``final_status``
+        reflects the gate-node's DB write (e.g. ``PENDING_PR_APPROVAL``)
+        and ``interrupted=True`` signals the pause to CLI callers.
+        """
+        final_state = runnable.get_state(thread_config).values or {}
+        row = self._repo.get_workflow(workflow_id)
+        status = row["status"] if row else WorkflowStatus.PENDING
+        code_generation_summary = final_state.get("code_generation_summary")
+        return WorkflowRunResult(
+            workflow_id=workflow_id,
+            ticket_key=final_state.get("ticket_key") or ticket_key,
+            final_status=status,
+            interrupted=True,
+            code_generation_summary=(code_generation_summary if code_generation_summary else None),
+            pr_url=(code_generation_summary or {}).get("pr_url"),
+            failed_node=final_state.get("failed_node"),
+            final_state=dict(final_state) if final_state else None,
+        )
+
     def _run_graph(
         self,
         graph_input: Any,
@@ -526,12 +555,26 @@ class LocalWorkflowService:
     ) -> WorkflowRunResult:
         """Common run-and-resolve flow shared by every graph-running method.
 
-        Returns a ``WorkflowRunResult`` reflecting the outcome.  Catches
-        ``GraphInterrupt`` (sets ``interrupted=True``) but lets every other
-        exception propagate so the caller can decide how to surface it
-        (today the dispatcher prints, sets exit codes, and so on).
+        Returns a ``WorkflowRunResult`` reflecting the outcome.  Interrupt
+        detection has two prongs:
+
+        1. Legacy exception path — some LangGraph versions surface
+           ``interrupt()`` by raising ``GraphInterrupt`` out of the stream.
+        2. Event path (current LangGraph ≥1.x) — ``interrupt()`` inside a
+           node emits an ``{"__interrupt__": ...}`` event and the stream
+           terminates cleanly.  In that case the gate node has already
+           written a ``PENDING_*`` status to the DB (see
+           ``WorkflowStatus.is_paused_at_gate``); if the row transitioned
+           into a paused-at-gate status during the run we treat that as
+           the canonical "paused at gate" signal and skip ``post_process``
+           so post-processors cannot overwrite the gate's status.
+
+        Every other exception propagates so the caller can decide how to
+        surface it.
         """
         runnable: Any = graph if graph is not None else self._graph_factory()
+        pre_run_row = self._repo.get_workflow(workflow_id)
+        pre_run_status = pre_run_row["status"] if pre_run_row else None
         try:
             _drive_graph_stream(
                 runnable,
@@ -541,21 +584,34 @@ class LocalWorkflowService:
                 thread_config=thread_config,
             )
         except GraphInterrupt:
-            final_state = runnable.get_state(thread_config).values or {}
-            row = self._repo.get_workflow(workflow_id)
-            status = row["status"] if row else WorkflowStatus.PENDING
-            code_generation_summary = final_state.get("code_generation_summary")
-            return WorkflowRunResult(
+            return self._build_interrupted_result(
+                runnable,
                 workflow_id=workflow_id,
-                ticket_key=final_state.get("ticket_key") or ticket_key,
-                final_status=status,
-                interrupted=True,
-                code_generation_summary=(
-                    code_generation_summary if code_generation_summary else None
-                ),
-                pr_url=(code_generation_summary or {}).get("pr_url"),
-                failed_node=final_state.get("failed_node"),
-                final_state=dict(final_state) if final_state else None,
+                ticket_key=ticket_key,
+                thread_config=thread_config,
+            )
+
+        # Event-path interrupt detection: the stream ended without raising,
+        # but if a gate node updated the row to a paused-at-gate status
+        # during this run (i.e. the status _transitioned_ into paused),
+        # the graph is now suspended at a human gate.  Skip ``post_process``
+        # so it cannot clobber the gate write.  A row that was already
+        # paused-at-gate before the run _and did not change_ is treated as
+        # "graph did not advance" and falls through to the normal path
+        # (this keeps FakeGraph-based unit tests that never fire a real
+        # gate node behaving as before).
+        post_run_row = self._repo.get_workflow(workflow_id)
+        post_run_status = post_run_row["status"] if post_run_row else None
+        if (
+            post_run_status is not None
+            and post_run_status.is_paused_at_gate()
+            and post_run_status != pre_run_status
+        ):
+            return self._build_interrupted_result(
+                runnable,
+                workflow_id=workflow_id,
+                ticket_key=ticket_key,
+                thread_config=thread_config,
             )
 
         final_state = runnable.get_state(thread_config).values or {}
@@ -678,6 +734,31 @@ class LocalWorkflowService:
         new_failed_node = final_state.get("failed_node")
         graph_error = final_state.get("error")
         actor = "dispatcher"
+
+        # Invariant: if the row is already at a human-gate status the gate
+        # node wrote that status immediately before its interrupt() call.
+        # The retry post-process must never overwrite it — otherwise a
+        # successful re-run of ``generate_code`` (or any node upstream of a
+        # gate) would silently mark the workflow COMPLETED and bypass the
+        # human PR / plan / clarification decision.  In practice
+        # ``_run_graph`` now short-circuits paused-at-gate runs before
+        # reaching any post_processor, but the guard is kept here so the
+        # invariant is expressed at the write site too.
+        current_row = self._repo.get_workflow(wf_id)
+        if current_row and current_row["status"].is_paused_at_gate():
+            return WorkflowRunResult(
+                workflow_id=wf_id,
+                ticket_key=ticket,
+                final_status=current_row["status"],
+                interrupted=True,
+                error=graph_error,
+                code_generation_summary=(
+                    code_generation_summary if code_generation_summary else None
+                ),
+                pr_url=(code_generation_summary.get("pr_url") if code_generation_summary else None),
+                failed_node=new_failed_node,
+                final_state=final_state,
+            )
 
         if code_generation_summary and exec_status in ("success", "partial"):
             self._repo.update_status(
