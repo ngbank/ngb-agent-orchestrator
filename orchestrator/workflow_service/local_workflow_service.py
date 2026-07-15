@@ -397,24 +397,18 @@ class LocalWorkflowService:
         )
 
     def approve_plan(self, workflow_id: str) -> WorkflowRunResult:
-        ticket_key = self._ticket_for(workflow_id)
-        thread_config = _make_thread_config(workflow_id)
-        return self._run_graph(
-            Command(resume={"decision": "approved"}),
-            workflow_id=workflow_id,
-            ticket_key=ticket_key,
-            thread_config=thread_config,
+        return self._resume_at_gate(
+            workflow_id,
+            expected_gate=WorkflowStatus.PENDING_APPROVAL,
+            payload={"decision": "approved"},
             post_process=self._post_process_approve_plan,
         )
 
     def reject_plan(self, workflow_id: str, reason: Optional[str]) -> WorkflowRunResult:
-        ticket_key = self._ticket_for(workflow_id)
-        thread_config = _make_thread_config(workflow_id)
-        return self._run_graph(
-            Command(resume={"decision": "rejected", "reason": reason}),
-            workflow_id=workflow_id,
-            ticket_key=ticket_key,
-            thread_config=thread_config,
+        return self._resume_at_gate(
+            workflow_id,
+            expected_gate=WorkflowStatus.PENDING_APPROVAL,
+            payload={"decision": "rejected", "reason": reason},
         )
 
     def submit_clarification(
@@ -422,13 +416,10 @@ class LocalWorkflowService:
         workflow_id: str,
         answers: List[Dict[str, str]],
     ) -> WorkflowRunResult:
-        ticket_key = self._ticket_for(workflow_id)
-        thread_config = _make_thread_config(workflow_id)
-        return self._run_graph(
-            Command(resume={"answers": answers}),
-            workflow_id=workflow_id,
-            ticket_key=ticket_key,
-            thread_config=thread_config,
+        return self._resume_at_gate(
+            workflow_id,
+            expected_gate=WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION,
+            payload={"answers": answers},
         )
 
     def retry(self, workflow_id: str) -> WorkflowRunResult:
@@ -473,34 +464,25 @@ class LocalWorkflowService:
         )
 
     def approve_pr(self, workflow_id: str) -> WorkflowRunResult:
-        ticket_key = self._ticket_for(workflow_id)
-        thread_config = _make_thread_config(workflow_id)
-        return self._run_graph(
-            Command(resume={"decision": "approved"}),
-            workflow_id=workflow_id,
-            ticket_key=ticket_key,
-            thread_config=thread_config,
+        return self._resume_at_gate(
+            workflow_id,
+            expected_gate=WorkflowStatus.PENDING_PR_APPROVAL,
+            payload={"decision": "approved"},
             post_process=self._post_process_pr_decision("approved"),
         )
 
     def comment_pr(self, workflow_id: str, comments: str) -> WorkflowRunResult:
-        ticket_key = self._ticket_for(workflow_id)
-        thread_config = _make_thread_config(workflow_id)
-        return self._run_graph(
-            Command(resume={"decision": "commented", "comments": comments}),
-            workflow_id=workflow_id,
-            ticket_key=ticket_key,
-            thread_config=thread_config,
+        return self._resume_at_gate(
+            workflow_id,
+            expected_gate=WorkflowStatus.PENDING_PR_APPROVAL,
+            payload={"decision": "commented", "comments": comments},
         )
 
     def reject_pr(self, workflow_id: str, reason: Optional[str]) -> WorkflowRunResult:
-        ticket_key = self._ticket_for(workflow_id)
-        thread_config = _make_thread_config(workflow_id)
-        return self._run_graph(
-            Command(resume={"decision": "rejected", "reason": reason}),
-            workflow_id=workflow_id,
-            ticket_key=ticket_key,
-            thread_config=thread_config,
+        return self._resume_at_gate(
+            workflow_id,
+            expected_gate=WorkflowStatus.PENDING_PR_APPROVAL,
+            payload={"decision": "rejected", "reason": reason},
             post_process=self._post_process_pr_decision("rejected", reason=reason),
         )
 
@@ -508,9 +490,60 @@ class LocalWorkflowService:
     # Internals
     # ------------------------------------------------------------------
 
-    def _ticket_for(self, workflow_id: str) -> str:
+    def _resume_at_gate(
+        self,
+        workflow_id: str,
+        *,
+        expected_gate: WorkflowStatus,
+        payload: Dict[str, Any],
+        post_process: Optional[
+            Callable[[str, Optional[str], Dict[str, Any]], WorkflowRunResult]
+        ] = None,
+    ) -> WorkflowRunResult:
+        """Guard-then-run helper for every interrupt-resume verb.
+
+        Every gate-resume method (``approve_plan``, ``reject_plan``,
+        ``submit_clarification``, ``approve_pr``, ``comment_pr``,
+        ``reject_pr``) funnels through here. The helper:
+
+        1. Reads the current DB status and refuses the resume if it does
+           not equal ``expected_gate``. This is the fix for wrong-verb
+           misuse: without this check, POST ``/approve-plan`` on a
+           workflow paused at ``await_pr_approval`` would send
+           ``Command(resume={"decision": "approved"})`` to the wrong
+           ``interrupt()`` — and because the payload shape coincides
+           with the PR-approve payload, the wrong gate silently accepts
+           the wrong decision.
+        2. Delegates to :meth:`_run_graph` with
+           ``Command(resume=payload)`` and the given ``post_process``.
+
+        The workflow row lookup is a single DB read; unknown workflows
+        raise ``ValueError`` up to the CLI / HTTP layer, mapped to a
+        404 by the server route.
+
+        Raises:
+            ValueError: when the workflow is not found or is not
+                currently paused at ``expected_gate``.
+        """
         row = self._repo.get_workflow(workflow_id)
-        return (row or {}).get("ticket_key", "") if row else ""
+        if row is None:
+            raise ValueError(f"Workflow not found: {workflow_id}")
+        current_status: WorkflowStatus = row["status"]
+        if current_status != expected_gate:
+            raise ValueError(
+                f"Workflow {workflow_id} is in status {current_status.value}; "
+                f"cannot resume — expected gate {expected_gate.value}."
+            )
+
+        ticket_key = row.get("ticket_key", "") or ""
+        thread_config = _make_thread_config(workflow_id)
+        return self._run_graph(
+            Command(resume=payload),
+            workflow_id=workflow_id,
+            ticket_key=ticket_key,
+            thread_config=thread_config,
+            post_process=post_process,
+        )
 
     def _build_interrupted_result(
         self,

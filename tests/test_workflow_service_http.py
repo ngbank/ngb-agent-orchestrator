@@ -744,11 +744,11 @@ class TestApproval:
         # Fire-and-forget: the route returns a snapshot from the current
         # workflow row (the seeded detail) rather than the eventual result
         # of the background graph drive.
-        fake_service.seed(_make_detail("wf-1"))
+        fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.PENDING_APPROVAL))
         fake_service.mutation_result = _expected_run_result("wf-1")
         result = http_service.approve_plan("wf-1")
         # Status snapshot reflects the seeded row.
-        assert result.final_status == WorkflowStatus.IN_PROGRESS
+        assert result.final_status == WorkflowStatus.PENDING_APPROVAL
         # The graph drive ran inline via SyncBackgroundDispatcher.
         assert fake_service.approve_plan_calls == ["wf-1"]
 
@@ -765,7 +765,7 @@ class TestApproval:
         # dispatcher's on_failure handler calls mark_failed.  The HTTP
         # client itself does not see the exception (the route already
         # returned 202).
-        fake_service.seed(_make_detail("wf-1"))
+        fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.PENDING_APPROVAL))
         fake_service.mutation_exc = ValueError("not awaiting approval")
         # Should not raise — server returns 202 immediately.
         http_service.approve_plan("wf-1")
@@ -778,7 +778,7 @@ class TestApproval:
         fake_service: _FakeWorkflowService,
         http_service: HttpWorkflowService,
     ) -> None:
-        fake_service.seed(_make_detail("wf-1"))
+        fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.PENDING_APPROVAL))
         fake_service.mutation_result = _expected_run_result("wf-1")
         http_service.reject_plan("wf-1", "bad scope")
         assert fake_service.reject_plan_calls == [{"workflow_id": "wf-1", "reason": "bad scope"}]
@@ -788,7 +788,7 @@ class TestApproval:
         fake_service: _FakeWorkflowService,
         http_service: HttpWorkflowService,
     ) -> None:
-        fake_service.seed(_make_detail("wf-1"))
+        fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.PENDING_APPROVAL))
         fake_service.mutation_result = _expected_run_result("wf-1")
         http_service.reject_plan("wf-1", None)
         assert fake_service.reject_plan_calls == [{"workflow_id": "wf-1", "reason": None}]
@@ -798,7 +798,9 @@ class TestApproval:
         fake_service: _FakeWorkflowService,
         http_service: HttpWorkflowService,
     ) -> None:
-        fake_service.seed(_make_detail("wf-1"))
+        fake_service.seed(
+            _make_detail("wf-1", status=WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION)
+        )
         fake_service.mutation_result = _expected_run_result("wf-1")
         answers = [
             {"concern": "what about retries?", "answer": "exponential backoff"},
