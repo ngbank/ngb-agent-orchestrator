@@ -13,7 +13,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from ace.models import CandidateItem
-from ace.pipeline.reflector import ReflectorError, reflect
+from ace.pipeline.reflector import (
+    ReflectorError,
+    comment_recall,
+    reflect,
+    split_comment_units,
+)
 from ace.pipeline.trace_reader import TraceBundle
 
 # ---------------------------------------------------------------------------
@@ -448,3 +453,103 @@ def test_reflect_empty_llm_content_triggers_retry():
 
     assert result == []
     assert mock_call.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Comment units & recall (AOS-272)
+# ---------------------------------------------------------------------------
+
+
+def _pr_round(round_n: int, comments: str) -> dict:
+    return {
+        "round": round_n,
+        "comments": comments,
+        "actor": "reviewer",
+        "timestamp": f"2026-01-0{round_n}T00:00:00+00:00",
+    }
+
+
+def test_split_comment_units_numbers_paragraphs_across_rounds():
+    rounds = [
+        _pr_round(1, "Please remove the .venv symlink.\n\nAlso use ctx.exit()."),
+        _pr_round(2, "The .venv symlink is back again."),
+    ]
+
+    units = split_comment_units(rounds)
+
+    assert [u["id"] for u in units] == ["pr_comment_1", "pr_comment_2", "pr_comment_3"]
+    assert units[0]["text"] == "Please remove the .venv symlink."
+    assert units[1]["text"] == "Also use ctx.exit()."
+    assert units[2]["round"] == 2
+    assert units[2]["actor"] == "reviewer"
+
+
+def test_split_comment_units_skips_blank_and_non_string_comments():
+    rounds = [
+        _pr_round(1, "  \n\n   "),
+        {"round": 2, "comments": None, "actor": "reviewer", "timestamp": "t"},
+        "not-a-dict",
+        _pr_round(3, "One real critique."),
+    ]
+
+    units = split_comment_units(rounds)
+
+    assert len(units) == 1
+    assert units[0]["id"] == "pr_comment_1"
+    assert units[0]["text"] == "One real critique."
+
+
+def test_split_comment_units_empty_input():
+    assert split_comment_units([]) == []
+
+
+def _candidate_with_evidence(*signal_sources: str) -> CandidateItem:
+    return CandidateItem(
+        pattern_type="implementation",
+        scope="codebase_wide",
+        description="Never commit virtualenv directories or symlinks to them.",
+        initial_confidence=0.65,
+        evidence=[{"signal_source": s, "detail": "quote"} for s in signal_sources],
+    )
+
+
+def test_comment_recall_counts_distinct_cited_units():
+    bundle = _bundle(
+        pr_comments=[_pr_round(1, "Critique A.\n\nCritique B.\n\nCritique C.")],
+    )
+    candidates = [
+        _candidate_with_evidence("pr_comment_1", "pr_comment_3"),
+        _candidate_with_evidence("pr_comment_1"),  # duplicate citation
+    ]
+
+    assert comment_recall(bundle, candidates) == (3, 2)
+
+
+def test_comment_recall_ignores_legacy_and_out_of_range_sources():
+    bundle = _bundle(pr_comments=[_pr_round(1, "Only one critique.")])
+    candidates = [
+        _candidate_with_evidence("pr_comment", "pr_comment_9", "plan_concern"),
+    ]
+
+    assert comment_recall(bundle, candidates) == (1, 0)
+
+
+def test_comment_recall_zero_units_without_pr_comments():
+    assert comment_recall(_bundle(pr_comments=[]), []) == (0, 0)
+
+
+def test_reflect_user_message_contains_numbered_comment_units():
+    body = json.dumps({"candidates": []})
+    bundle = _bundle(
+        pr_comments=[_pr_round(1, "Remove the .venv symlink.\n\nUse ctx.exit().")],
+    )
+    with patch(
+        "ace.pipeline.reflector.litellm.completion",
+        return_value=_mock_response(body),
+    ) as mock_call:
+        reflect(bundle)
+
+    user_message = mock_call.call_args.kwargs["messages"][1]["content"]
+    assert "pr_comment_1" in user_message
+    assert "pr_comment_2" in user_message
+    assert "Remove the .venv symlink." in user_message

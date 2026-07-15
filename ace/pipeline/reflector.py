@@ -303,7 +303,65 @@ def _render_user_message(bundle: TraceBundle) -> str:
         "work_plan": bundle.work_plan,
         "code_generation_summary": bundle.code_generation_summary,
         "clarification_history": bundle.clarification_history,
-        "pr_comments": bundle.pr_comments,
+        "pr_comments": split_comment_units(bundle.pr_comments),
         "rejection_reason": bundle.rejection_reason,
     }
     return "TRACE:\n" + json.dumps(payload, indent=2, default=str)
+
+
+# ---------------------------------------------------------------------------
+# Comment units & recall (AOS-272)
+# ---------------------------------------------------------------------------
+
+_PR_COMMENT_SOURCE_RE = re.compile(r"^pr_comment_(\d+)$")
+
+
+def split_comment_units(pr_comments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Explode PR-comment rounds into numbered paragraph units.
+
+    Each round's free-text ``comments`` blob is split on blank lines so that
+    every distinct critique gets its own addressable id (``pr_comment_1``,
+    ``pr_comment_2``, …) the Reflector must cite in evidence. Numbering is
+    1-indexed and continuous across rounds, in round order — it is the
+    denominator of the per-comment recall metric, so it must be deterministic
+    for a given trace.
+    """
+    units: list[dict[str, Any]] = []
+    for entry in pr_comments:
+        if not isinstance(entry, dict):
+            continue
+        text = entry.get("comments")
+        if not isinstance(text, str):
+            continue
+        paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+        for paragraph in paragraphs:
+            units.append(
+                {
+                    "id": f"pr_comment_{len(units) + 1}",
+                    "round": entry.get("round"),
+                    "actor": entry.get("actor"),
+                    "timestamp": entry.get("timestamp"),
+                    "text": paragraph,
+                }
+            )
+    return units
+
+
+def comment_recall(bundle: TraceBundle, candidates: list[CandidateItem]) -> tuple[int, int]:
+    """Return ``(units_total, units_cited)`` for the per-comment recall metric.
+
+    ``units_total`` is the number of comment units :func:`split_comment_units`
+    produced for the bundle; ``units_cited`` is how many distinct in-range
+    units appear as ``pr_comment_N`` evidence across *candidates*. Legacy
+    un-numbered ``pr_comment`` sources and out-of-range indices (the LLM
+    inventing a unit) are not counted as cited.
+    """
+    units_total = len(split_comment_units(bundle.pr_comments))
+    cited: set[int] = set()
+    for candidate in candidates:
+        for entry in candidate.evidence:
+            source = entry.get("signal_source", "")
+            match = _PR_COMMENT_SOURCE_RE.match(source) if isinstance(source, str) else None
+            if match and 1 <= int(match.group(1)) <= units_total:
+                cited.add(int(match.group(1)))
+    return units_total, len(cited)

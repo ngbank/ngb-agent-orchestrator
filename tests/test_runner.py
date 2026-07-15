@@ -176,6 +176,80 @@ def test_run_mining_proceed_inserts_extraction_log_on_success():
     assert _extraction_log_count(wf_id) == 1
 
 
+def _extraction_log_metrics(workflow_id: str) -> tuple:
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT comment_units, comment_units_cited FROM context_extraction_log"
+            " WHERE workflow_id = ?",
+            (workflow_id,),
+        ).fetchone()
+        return (row["comment_units"], row["comment_units_cited"])
+    finally:
+        conn.close()
+
+
+def test_run_mining_proceed_persists_comment_recall_metric():
+    wf_id = _make_workflow(status=WorkflowStatus.COMPLETED)
+    state_store.update_pr_comments(
+        wf_id, "Remove the .venv symlink.\n\nUse ctx.exit().", actor="reviewer"
+    )
+
+    cited_candidate = CandidateItem(
+        pattern_type="implementation",
+        scope="codebase_wide",
+        description="Never commit virtualenv directories or symlinks to them.",
+        initial_confidence=0.65,
+        evidence=[{"signal_source": "pr_comment_1", "detail": "quote"}],
+    )
+    with (
+        patch("ace.pipeline.runner.evaluate", return_value="proceed"),
+        patch("ace.pipeline.runner.reflect", return_value=[cited_candidate]),
+        patch("ace.pipeline.runner.curate", return_value=CurationResult(created=1)),
+    ):
+        result = run_mining()
+
+    assert _extraction_log_metrics(wf_id) == (2, 1)
+    assert result.comment_units == 2
+    assert result.comment_units_cited == 1
+
+
+def test_run_mining_skip_leaves_comment_recall_metric_null():
+    wf_id = _make_workflow()
+
+    with patch("ace.pipeline.runner.evaluate", return_value="skip"):
+        run_mining()
+
+    assert _extraction_log_metrics(wf_id) == (None, None)
+
+
+def test_run_mining_remine_refreshes_extraction_log_row():
+    """Re-mining via --workflow-id upserts the existing ledger row with fresh metrics."""
+    wf_id = _make_workflow()
+    state_store.update_pr_comments(wf_id, "One critique.", actor="reviewer")
+    conn = get_connection()
+    try:
+        conn.execute(
+            "INSERT INTO context_extraction_log (workflow_id, extracted_at) VALUES (?, '2026-05-01T00:00:00+00:00')",
+            (wf_id,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    with (
+        patch("ace.pipeline.runner.evaluate", return_value="proceed"),
+        patch("ace.pipeline.runner.reflect", return_value=[]),
+        patch("ace.pipeline.runner.curate", return_value=CurationResult()),
+    ):
+        result = run_mining(workflow_id=wf_id)
+
+    assert result.processed == 1
+    assert result.failed == 0
+    assert _extraction_log_count(wf_id) == 1
+    assert _extraction_log_metrics(wf_id) == (1, 0)
+
+
 # ---------------------------------------------------------------------------
 # run_mining — skip verdict
 # ---------------------------------------------------------------------------
