@@ -174,6 +174,28 @@ operations are never exposed by an unauthenticated dev server. OpenAPI
 is exposed at `/openapi.json` and Swagger UI at `/docs`. See
 [docs/server.md](server.md) for the run story.
 
+Routes are split by resource under `orchestrator/server/routes/`:
+
+- `_shared.py` — the three `APIRouter` instances (`health_router`,
+  `workflow_router`, `admin_router`) plus guard helpers
+  (`_require_workflow`, `_require_paused_at_gate`,
+  `_submit_graph_drive`, `_snapshot_response`) and the response-code
+  tables (`_MUTATION_RESPONSES`, `_GATE_RESUME_ENDPOINT`).
+- `health.py` — `GET /healthz`.
+- `workflows.py` — workflow CRUD (`start`, `list`, `get`, `cancel`,
+  `history`, `audit-log`).
+- `decisions.py` — every gate-resume verb (`approve-plan`,
+  `reject-plan`, `clarification`, `approve-pr`, `reject-pr`,
+  `comment-pr`) and `retry`; the six resume verbs share the
+  `_require_paused_at_gate` guard.
+- `streams.py` — SSE endpoints (`events`, `logs`).
+- `admin.py` — `/admin/clear-db` and
+  `/admin/workflows/{id}/mark-interrupted`.
+
+`routes/__init__.py` imports each submodule for side-effect handler
+registration and re-exports the three routers, so `app.py` still says
+`from .routes import health_router, workflow_router, admin_router`.
+
 ### `orchestrator/subprocess_registry.py`
 
 Process-wide registry that tracks the live child subprocesses spawned by
