@@ -21,7 +21,11 @@ from .dtos import (
     ListItemsResult,
     MineRequest,
     MineResult,
+    PromoteRequest,
+    PromoteResult,
     ProvenanceEntryDTO,
+    RejectRequest,
+    RejectResult,
     ShowItemRequest,
     ShowItemResult,
 )
@@ -115,6 +119,19 @@ class LocalAgentContextEngineService:
             repo=item.repo,
             platform=item.platform,
         )
+
+    def promote(self, request: PromoteRequest) -> PromoteResult:
+        item_id = self._repo.promote(
+            request.item_id,
+            review_notes=request.notes,
+            scope=request.scope,  # type: ignore[arg-type]
+            scope_value=request.scope_value,
+        )
+        return PromoteResult(item_id=item_id)
+
+    def reject(self, request: RejectRequest) -> RejectResult:
+        self._repo.reject(request.item_id, review_notes=request.notes)
+        return RejectResult(item_id=request.item_id)
 
 
 def _to_mine_result(result: RunnerResult) -> MineResult:

@@ -170,3 +170,57 @@ class ShowItemResult:
     project: Optional[str]
     repo: Optional[str]
     platform: Optional[str]
+
+
+# ---------------------------------------------------------------------------
+# ace promote
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PromoteRequest:
+    """Inputs for :meth:`AgentContextEngineService.promote`."""
+
+    item_id: str
+    """The UUID of the staged item to promote."""
+
+    notes: Optional[str] = None
+    """Optional reviewer annotations stored in ``review_notes``."""
+
+    scope: Optional[str] = None
+    """Narrow the scope dimension at promotion time (overrides the staged value)."""
+
+    scope_value: Optional[str] = None
+    """Narrow the scope value at promotion time (overrides the staged value)."""
+
+
+@dataclass(frozen=True)
+class PromoteResult:
+    """Outcome of :meth:`AgentContextEngineService.promote`."""
+
+    item_id: str
+    """The id of the newly created live context item (same UUID as the staged row)."""
+
+
+# ---------------------------------------------------------------------------
+# ace reject
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class RejectRequest:
+    """Inputs for :meth:`AgentContextEngineService.reject`."""
+
+    item_id: str
+    """The UUID of the staged item to reject."""
+
+    notes: Optional[str] = None
+    """Optional reviewer annotations stored in ``review_notes``."""
+
+
+@dataclass(frozen=True)
+class RejectResult:
+    """Outcome of :meth:`AgentContextEngineService.reject`."""
+
+    item_id: str
+    """The id of the rejected staged item."""

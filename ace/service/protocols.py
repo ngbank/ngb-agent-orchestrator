@@ -25,6 +25,10 @@ from .dtos import (
     ListItemsResult,
     MineRequest,
     MineResult,
+    PromoteRequest,
+    PromoteResult,
+    RejectRequest,
+    RejectResult,
     ShowItemRequest,
     ShowItemResult,
 )
@@ -55,5 +59,23 @@ class AgentContextEngineService(Protocol):
 
         Searches the live table first; falls back to the staging table when the
         id is not found in live.
+        """
+        ...
+
+    def promote(self, request: PromoteRequest) -> PromoteResult:
+        """Promote a staged item into the live context item store.
+
+        Appends a ``human_review`` evidence event (fixed +0.20 weight, capped
+        at 1.0) to provenance; *notes* are stored in ``review_notes`` for audit.
+        *scope*/*scope_value* optionally narrow the item's scope at promotion
+        time.  The staged row is preserved with ``promoted_at`` set.
+        """
+        ...
+
+    def reject(self, request: RejectRequest) -> RejectResult:
+        """Mark a staged item as rejected (no hard delete).
+
+        Sets ``rejected_at`` on the staged row for audit; *notes* are stored in
+        ``review_notes``.
         """
         ...
