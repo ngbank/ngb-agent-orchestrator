@@ -96,6 +96,17 @@ remote mode. `build_local_workflow_service()` and
 `build_workflow_service_from_env()` (in `factory.py`) picks between them
 based on `ORCHESTRATOR_MODE`.
 
+Every gate-resume verb on `LocalWorkflowService` (`approve_plan`,
+`reject_plan`, `submit_clarification`, `approve_pr`, `comment_pr`,
+`reject_pr`) funnels through a single `_resume_at_gate` helper that reads
+the workflow's current status and rejects any resume that doesn't match
+the verb's expected gate. This closes a class of misuse where payload
+shapes coincide across gates (e.g. `{"decision": "approved"}` is valid at
+both plan and PR interrupts) and the wrong verb would otherwise silently
+inject the wrong decision. The FastAPI routes apply the same guard
+before dispatching, so wrong-verb requests fail with a 409 that names
+the correct endpoint for the gate the workflow is actually paused at.
+
 The remote-mode client currently supports the read / cancel / start /
 `read_logs` / `stream_events` surface; the approval, clarification, retry,
 and PR-comment endpoints are scheduled for the B4 work item and raise

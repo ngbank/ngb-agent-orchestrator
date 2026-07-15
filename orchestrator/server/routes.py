@@ -220,6 +220,57 @@ def _require_workflow(service: WorkflowService, workflow_id: str) -> None:
         )
 
 
+def _require_paused_at_gate(
+    service: WorkflowService,
+    workflow_id: str,
+    expected_gate: WorkflowStatus,
+) -> None:
+    """Raise 404/409 unless ``workflow_id`` is paused at ``expected_gate``.
+
+    Mirrors the ``/retry`` route's guard so wrong-verb misuse is caught at
+    the transport layer. Without this check, POST ``/approve-plan`` on a
+    workflow paused at ``await_pr_approval`` would still dispatch
+    ``Command(resume={"decision": "approved"})`` to the wrong ``interrupt()``
+    — the payload shape coincides with the PR-approve payload and the
+    wrong gate silently accepts the wrong decision. Rejecting here means
+    the misuse never reaches the graph.
+
+    Uses ``_GATE_RESUME_ENDPOINT`` for the hint so mismatched requests
+    are pointed at the correct verb.
+    """
+    detail = service.get(workflow_id)
+    if detail is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Workflow not found: {workflow_id}",
+        )
+    if detail.status == expected_gate:
+        return
+    if detail.status.is_paused_at_gate():
+        # Wrong gate — point at the correct resume verb for the gate the
+        # workflow is actually paused at.
+        resume_hint = _GATE_RESUME_ENDPOINT.get(
+            detail.status,
+            "the matching decision endpoint",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Workflow {workflow_id} is paused at {detail.status.value}, "
+                f"not {expected_gate.value}. Use {resume_hint} instead."
+            ),
+        )
+    # Not paused at any gate — refuse without a resume-verb hint (the
+    # workflow isn't waiting for a human decision at all).
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=(
+            f"Workflow {workflow_id} is in status {detail.status.value} "
+            f"and is not paused at {expected_gate.value}; nothing to resume."
+        ),
+    )
+
+
 def _service_value_error_to_409(exc: ValueError) -> HTTPException:
     """Map a ``ValueError`` raised by a graph-running service method to 409.
 
@@ -315,8 +366,9 @@ _MUTATION_RESPONSES: Dict[int | str, Dict[str, Any]] = {
 
 
 # Maps a human-decision gate status to the REST endpoint that resumes it.
-# Used by ``retry_workflow`` to give callers a concrete recovery hint when
-# they mistakenly POST /retry on a gate-paused workflow (AOS-280).
+# Used by ``retry_workflow`` and ``_require_paused_at_gate`` to give callers
+# a concrete recovery hint when they POST the wrong verb on a gate-paused
+# workflow.
 _GATE_RESUME_ENDPOINT: Dict[WorkflowStatus, str] = {
     WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION: "POST /workflows/{id}/clarification",
     WorkflowStatus.PENDING_APPROVAL: "POST /workflows/{id}/approve-plan or /reject-plan",
@@ -338,7 +390,7 @@ def approve_plan(
     service: WorkflowService = Depends(get_service),
     dispatcher: BackgroundDispatcherProtocol = Depends(get_background_dispatcher),
 ) -> WorkflowRunResponse:
-    _require_workflow(service, workflow_id)
+    _require_paused_at_gate(service, workflow_id, WorkflowStatus.PENDING_APPROVAL)
     _submit_graph_drive(
         dispatcher=dispatcher,
         service=service,
@@ -363,7 +415,7 @@ def reject_plan(
     service: WorkflowService = Depends(get_service),
     dispatcher: BackgroundDispatcherProtocol = Depends(get_background_dispatcher),
 ) -> WorkflowRunResponse:
-    _require_workflow(service, workflow_id)
+    _require_paused_at_gate(service, workflow_id, WorkflowStatus.PENDING_APPROVAL)
     reason = body.reason if body is not None else None
     _submit_graph_drive(
         dispatcher=dispatcher,
@@ -389,7 +441,7 @@ def submit_clarification(
     service: WorkflowService = Depends(get_service),
     dispatcher: BackgroundDispatcherProtocol = Depends(get_background_dispatcher),
 ) -> WorkflowRunResponse:
-    _require_workflow(service, workflow_id)
+    _require_paused_at_gate(service, workflow_id, WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION)
     answers = [a.model_dump() for a in body.answers]
     _submit_graph_drive(
         dispatcher=dispatcher,
@@ -470,7 +522,7 @@ def approve_pr(
     service: WorkflowService = Depends(get_service),
     dispatcher: BackgroundDispatcherProtocol = Depends(get_background_dispatcher),
 ) -> WorkflowRunResponse:
-    _require_workflow(service, workflow_id)
+    _require_paused_at_gate(service, workflow_id, WorkflowStatus.PENDING_PR_APPROVAL)
     _submit_graph_drive(
         dispatcher=dispatcher,
         service=service,
@@ -495,7 +547,7 @@ def reject_pr(
     service: WorkflowService = Depends(get_service),
     dispatcher: BackgroundDispatcherProtocol = Depends(get_background_dispatcher),
 ) -> WorkflowRunResponse:
-    _require_workflow(service, workflow_id)
+    _require_paused_at_gate(service, workflow_id, WorkflowStatus.PENDING_PR_APPROVAL)
     reason = body.reason if body is not None else None
     _submit_graph_drive(
         dispatcher=dispatcher,
@@ -521,7 +573,7 @@ def comment_pr(
     service: WorkflowService = Depends(get_service),
     dispatcher: BackgroundDispatcherProtocol = Depends(get_background_dispatcher),
 ) -> WorkflowRunResponse:
-    _require_workflow(service, workflow_id)
+    _require_paused_at_gate(service, workflow_id, WorkflowStatus.PENDING_PR_APPROVAL)
     _submit_graph_drive(
         dispatcher=dispatcher,
         service=service,

@@ -590,6 +590,60 @@ class TestResumeOperations:
         assert isinstance(cmd, Command)
 
 
+class TestResumeAtGateGuard:
+    """Wrong-gate / missing-workflow rejection for every resume verb.
+
+    Guards against a class of bug where the resume payload shapes
+    coincide across gates (e.g. ``{"decision": "approved"}`` is valid at
+    both the plan-approval and PR-approval ``interrupt()`` calls), so
+    calling the wrong verb on a wrong-gate workflow would silently
+    inject the wrong decision without the ``_resume_at_gate`` guard.
+    """
+
+    def test_unknown_workflow_raises_value_error(self, temp_db, repo):
+        svc = _make_service(repo, FakeGraph())
+        with pytest.raises(ValueError, match="not found"):
+            svc.approve_plan("nope")
+
+    @pytest.mark.parametrize(
+        "verb,args,current_status",
+        [
+            ("approve_plan", (), WorkflowStatus.PENDING_PR_APPROVAL),
+            ("reject_plan", ("nope",), WorkflowStatus.PENDING_PR_APPROVAL),
+            ("submit_clarification", ([],), WorkflowStatus.PENDING_APPROVAL),
+            ("approve_pr", (), WorkflowStatus.PENDING_APPROVAL),
+            ("reject_pr", ("nope",), WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION),
+            ("comment_pr", ("hi",), WorkflowStatus.PENDING_APPROVAL),
+        ],
+    )
+    def test_wrong_gate_raises_and_does_not_stream(self, temp_db, repo, verb, args, current_status):
+        wf_id = repo.create_workflow(ticket_key="AOS-282", status=current_status)
+        graph = FakeGraph()
+        svc = _make_service(repo, graph)
+        method = getattr(svc, verb)
+        with pytest.raises(ValueError, match="cannot resume"):
+            method(wf_id, *args)
+        # The graph must never be driven when the guard rejects.
+        assert graph.stream_calls == []
+
+    @pytest.mark.parametrize(
+        "verb,args,current_status",
+        [
+            ("approve_plan", (), WorkflowStatus.FAILED),
+            ("approve_pr", (), WorkflowStatus.COMPLETED),
+            ("submit_clarification", ([],), WorkflowStatus.IN_PROGRESS),
+        ],
+    )
+    def test_non_gate_status_raises(self, temp_db, repo, verb, args, current_status):
+        wf_id = repo.create_workflow(ticket_key="AOS-282", status=current_status)
+        graph = FakeGraph()
+        svc = _make_service(repo, graph)
+        method = getattr(svc, verb)
+        with pytest.raises(ValueError, match="cannot resume"):
+            method(wf_id, *args)
+        assert graph.stream_calls == []
+
+
 class TestRetry:
     def test_retry_raises_when_workflow_missing(self, temp_db, repo):
         svc = _make_service(repo, FakeGraph())

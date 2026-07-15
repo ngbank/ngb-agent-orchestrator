@@ -1014,7 +1014,7 @@ def _make_run_result(workflow_id: str = "wf-1") -> WorkflowRunResult:
 
 
 def test_approve_plan_happy_path(client: TestClient, fake_service: FakeWorkflowService) -> None:
-    fake_service.seed(_make_detail("wf-1"))
+    fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.PENDING_APPROVAL))
     fake_service.mutation_result = _make_run_result("wf-1")
     response = client.post("/workflows/wf-1/approve-plan")
     # Fire-and-forget: 202 Accepted with the post-run snapshot when the
@@ -1040,7 +1040,7 @@ def test_approve_plan_marks_failed_on_value_error(
     # With fire-and-forget the route returns 202 immediately and any
     # exception raised by the graph drive is captured by the dispatcher's
     # on_failure handler, which marks the workflow FAILED.
-    fake_service.seed(_make_detail("wf-1"))
+    fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.PENDING_APPROVAL))
     fake_service.mutation_exc = ValueError("not awaiting approval")
     response = client.post("/workflows/wf-1/approve-plan")
     assert response.status_code == 202
@@ -1052,7 +1052,7 @@ def test_approve_plan_marks_failed_on_value_error(
 
 
 def test_reject_plan_passes_reason(client: TestClient, fake_service: FakeWorkflowService) -> None:
-    fake_service.seed(_make_detail("wf-1"))
+    fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.PENDING_APPROVAL))
     fake_service.mutation_result = _make_run_result("wf-1")
     response = client.post("/workflows/wf-1/reject-plan", json={"reason": "bad scope"})
     assert response.status_code == 202
@@ -1060,7 +1060,7 @@ def test_reject_plan_passes_reason(client: TestClient, fake_service: FakeWorkflo
 
 
 def test_reject_plan_without_body(client: TestClient, fake_service: FakeWorkflowService) -> None:
-    fake_service.seed(_make_detail("wf-1"))
+    fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.PENDING_APPROVAL))
     fake_service.mutation_result = _make_run_result("wf-1")
     response = client.post("/workflows/wf-1/reject-plan")
     assert response.status_code == 202
@@ -1075,7 +1075,7 @@ def test_reject_plan_404_when_missing(client: TestClient) -> None:
 def test_submit_clarification_happy_path(
     client: TestClient, fake_service: FakeWorkflowService
 ) -> None:
-    fake_service.seed(_make_detail("wf-1"))
+    fake_service.seed(_make_detail("wf-1", status=WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION))
     fake_service.mutation_result = _make_run_result("wf-1")
     answers = [
         {"concern": "what about retries?", "answer": "use exponential backoff"},
@@ -1216,6 +1216,122 @@ def test_comment_pr_rejects_empty_comments(client: TestClient) -> None:
 def test_comment_pr_404_when_missing(client: TestClient) -> None:
     response = client.post("/workflows/nope/comment-pr", json={"comments": "hi"})
     assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Wrong-gate rejection for every resume verb (AOS-282)
+# ---------------------------------------------------------------------------
+
+
+# Each row: (endpoint verb, JSON body or None, expected gate hint fragment
+# for the correct verb of the gate the workflow is *actually* paused at).
+_RESUME_VERBS = [
+    ("approve-plan", None, "approve-plan or /reject-plan"),
+    ("reject-plan", {"reason": "x"}, "approve-plan or /reject-plan"),
+    ("clarification", {"answers": [{"concern": "a", "answer": "b"}]}, "clarification"),
+    ("approve-pr", None, "approve-pr, /comment-pr, or /reject-pr"),
+    ("reject-pr", {"reason": "x"}, "approve-pr, /comment-pr, or /reject-pr"),
+    ("comment-pr", {"comments": "hi"}, "approve-pr, /comment-pr, or /reject-pr"),
+]
+
+# Which gate status matches which verb.
+_VERB_GATE = {
+    "approve-plan": WorkflowStatus.PENDING_APPROVAL,
+    "reject-plan": WorkflowStatus.PENDING_APPROVAL,
+    "clarification": WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION,
+    "approve-pr": WorkflowStatus.PENDING_PR_APPROVAL,
+    "reject-pr": WorkflowStatus.PENDING_PR_APPROVAL,
+    "comment-pr": WorkflowStatus.PENDING_PR_APPROVAL,
+}
+
+
+@pytest.mark.parametrize("verb, body, _hint", _RESUME_VERBS)
+@pytest.mark.parametrize(
+    "current_status",
+    [WorkflowStatus.FAILED, WorkflowStatus.COMPLETED, WorkflowStatus.IN_PROGRESS],
+)
+def test_resume_verbs_409_when_not_paused_at_any_gate(
+    client: TestClient,
+    fake_service: FakeWorkflowService,
+    verb: str,
+    body,
+    _hint: str,
+    current_status: WorkflowStatus,
+) -> None:
+    """A workflow not paused at any gate cannot be resumed with any verb.
+
+    The service's ``_resume_at_gate`` would raise, but this guard runs
+    at the route so the misuse never dispatches. The response should not
+    include a resume-verb hint (there's no gate to route the caller to).
+    """
+    fake_service.seed(_make_detail("wf-1", status=current_status))
+    response = (
+        client.post(f"/workflows/wf-1/{verb}", json=body)
+        if body
+        else client.post(f"/workflows/wf-1/{verb}")
+    )
+    assert response.status_code == 409, response.json()
+    detail = response.json()["detail"]
+    assert current_status.value in detail
+    # No specific verb hint when the workflow isn't at any gate.
+    assert "nothing to resume" in detail
+
+
+@pytest.mark.parametrize("verb, body, _hint", _RESUME_VERBS)
+def test_resume_verbs_409_when_paused_at_wrong_gate(
+    client: TestClient,
+    fake_service: FakeWorkflowService,
+    verb: str,
+    body,
+    _hint: str,
+) -> None:
+    """Wrong-verb-for-gate misuse returns 409 with a hint at the right verb.
+
+    Guards the wrong-verb defect: without ``_require_paused_at_gate``,
+    POST /approve-plan on a PR-paused workflow would ``Command(resume=
+    {"decision": "approved"})`` into ``await_pr_approval``. Because both
+    gate interrupts share the ``{"decision": "approved"}`` payload shape,
+    the PR would be silently approved through the wrong endpoint. The
+    409 response must name the correct resume endpoint for the gate the
+    workflow is actually paused at.
+    """
+    expected_gate = _VERB_GATE[verb]
+    # Pick a different gate to seed the workflow at.
+    wrong_gate = next(
+        g
+        for g in (
+            WorkflowStatus.PENDING_APPROVAL,
+            WorkflowStatus.PENDING_PR_APPROVAL,
+            WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION,
+        )
+        if g != expected_gate
+    )
+    fake_service.seed(_make_detail("wf-1", status=wrong_gate))
+    response = (
+        client.post(f"/workflows/wf-1/{verb}", json=body)
+        if body
+        else client.post(f"/workflows/wf-1/{verb}")
+    )
+    assert response.status_code == 409, response.json()
+    detail = response.json()["detail"]
+    assert wrong_gate.value in detail
+    # Hint must point at the correct verb for the gate the workflow is at.
+    wrong_gate_hint_fragment = {
+        WorkflowStatus.PENDING_APPROVAL: "approve-plan",
+        WorkflowStatus.PENDING_PR_APPROVAL: "approve-pr",
+        WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION: "clarification",
+    }[wrong_gate]
+    assert wrong_gate_hint_fragment in detail
+    # The wrongly-called service method must NOT have been dispatched.
+    calls_attr = {
+        "approve-plan": fake_service.approve_plan_calls,
+        "reject-plan": fake_service.reject_plan_calls,
+        "clarification": fake_service.submit_clarification_calls,
+        "approve-pr": fake_service.approve_pr_calls,
+        "reject-pr": fake_service.reject_pr_calls,
+        "comment-pr": fake_service.comment_pr_calls,
+    }[verb]
+    assert calls_attr == []
 
 
 # ---------------------------------------------------------------------------
