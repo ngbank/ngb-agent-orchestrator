@@ -15,16 +15,29 @@ from typing import Optional
 
 from langchain_core.runnables import RunnableConfig
 
+# Node names that live INSIDE the ``work_planner`` compiled subgraph.  A
+# failure in any of them collapses to the top-level ``work_planner`` node
+# for rewind purposes, because the subgraph runs atomically inside the
+# parent graph (no separate checkpointer, no per-subgraph-node snapshots
+# in the parent's history).
+#
+# This set MUST stay in sync with the nodes registered in
+# :func:`orchestrator.work_planner.builder.build_work_planner`.  A sync
+# test (``tests/test_retry.py::test_work_planner_nodes_in_sync``) enforces
+# the invariant so subgraph edits can't silently break retry classification.
 WORK_PLANNER_NODES = {
     "validate_input",
     "check_duplicate",
     "fetch_ticket",
     "create_workflow_record",
+    "repo_setup",
     "generate_plan",
     "validate_plan",
     "await_workplan_clarification",
     "store_plan",
     "post_to_jira",
+    "cleanup",
+    "error_handler",
 }
 
 

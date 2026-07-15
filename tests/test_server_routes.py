@@ -1138,6 +1138,38 @@ def test_retry_404_when_missing(client: TestClient) -> None:
     assert response.status_code == 404
 
 
+@pytest.mark.parametrize(
+    "gate_status, expected_hint",
+    [
+        (WorkflowStatus.PENDING_APPROVAL, "approve-plan"),
+        (WorkflowStatus.PENDING_PR_APPROVAL, "approve-pr"),
+        (WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION, "clarification"),
+    ],
+)
+def test_retry_409_when_paused_at_gate_includes_resume_hint(
+    client: TestClient,
+    fake_service: FakeWorkflowService,
+    gate_status: WorkflowStatus,
+    expected_hint: str,
+) -> None:
+    """AOS-280: gate-paused workflows must be rejected with a concrete hint.
+
+    A workflow paused at a human-decision gate is not "stuck"; it is
+    waiting for a human. Retrying it would rewind past the gate node and
+    silently skip the decision. The 409 response must name the correct
+    resume endpoint so direct HTTP callers know what to do.
+    """
+    fake_service.seed(_make_detail("wf-1", status=gate_status))
+    response = client.post("/workflows/wf-1/retry")
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert "paused at a human-decision gate" in detail
+    assert gate_status.value in detail
+    assert expected_hint in detail
+    # The service's retry method must NOT have been dispatched.
+    assert fake_service.retry_calls == []
+
+
 # ---------------------------------------------------------------------------
 # Mutating routes — PR review flow (AOS-147)
 # ---------------------------------------------------------------------------

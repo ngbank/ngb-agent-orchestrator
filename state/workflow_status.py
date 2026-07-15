@@ -62,3 +62,20 @@ class WorkflowStatus(Enum):
             WorkflowStatus.PR_COMMENTED,
             WorkflowStatus.APPROVED,
         )
+
+    def is_paused_at_gate(self) -> bool:
+        """Return True if the workflow is paused awaiting a human decision.
+
+        These are the "interrupt at a gate" states: the graph has called
+        ``interrupt()`` inside a gate node (await_workplan_clarification,
+        await_approval, await_pr_approval) and the DB row was updated to
+        the corresponding pending status _before_ the interrupt fired.
+        Callers must respect this status — resuming a gate-paused workflow
+        requires a specific verb (--submit-clarification / --approve-plan /
+        --approve-pr / --reject / --reject-pr / --comment-pr), not --retry.
+        """
+        return self in (
+            WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION,
+            WorkflowStatus.PENDING_APPROVAL,
+            WorkflowStatus.PENDING_PR_APPROVAL,
+        )

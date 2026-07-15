@@ -17,8 +17,6 @@ from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, Set
 
 import click
 
-from state.workflow_status import WorkflowStatus
-
 if TYPE_CHECKING:
     from orchestrator.workflow_service import WorkflowService
     from orchestrator.workflow_service.dtos import WorkflowEvent, WorkflowRunResult
@@ -30,14 +28,6 @@ if TYPE_CHECKING:
 # gate (await_approval, await_pr_approval, …) and the dispatcher should
 # stop streaming so the user can act.
 _TERMINAL_KINDS: Set[str] = {"completed", "failed", "cancelled", "interrupt"}
-
-# Workflow statuses that mean "graph is paused at a human gate".  Used to
-# synthesise the ``interrupted`` flag on the refreshed WorkflowRunResult
-# the post-follow handlers consume.
-_PAUSED_STATUSES = {
-    WorkflowStatus.PENDING_APPROVAL,
-    WorkflowStatus.PENDING_PR_APPROVAL,
-}
 
 
 def is_remote_service(service: "WorkflowService") -> bool:
@@ -155,7 +145,7 @@ def submit_and_follow(
         workflow_id=wf_id,
         ticket_key=detail.ticket_key,
         final_status=detail.status,
-        interrupted=detail.status in _PAUSED_STATUSES,
+        interrupted=detail.status.is_paused_at_gate(),
         code_generation_summary=detail.code_generation_summary,
         pr_url=detail.pr_url,
     )

@@ -314,6 +314,18 @@ _MUTATION_RESPONSES: Dict[int | str, Dict[str, Any]] = {
 }
 
 
+# Maps a human-decision gate status to the REST endpoint that resumes it.
+# Used by ``retry_workflow`` to give callers a concrete recovery hint when
+# they mistakenly POST /retry on a gate-paused workflow (AOS-280).
+_GATE_RESUME_ENDPOINT: Dict[WorkflowStatus, str] = {
+    WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION: "POST /workflows/{id}/clarification",
+    WorkflowStatus.PENDING_APPROVAL: "POST /workflows/{id}/approve-plan or /reject-plan",
+    WorkflowStatus.PENDING_PR_APPROVAL: (
+        "POST /workflows/{id}/approve-pr, /comment-pr, or /reject-pr"
+    ),
+}
+
+
 @workflow_router.post(
     "/{workflow_id}/approve-plan",
     response_model=WorkflowRunResponse,
@@ -407,6 +419,20 @@ def retry_workflow(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Workflow not found: {workflow_id}",
+        )
+    if detail.status.is_paused_at_gate():
+        # A gate-paused workflow is not stuck — it is waiting for a human
+        # decision.  Retrying it would rewind past the gate node and
+        # silently skip the decision (this was the AOS-280 root cause).
+        # Point the caller at the correct resume endpoint instead.
+        resume_hint = _GATE_RESUME_ENDPOINT.get(detail.status, "the matching decision endpoint")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Workflow {workflow_id} is paused at a human-decision gate "
+                f"(status: {detail.status.value}) and cannot be retried. "
+                f"Use {resume_hint} instead."
+            ),
         )
     if not detail.status.is_retryable():
         raise HTTPException(
