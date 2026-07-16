@@ -864,11 +864,17 @@ def test_events_stream_heartbeat_when_idle(
     # generator exits and the test does not hang.  The fake's set_status is
     # invoked from a non-asyncio thread; that is safe because TestClient runs
     # the request in its own thread and dict assignment is GIL-protected.
+    #
+    # The delay must comfortably outlast the request/response setup overhead
+    # (TestClient's portal + event loop bootstrap), not just the generator's
+    # own poll interval — on a loaded machine that overhead alone can exceed
+    # 50ms, which raced the transition ahead of the first heartbeat and made
+    # this test fail deterministically rather than flakily.
     import threading
     import time as _time
 
     def _terminate() -> None:
-        _time.sleep(0.05)
+        _time.sleep(0.5)
         fake_service.set_status("wf-1", WorkflowStatus.COMPLETED)
 
     threading.Thread(target=_terminate, daemon=True).start()

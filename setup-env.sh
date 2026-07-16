@@ -283,8 +283,17 @@ if $DO_GOOSE; then
         fi
         info "Installing goose ${GOOSE_VERSION_PINNED} to ${GOOSE_BIN_DIR}..."
         mkdir -p "$GOOSE_BIN_DIR"
-        CONFIGURE=false GOOSE_BIN_DIR="$GOOSE_BIN_DIR" \
-            curl -fsSL "https://github.com/aaif-goose/goose/releases/download/v${GOOSE_VERSION_PINNED}/download_cli.sh" | bash \
+        # Download the installer script and run it with `bash -c` (not piped)
+        # so the env vars below actually reach it. `curl ... | bash` sets
+        # CONFIGURE/GOOSE_BIN_DIR/GOOSE_VERSION only on the `curl` process,
+        # not on `bash` at the other end of the pipe, so they'd silently be
+        # ignored. GOOSE_VERSION must be set explicitly: the installer
+        # defaults to the "stable" release tag regardless of which release's
+        # copy of download_cli.sh was fetched.
+        goose_installer="$(curl -fsSL "https://github.com/aaif-goose/goose/releases/download/v${GOOSE_VERSION_PINNED}/download_cli.sh")" \
+            || error "Failed to download goose installer script. Check the URL and your network connection."
+        CONFIGURE=false GOOSE_BIN_DIR="$GOOSE_BIN_DIR" GOOSE_VERSION="$GOOSE_VERSION_PINNED" \
+            bash -c "$goose_installer" \
             || error "Goose installer failed. Check the URL and your network connection."
         actual="$("$GOOSE_BIN" --version 2>/dev/null | tr -d '[:space:]' || true)"
         [[ "$actual" == "$GOOSE_VERSION_PINNED" ]] \
