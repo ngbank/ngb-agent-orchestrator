@@ -1,0 +1,44 @@
+{
+  "name": "ngb-agent-orchestrator",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "features": {
+    // Provides the Docker CLI + daemon inside the codespace, needed for
+    // `./setup-env.sh --docker` and `docker compose` (see docker-compose.yml).
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    // Needed for `./setup-env.sh --env` (az login + Key Vault secret sync).
+    "ghcr.io/devcontainers/features/azure-cli:1": {},
+    // setup-env.sh requires `direnv` on PATH to auto-load the generated .env.
+    "ghcr.io/devcontainers-community/features/direnv:1": {}
+  },
+  // pyenv isn't available as a devcontainer feature, so postCreate.sh installs
+  // it directly (matching the local dev flow setup-env.sh expects) before
+  // running the pinned-Python + deps + goose stages.
+  "postCreateCommand": "bash .devcontainer/postCreate.sh",
+  "forwardPorts": [8080],
+  "portsAttributes": {
+    "8080": {
+      "label": "orchestrator-server",
+      "onAutoForward": "notify"
+    }
+  },
+  "remoteEnv": {
+    "PATH": "${containerEnv:HOME}/.local/bin:${containerEnv:PATH}"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.black-formatter",
+        "ms-python.isort",
+        "ms-python.flake8",
+        "ms-python.mypy-type-checker",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "${containerWorkspaceFolder}/.venv/bin/python",
+        "python.testing.pytestEnabled": true,
+        "python.testing.unittestEnabled": false
+      }
+    }
+  }
+}
