@@ -45,7 +45,7 @@ class InputModal(ModalScreen[str | None]):
 
     def compose(self) -> ComposeResult:
         with Vertical():
-            yield Static(self.title, id="input_title")  # pyright: ignore[reportArgumentType]
+            yield Static(self.title, id="input_title")  # type: ignore[arg-type]
             yield Input(placeholder=self.placeholder, id="input_field")
             with Horizontal():
                 yield Button("Submit", variant="primary", id="submit")

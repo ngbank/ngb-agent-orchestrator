@@ -113,7 +113,7 @@ class AceTUI(App[None]):
             pass
 
     def _notify(self, message: str, severity: str = "information") -> None:
-        self.notify(message, severity=severity, timeout=4)  # pyright: ignore[reportArgumentType]
+        self.notify(message, severity=severity, timeout=4)  # type: ignore[arg-type]
 
     # ------------------------------------------------------------------
     # Worker thread dispatcher (mirrors dispatcher/tui/app.py pattern)

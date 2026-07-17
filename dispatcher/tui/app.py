@@ -161,7 +161,7 @@ class WorkflowTUI(App[None]):
     def _notify(self, message: str, severity: str = "information") -> None:
         # Textual's `severity` parameter uses Literal types; we accept str at the
         # boundary for caller convenience and trust the documented values.
-        self.notify(message, severity=severity, timeout=4)  # pyright: ignore[reportArgumentType]
+        self.notify(message, severity=severity, timeout=4)  # type: ignore[arg-type]
 
     # ------------------------------------------------------------------
     # Async action plumbing
@@ -401,7 +401,7 @@ class WorkflowTUI(App[None]):
 
         self.push_screen(  # pyright: ignore[reportCallIssue]
             ConfirmModal("Are you sure you want to clear ALL workflows and checkpoints?"),
-            on_confirm,  # pyright: ignore[reportArgumentType]
+            on_confirm,  # type: ignore[arg-type]
         )
 
     def on_data_table_row_highlighted(self, event) -> None:
