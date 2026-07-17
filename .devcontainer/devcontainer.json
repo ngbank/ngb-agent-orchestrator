@@ -8,7 +8,11 @@
     // Needed for `./setup-env.sh --env` (az login + Key Vault secret sync).
     "ghcr.io/devcontainers/features/azure-cli:1": {},
     // setup-env.sh requires `direnv` on PATH to auto-load the generated .env.
-    "ghcr.io/devcontainers-community/features/direnv:1": {}
+    "ghcr.io/devcontainers-community/features/direnv:1": {},
+    // Required for `gh codespace ssh` — the base image ships no SSH server.
+    "ghcr.io/devcontainers/features/sshd:1": {
+      "version": "latest"
+    }
   },
   // pyenv isn't available as a devcontainer feature, so postCreate.sh installs
   // it directly (matching the local dev flow setup-env.sh expects) before
