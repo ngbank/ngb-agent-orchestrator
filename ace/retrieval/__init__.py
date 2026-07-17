@@ -1,1 +1,1 @@
-"""Context-item retrieval and prompt-block rendering."""
+"""Context-item retrieval: ``retrieve_context_items()`` over the live store."""
