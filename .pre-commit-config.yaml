@@ -113,3 +113,13 @@ repos:
         language: system
         files: ^state/migrations/.*\.sql$
         pass_filenames: true
+
+  # ── Commit message convention ─────────────────────────────────────────────
+  # type(scope): description, e.g. "fix(AOS-280): ..." or "feat: ...".
+  # scope is optional; when present it's a ticket ID (AOS-123) or short topic.
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.6.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: [feat, fix, chore, refactor, docs, style, test]
