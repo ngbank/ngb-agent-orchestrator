@@ -12,7 +12,9 @@
     // Required for `gh codespace ssh` — the base image ships no SSH server.
     "ghcr.io/devcontainers/features/sshd:1": {
       "version": "latest"
-    }
+    },
+    // Provides the `gh` CLI, used for PR/issue workflows and `gh codespace ssh`.
+    "ghcr.io/devcontainers/features/github-cli:1": {}
   },
   // pyenv isn't available as a devcontainer feature, so postCreate.sh installs
   // it directly (matching the local dev flow setup-env.sh expects) before
