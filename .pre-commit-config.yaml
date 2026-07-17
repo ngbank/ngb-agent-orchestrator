@@ -41,20 +41,32 @@ repos:
       - id: flake8
 
   # ── Python type checking ──────────────────────────────────────────────────
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.20.0
-    hooks:
-      - id: mypy
-        additional_dependencies: [types-requests]
-        args: [--ignore-missing-imports, --no-error-summary, --python-version=3.13]
-        exclude: ^(venv/|state/migrations/)
-
+  # mypy runs as a local hook (not pre-commit/mirrors-mypy) so it type-checks
+  # against .venv, where the project's actual runtime dependencies (textual,
+  # litellm, etc.) are installed. mirrors-mypy's isolated hook environment
+  # only had `additional_dependencies: [types-requests]`, so any import it
+  # couldn't resolve (e.g. `textual`) silently became `Any` under
+  # --ignore-missing-imports — masking real type errors in ace/tui/,
+  # dispatcher/tui/, and elsewhere until someone ran mypy locally against
+  # .venv directly. Args/excludes beyond `exclude:` below are already
+  # declared in [tool.mypy] in pyproject.toml, which mypy reads
+  # automatically from the repo root. tests/ is excluded to match
+  # pyrightconfig.json's `"ignore": ["tests"]` — mocking/stub-heavy test
+  # code is deliberately exempt from strict type checking in this repo.
+  #
   # Pyright runs Pylance's analysis engine — catches possibly-unbound symbols,
   # narrowing failures, and signature mismatches that mypy misses. Scope and
   # strictness are configured in pyrightconfig.json (tests are excluded).
   # Runs via the project venv so library types resolve correctly.
   - repo: local
     hooks:
+      - id: mypy
+        name: mypy
+        entry: .venv/bin/python -m mypy
+        language: system
+        types: [python]
+        exclude: ^(venv/|state/migrations/|tests/)
+
       - id: check-no-print
         name: check-no-print
         entry: .venv/bin/python scripts/check_no_print.py
