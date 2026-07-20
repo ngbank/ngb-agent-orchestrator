@@ -48,12 +48,20 @@ def tier_to_confidence_range(tier: ConfidenceTier) -> tuple[float, float]:
 # Runtime feature flags and retrieval tuning
 # ---------------------------------------------------------------------------
 
-_TRUTHY = frozenset({"1", "true", "yes", "on"})
 
+def _parse_bool(name: str, value: Optional[str]) -> bool:
+    """Parse an ACE flag env var — only ``true`` and ``false`` are accepted.
 
-def _parse_bool(value: Optional[str]) -> bool:
-    """Return ``True`` when *value* is a truthy env-var string (case-insensitive)."""
-    return (value or "").lower() in _TRUTHY
+    Raises :exc:`ValueError` for any other value so that typos (e.g.
+    ``ACE_ENABLED=treu``) fail loudly instead of silently staying off.
+    Unset / empty env vars are treated as ``false`` (the safe default).
+    """
+    normalised = (value or "").strip().lower()
+    if normalised in ("", "false"):
+        return False
+    if normalised == "true":
+        return True
+    raise ValueError(f"{name} must be 'true' or 'false', got: {value!r}")
 
 
 @dataclass(frozen=True)
@@ -114,18 +122,21 @@ def get_ace_settings() -> ACESettings:
 
     Environment variables
     ---------------------
+    All flag variables accept only ``true`` or ``false`` (case-insensitive).
+    Any other value raises :exc:`ValueError` so typos fail loudly.
+
     ``ACE_ENABLED``
-        Master switch.  Set to ``1`` / ``true`` / ``yes`` / ``on`` to activate ACE.
-        All other flags are ignored when this is off.  Default: off.
+        Master switch.  Set to ``true`` to activate ACE.
+        All other flags are ignored when this is off.  Default: ``false``.
     ``ACE_PLANNER_ENABLED``
-        Enable context injection at the planner injection point.  Default: off.
+        Enable context injection at the planner injection point.  Default: ``false``.
     ``ACE_CODE_GENERATOR_ENABLED``
-        Enable context injection at the code-generator injection point.  Default: off.
+        Enable context injection at the code-generator injection point.  Default: ``false``.
     ``ACE_PR_RERUN_ENABLED``
-        Enable context injection on PR re-run.  Default: off.
+        Enable context injection on PR re-run.  Default: ``false``.
     ``ACE_SYNTHESIZER_ENABLED``
-        When on, retrieved items are rendered via the injection-time synthesizer
-        (AOS-274).  When off, the legacy flat-list format is used.  Default: off.
+        When ``true``, retrieved items are rendered via the injection-time synthesizer
+        (AOS-274).  When ``false``, the legacy flat-list format is used.  Default: ``false``.
     ``ACE_CONFIDENCE_THRESHOLD``
         Minimum confidence score for retrieval.  Items below this floor are
         excluded.  Must be a float in ``[0.0, 1.0]``.
@@ -158,11 +169,15 @@ def get_ace_settings() -> ACESettings:
         raise ValueError(f"ACE_TOP_K must be a positive integer, got: {top_k}")
 
     return ACESettings(
-        ace_enabled=_parse_bool(os.getenv("ACE_ENABLED")),
-        planner_enabled=_parse_bool(os.getenv("ACE_PLANNER_ENABLED")),
-        code_generator_enabled=_parse_bool(os.getenv("ACE_CODE_GENERATOR_ENABLED")),
-        pr_rerun_enabled=_parse_bool(os.getenv("ACE_PR_RERUN_ENABLED")),
-        synthesizer_enabled=_parse_bool(os.getenv("ACE_SYNTHESIZER_ENABLED")),
+        ace_enabled=_parse_bool("ACE_ENABLED", os.getenv("ACE_ENABLED")),
+        planner_enabled=_parse_bool("ACE_PLANNER_ENABLED", os.getenv("ACE_PLANNER_ENABLED")),
+        code_generator_enabled=_parse_bool(
+            "ACE_CODE_GENERATOR_ENABLED", os.getenv("ACE_CODE_GENERATOR_ENABLED")
+        ),
+        pr_rerun_enabled=_parse_bool("ACE_PR_RERUN_ENABLED", os.getenv("ACE_PR_RERUN_ENABLED")),
+        synthesizer_enabled=_parse_bool(
+            "ACE_SYNTHESIZER_ENABLED", os.getenv("ACE_SYNTHESIZER_ENABLED")
+        ),
         confidence_threshold=confidence_threshold,
         top_k=top_k,
     )

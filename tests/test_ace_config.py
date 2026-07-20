@@ -89,16 +89,36 @@ def test_is_synthesizer_active_both_on():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("truthy", ["1", "true", "True", "TRUE", "yes", "YES", "on", "ON"])
-def test_ace_enabled_truthy_values(monkeypatch, truthy):
-    monkeypatch.setenv("ACE_ENABLED", truthy)
+# ---------------------------------------------------------------------------
+# Flag parsing — strict true/false only
+# ---------------------------------------------------------------------------
+
+
+def test_ace_enabled_true(monkeypatch):
+    monkeypatch.setenv("ACE_ENABLED", "true")
     assert get_ace_settings().ace_enabled is True
 
 
-@pytest.mark.parametrize("falsy", ["0", "false", "False", "no", "off", "", "random"])
-def test_ace_enabled_falsy_values(monkeypatch, falsy):
-    monkeypatch.setenv("ACE_ENABLED", falsy)
+def test_ace_enabled_true_uppercase(monkeypatch):
+    monkeypatch.setenv("ACE_ENABLED", "True")
+    assert get_ace_settings().ace_enabled is True
+
+
+def test_ace_enabled_false(monkeypatch):
+    monkeypatch.setenv("ACE_ENABLED", "false")
     assert get_ace_settings().ace_enabled is False
+
+
+def test_ace_enabled_unset_defaults_false(monkeypatch):
+    monkeypatch.delenv("ACE_ENABLED", raising=False)
+    assert get_ace_settings().ace_enabled is False
+
+
+@pytest.mark.parametrize("bad", ["1", "0", "yes", "no", "on", "off", "treu"])
+def test_ace_enabled_invalid_raises(monkeypatch, bad):
+    monkeypatch.setenv("ACE_ENABLED", bad)
+    with pytest.raises(ValueError, match="ACE_ENABLED must be 'true' or 'false'"):
+        get_ace_settings()
 
 
 # ---------------------------------------------------------------------------
@@ -107,8 +127,8 @@ def test_ace_enabled_falsy_values(monkeypatch, falsy):
 
 
 def test_planner_enabled_from_env(monkeypatch):
-    monkeypatch.setenv("ACE_ENABLED", "1")
-    monkeypatch.setenv("ACE_PLANNER_ENABLED", "1")
+    monkeypatch.setenv("ACE_ENABLED", "true")
+    monkeypatch.setenv("ACE_PLANNER_ENABLED", "true")
     s = get_ace_settings()
     assert s.planner_enabled is True
     assert s.is_planner_active() is True
@@ -116,22 +136,22 @@ def test_planner_enabled_from_env(monkeypatch):
 
 def test_code_generator_enabled_from_env(monkeypatch):
     monkeypatch.setenv("ACE_ENABLED", "true")
-    monkeypatch.setenv("ACE_CODE_GENERATOR_ENABLED", "yes")
+    monkeypatch.setenv("ACE_CODE_GENERATOR_ENABLED", "true")
     s = get_ace_settings()
     assert s.code_generator_enabled is True
     assert s.is_code_generator_active() is True
 
 
 def test_pr_rerun_enabled_from_env(monkeypatch):
-    monkeypatch.setenv("ACE_ENABLED", "on")
-    monkeypatch.setenv("ACE_PR_RERUN_ENABLED", "1")
+    monkeypatch.setenv("ACE_ENABLED", "true")
+    monkeypatch.setenv("ACE_PR_RERUN_ENABLED", "true")
     s = get_ace_settings()
     assert s.pr_rerun_enabled is True
     assert s.is_pr_rerun_active() is True
 
 
 def test_synthesizer_enabled_from_env(monkeypatch):
-    monkeypatch.setenv("ACE_ENABLED", "1")
+    monkeypatch.setenv("ACE_ENABLED", "true")
     monkeypatch.setenv("ACE_SYNTHESIZER_ENABLED", "true")
     s = get_ace_settings()
     assert s.synthesizer_enabled is True
@@ -204,8 +224,8 @@ def test_invalid_top_k_negative(monkeypatch):
 
 
 def test_only_planner_flag_on(monkeypatch):
-    monkeypatch.setenv("ACE_ENABLED", "1")
-    monkeypatch.setenv("ACE_PLANNER_ENABLED", "1")
+    monkeypatch.setenv("ACE_ENABLED", "true")
+    monkeypatch.setenv("ACE_PLANNER_ENABLED", "true")
     monkeypatch.delenv("ACE_CODE_GENERATOR_ENABLED", raising=False)
     monkeypatch.delenv("ACE_PR_RERUN_ENABLED", raising=False)
     monkeypatch.delenv("ACE_SYNTHESIZER_ENABLED", raising=False)
