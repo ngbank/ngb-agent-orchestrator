@@ -265,6 +265,24 @@ OTEL_ELASTIC_API_KEY=<api-key>
 
 ---
 
+### ACE — Agentic Context Engine
+
+All ACE flags default to **off** (`false`). `ACE_ENABLED` is the master switch; per-injection-point flags are ignored when it is off. Truthy values: `1`, `true`, `yes`, `on` (case-insensitive).
+
+| Variable | Default | Description |
+|---|---|---|
+| `ACE_ENABLED` | `false` | Master switch. Must be `true` before any injection point can activate. |
+| `ACE_PLANNER_ENABLED` | `false` | Enable context injection at the planner injection point (requires `ACE_ENABLED`). |
+| `ACE_CODE_GENERATOR_ENABLED` | `false` | Enable context injection at the code-generator injection point (requires `ACE_ENABLED`). |
+| `ACE_PR_RERUN_ENABLED` | `false` | Enable context injection on PR re-run (requires `ACE_ENABLED`). |
+| `ACE_SYNTHESIZER_ENABLED` | `false` | When on, retrieved items are rendered via the injection-time synthesizer (AOS-274). When off, a legacy flat-list format is used (reversibility default). Requires `ACE_ENABLED`. |
+| `ACE_CONFIDENCE_THRESHOLD` | `0.5` | Minimum confidence score (float in `[0.0, 1.0]`) for retrieval. Items below this floor are excluded. Defaults to the `TENTATIVE` tier floor. |
+| `ACE_TOP_K` | `10` | Maximum number of context items returned per retrieval call (positive integer). |
+
+Settings are loaded at injection time via `ace.config.get_ace_settings()` — they are read from the environment on each call so that changes to `.env` take effect on the next workflow run without a process restart.
+
+---
+
 ## Configuring Azure Key Vault Access
 
 1. Ensure your identity has Key Vault data-plane access (for example `Key Vault Secrets User`).
