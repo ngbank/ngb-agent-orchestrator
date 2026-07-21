@@ -377,6 +377,115 @@ def test_generate_plan_swallows_retrieval_errors(log_tmp, write_workplan_to_outp
     assert not any(a.startswith("context_items_path=") for a in cmd)
 
 
+# ---------------------------------------------------------------------------
+# End-to-end synthesizer-flag routing
+#
+# These tests exercise the real render_context_block() branching so that the
+# planner injection is verified to honour ACE_SYNTHESIZER_ENABLED end-to-end.
+# Only the SQL-touching retrieval and the LLM-calling synthesizer are stubbed;
+# ace.config.get_ace_settings is left untouched so env-var parsing is real.
+# ---------------------------------------------------------------------------
+
+
+def _fake_context_item():
+    """Build a minimal live ContextItem for retrieval stubs."""
+    from ace.models import ContextItem
+
+    return ContextItem(
+        id="ci-1",
+        pattern_type="approach",
+        scope="codebase_wide",
+        description="Use migrations for schema changes",
+        last_validated="2025-01-01T00:00:00Z",
+        created_at="2025-01-01T00:00:00Z",
+        updated_at="2025-01-01T00:00:00Z",
+        confidence=0.95,
+    )
+
+
+@pytest.fixture
+def ace_env(monkeypatch):
+    """Baseline ACE flags: master + planner on, synthesizer off. Tests flip further."""
+    monkeypatch.setenv("ACE_ENABLED", "true")
+    monkeypatch.setenv("ACE_PLANNER_ENABLED", "true")
+    monkeypatch.setenv("ACE_CODE_GENERATOR_ENABLED", "false")
+    monkeypatch.setenv("ACE_PR_RERUN_ENABLED", "false")
+    monkeypatch.setenv("ACE_SYNTHESIZER_ENABLED", "false")
+    yield monkeypatch
+
+
+def test_generate_plan_uses_flat_list_when_synthesizer_disabled(
+    log_tmp, write_workplan_to_output, ace_env
+):
+    """Synthesizer OFF → flat tier-labelled list, synthesizer never called."""
+    captured = {}
+
+    def _tee(cmd, logger_name, **kwargs):
+        for a in cmd:
+            if a.startswith("context_items_path="):
+                path = a.split("=", 1)[1]
+                captured["contents"] = open(path).read()
+        return write_workplan_to_output(cmd, logger_name, **kwargs)
+
+    with (
+        patch(_PATCH_TEE) as mock_tee,
+        patch(
+            "ace.retrieval.retrieve_context_items",
+            return_value=[_fake_context_item()],
+        ),
+        patch("ace.retrieval.synthesize_context_block") as mock_synth,
+    ):
+        mock_tee.side_effect = _tee
+        generate_plan({"ticket_key": "AOS-51", "workflow_id": "test-wf", "ticket": None})
+
+    mock_synth.assert_not_called()
+    assert captured.get("contents") == "- [ESTABLISHED] Use migrations for schema changes"
+
+
+def test_generate_plan_uses_synthesizer_when_flag_enabled(
+    log_tmp, write_workplan_to_output, ace_env
+):
+    """Synthesizer ON → synthesize_context_block runs and its markdown is injected."""
+    ace_env.setenv("ACE_SYNTHESIZER_ENABLED", "true")
+
+    from ace.retrieval.synthesizer import SynthesizedBlock
+
+    synth_block = SynthesizedBlock(
+        sections={"development_rules": "Prefer sequential migration prefixes."},
+        provenance={"development_rules": ["ci-1"]},
+    )
+    expected_markdown = synth_block.to_markdown()
+
+    captured = {}
+
+    def _tee(cmd, logger_name, **kwargs):
+        for a in cmd:
+            if a.startswith("context_items_path="):
+                path = a.split("=", 1)[1]
+                captured["contents"] = open(path).read()
+        return write_workplan_to_output(cmd, logger_name, **kwargs)
+
+    with (
+        patch(_PATCH_TEE) as mock_tee,
+        patch(
+            "ace.retrieval.retrieve_context_items",
+            return_value=[_fake_context_item()],
+        ),
+        patch(
+            "ace.retrieval.synthesize_context_block",
+            return_value=synth_block,
+        ) as mock_synth,
+    ):
+        mock_tee.side_effect = _tee
+        generate_plan({"ticket_key": "AOS-51", "workflow_id": "test-wf", "ticket": None})
+
+    mock_synth.assert_called_once()
+    # The synthesizer's rendered markdown — not the flat-list format — is what
+    # reached the recipe.
+    assert captured.get("contents") == expected_markdown
+    assert "## Development rules" in captured["contents"]
+
+
 def test_plan_recipe_declares_context_items_path_parameter():
     """Recipe must declare context_items_path and render the guidance block."""
     from pathlib import Path
