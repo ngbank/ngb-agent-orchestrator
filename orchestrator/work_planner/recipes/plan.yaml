@@ -19,6 +19,12 @@ parameters:
     default: ""
     description: "Path to a JSON file containing previous clarification rounds from the reviewer. Each round has concerns and the reviewer's answers."
 
+  - key: context_items_path
+    input_type: string
+    requirement: optional
+    default: ""
+    description: "Path to a markdown file containing prior-workflow context items retrieved via ACE (topic 08, injection point 1). Rendered before Fetch Ticket with 'guidance, not constraints' framing."
+
 extensions:
   - type: builtin
     name: developer
@@ -92,6 +98,29 @@ prompt: |
 
   ## Step 2: Fetch JIRA Ticket Data
 
+  {% if context_items_path %}
+  ### Prior workflow context (read first — guidance, not constraints)
+
+  Before fetching the ticket, read the prior-workflow context items retrieved
+  from ACE for this task:
+  ```
+  cat {{ context_items_path }}
+  ```
+
+  The file contains patterns learned from previous similar workflows, tagged
+  with confidence tiers:
+  - `[ESTABLISHED]` — well-validated across multiple workflows; strong prior.
+  - `[PATTERN]` — observed consistently; apply where relevant.
+  - `[TENTATIVE]` — limited evidence; use as a weak prior only.
+
+  **Apply these where relevant — they are guidance, not constraints.** Do NOT
+  treat high-confidence items as hard requirements; they must not suppress
+  legitimate exploration of novel approaches when the ticket calls for one.
+  Reason with these priors already active (like a skilled engineer checking
+  team conventions before drafting a solution), then proceed to fetch and
+  analyse the ticket.
+
+  {% endif %}
   Use the `acli jira workitem view` command to fetch ticket details:
   ```
   acli jira workitem view {{ ticket_key }}

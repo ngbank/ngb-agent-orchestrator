@@ -9,6 +9,9 @@ from typing import Any
 
 import click
 
+from ace.config import get_ace_settings
+from ace.retrieval import render_context_block
+from ace.retrieval.synthesizer import TicketContext
 from orchestrator.failure import mark_failure
 from orchestrator.litellm_callbacks import aggregate_token_usage
 from orchestrator.utils import goose_session, run_and_tee
@@ -21,6 +24,66 @@ from state.workflow_repository import update_usage_summary
 _RECIPE_PATH = Path(__file__).resolve().parent.parent / "recipes" / "plan.yaml"
 
 logger = logging.getLogger(__name__)
+
+
+def _project_from_ticket_key(ticket_key: str) -> str:
+    """Return the JIRA project short-name from a ticket key (``AOS-237`` → ``AOS``)."""
+    return ticket_key.split("-", 1)[0] if "-" in ticket_key else ticket_key
+
+
+def _write_context_items_file(
+    ticket_key: str,
+    ticket: Any,
+) -> str | None:
+    """Retrieve + render ACE context items for the planner and write to a temp file.
+
+    Returns the temp-file path when a non-empty block was written, or ``None``
+    when ACE is disabled, no items are available, or rendering raised. Errors
+    are logged and swallowed so retrieval never blocks plan generation — the
+    planner simply proceeds without prior-workflow context.
+    """
+    settings = get_ace_settings()
+    if not settings.is_planner_active():
+        return None
+
+    try:
+        ticket_summary = ""
+        query_text = ticket_key
+        if isinstance(ticket, dict):
+            ticket_summary = ticket.get("title") or ""
+            description = ticket.get("description") or ""
+            query_text = " ".join(part for part in (ticket_summary, description) if part)
+
+        ticket_context = TicketContext(
+            ticket_key=ticket_key,
+            ticket_summary=ticket_summary,
+            project=_project_from_ticket_key(ticket_key),
+            recipe_target="planner",
+        )
+        block = render_context_block(
+            ticket_context,
+            query_text=query_text,
+            top_k=settings.top_k,
+        )
+    except Exception:  # noqa: BLE001 — never let ACE retrieval fail plan generation
+        logger.warning(
+            "ACE context retrieval failed for %s — proceeding without context items",
+            ticket_key,
+            exc_info=True,
+        )
+        return None
+
+    if not block.strip():
+        return None
+
+    fd, path = tempfile.mkstemp(
+        suffix="_context_items.md",
+        prefix=f"{ticket_key}_",
+    )
+    os.close(fd)
+    with open(path, "w") as f:
+        f.write(block)
+    return path
 
 
 def generate_plan(state: GeneratePlanInputState) -> GeneratePlanOutputState:
@@ -37,6 +100,7 @@ def generate_plan(state: GeneratePlanInputState) -> GeneratePlanOutputState:
     workflow_id = state.get("workflow_id") or ticket_key
     clarifications = state.get("clarifications") or []
     working_dir = state.get("working_dir")
+    ticket = state.get("ticket")
 
     summary_fd, output_path = tempfile.mkstemp(
         suffix="_workplan.json",
@@ -54,6 +118,12 @@ def generate_plan(state: GeneratePlanInputState) -> GeneratePlanOutputState:
         os.close(clar_fd)
         with open(clarifications_path, "w") as f:
             json.dump(clarifications, f, indent=2)
+
+    # ACE injection point 1 (planner): retrieve + render prior-workflow context
+    # before Goose invocation. Same temp-file pattern as clarifications_path so
+    # the recipe template controls placement/framing.
+    # See docs/ACE/08-ace-orchestrator-injection-points.md.
+    context_items_path = _write_context_items_file(ticket_key, ticket)
 
     try:
         round_num = len(clarifications)
@@ -79,6 +149,8 @@ def generate_plan(state: GeneratePlanInputState) -> GeneratePlanOutputState:
         ]
         if clarifications_path:
             cmd.extend(["--params", f"clarifications_path={clarifications_path}"])
+        if context_items_path:
+            cmd.extend(["--params", f"context_items_path={context_items_path}"])
 
         if working_dir and not os.path.isdir(working_dir):
             return mark_failure(
@@ -136,3 +208,5 @@ def generate_plan(state: GeneratePlanInputState) -> GeneratePlanOutputState:
             os.unlink(output_path)
         if clarifications_path and os.path.exists(clarifications_path):
             os.unlink(clarifications_path)
+        if context_items_path and os.path.exists(context_items_path):
+            os.unlink(context_items_path)

@@ -70,6 +70,9 @@ class GeneratePlanInputState(TypedDict, total=False):
     workflow_id: Optional[str]
     clarifications: Optional[list]
     working_dir: Optional[str]
+    # Populated by fetch_ticket; read here so ACE injection can build a
+    # TicketContext with the ticket summary and description for retrieval.
+    ticket: Optional[Any]
 
 
 class GeneratePlanOutputState(TypedDict, total=False):
