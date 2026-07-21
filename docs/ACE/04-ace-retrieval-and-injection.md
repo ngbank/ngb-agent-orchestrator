@@ -70,6 +70,12 @@ The sections above assume the injected block is a formatted list of retrieved it
 
 Under the current model, retrieval still does everything above — scope filter, composite scoring, diversity filter, budget fit — but returns raw items rather than a rendered block. An LLM-driven synthesizer then renders those items into a structured document (development rules / architectural approach / testing approach / known pitfalls) using the ticket context as a rendering signal. The injection format described below is still where the document lands; the document just isn't a flat list anymore.
 
+**Current pipeline (implemented in `ace/retrieval/`)**:
+
+1. `retrieve_context_items()` — SQL + Python keyword ranking; returns `list[ContextItem]`.
+2. `synthesize_context_block(items, ticket_context)` — LLM call; returns `SynthesizedBlock` with sections and a provenance manifest.  Results are cached in `context_block_cache` keyed by `SHA-256(ticket_key, filter_predicate, corpus_snapshot_id, recipe_target)`.
+3. `render_context_block(ticket_context, ...)` — the single entry point for injection callers (planner, code generator, PR re-run). When `ACE_SYNTHESIZER_ENABLED=true`, composes steps 1 → 2 and returns the markdown. When off, falls back to the legacy flat-list format for reversibility.
+
 See Topic 15 for the synthesizer design, prompt shape, caching contract, and what changed on the curator side (Topic 5).
 
 ## Retrieval hygiene: two failure modes
