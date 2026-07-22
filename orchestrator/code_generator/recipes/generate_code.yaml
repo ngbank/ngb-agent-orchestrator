@@ -40,10 +40,10 @@ parameters:
     description: "Existing feature branch to checkout for incremental changes (re-execution after PR comments)"
     default: ""
 
-  - key: pr_comments
+  - key: pr_comments_path
     input_type: string
     requirement: optional
-    description: "Review comments from the PR to address in this re-execution"
+    description: "Path to a file containing review comments from the PR to address in this re-execution. File is empty on initial runs. Passed as a path (not inline) so multi-line comments survive argv parsing."
     default: ""
 
   - key: branch_name
@@ -83,18 +83,21 @@ prompt: |
   - Write execution summary to: {{ output_path }}
   - Write reasoning diary to: {{ reasoning_path }}
 
-  {% if pr_comments %}
+  {% if pr_comments_path %}
   ## ⚠️ PR REVIEW MODE — Address Comments Before Anything Else
 
-  This is a re-execution triggered by PR review comments. The following feedback was
-  provided by a reviewer and **must be fully addressed** in this run:
+  This is a re-execution triggered by PR review comments. The reviewer's feedback
+  has been written to a file so multi-line comments are preserved verbatim.
 
+  **Before doing anything else**, read the comments file:
   ```
-  {{ pr_comments | indent(2) }}
+  cat {{ pr_comments_path }}
   ```
+
+  Its contents are **mandatory review comments** and **must be fully addressed** in this run.
 
   **Mandatory requirements for this run:**
-  - Read and fully understand every comment above before touching any file
+  - Read and fully understand every comment in the file before touching any file
   - Treat each comment as a required change — do not skip or partially address any of them
   - After implementing all tasks (Step 4), explicitly verify each comment has been addressed
   - You will be updating the **existing branch** `{{ existing_branch }}` — do NOT create a new branch
@@ -179,8 +182,9 @@ prompt: |
   Otherwise:
   - Create a new branch using the pre-computed name: `git checkout -b {{ branch_name }}`
 
-  If `{{ pr_comments }}` is provided, those are mandatory review comments from the existing
-  PR that must be fully addressed — they are listed prominently at the top of these instructions.
+  If review comments were provided (see the PR REVIEW MODE section above and
+  `cat {{ pr_comments_path }}`), those are mandatory review comments from the existing
+  PR that must be fully addressed.
 
   ## Step 4: Implement Tasks
 

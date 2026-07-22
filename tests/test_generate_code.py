@@ -135,7 +135,7 @@ def test_prepare_workspace_creates_workspace_paths(monkeypatch, tmp_path):
 
 
 def test_run_goose_passes_existing_branch_and_comments():
-    """run_goose passes existing_branch and pr_comments to the recipe on re-execution."""
+    """run_goose passes existing_branch and the pr_comments file path (not inline text) to the recipe on re-execution."""
     from orchestrator.code_generator.nodes.run_goose import run_goose
 
     state = {
@@ -145,6 +145,7 @@ def test_run_goose_passes_existing_branch_and_comments():
         "work_plan_path": "/tmp/workplan.json",
         "summary_path": "/tmp/summary.json",
         "reasoning_path": "/tmp/reasoning.txt",
+        "pr_comments_path": "/tmp/pr_comments.txt",
         "code_generation_summary": {"branch": "feature/AOS-92+test"},
         "pr_comments": "Fix typo in line 42",
     }
@@ -160,8 +161,72 @@ def test_run_goose_passes_existing_branch_and_comments():
 
         cmd = mock_run.call_args[0][0]
         assert "existing_branch=feature/AOS-92+test" in cmd
-        assert "pr_comments=Fix typo in line 42" in cmd
+        assert "pr_comments_path=/tmp/pr_comments.txt" in cmd
+        # Inline pr_comments must NOT be passed — multi-line values would break Goose argv.
+        assert not any(arg.startswith("pr_comments=") for arg in cmd)
         assert any(arg.startswith("branch_name=feature/AOS-92+") for arg in cmd)
+
+
+def test_prepare_workspace_writes_multiline_pr_comments_to_file(monkeypatch, tmp_path):
+    """prepare_workspace materializes multi-line pr_comments to a tempfile byte-for-byte.
+
+    Regression: when pr_comments contained newlines they were previously passed
+    inline as ``--params pr_comments=...`` to Goose, whose argv parser
+    truncated the value at the first newline and dropped subsequent params
+    (including ``branch_name``), causing an immediate exit-1 failure.
+    """
+    import os
+
+    from orchestrator.code_generator.nodes.prepare_workspace import prepare_workspace
+
+    monkeypatch.setenv("LOGS_DIR", str(tmp_path / "logs"))
+    multiline_comments = (
+        "The PR template isn't filled correctly.\n"
+        "I think there's some duplication of code between the planner "
+        "and code generator."
+    )
+    state = {
+        "workflow_id": "wf-multiline",
+        "ticket_key": "AOS-286",
+        "work_plan_data": {"tasks": []},
+        "pr_comments": multiline_comments,
+    }
+
+    result = prepare_workspace(state)
+
+    assert result.get("pr_comments_path"), "pr_comments_path missing"
+    assert os.path.isfile(result["pr_comments_path"])
+    with open(result["pr_comments_path"]) as f:
+        assert f.read() == multiline_comments
+
+    for p in (
+        result["work_plan_path"],
+        result["summary_path"],
+        result["reasoning_path"],
+        result["pr_comments_path"],
+    ):
+        os.unlink(p)
+
+
+def test_prepare_workspace_skips_pr_comments_file_when_empty(monkeypatch, tmp_path):
+    """No pr_comments_path is created on initial runs (no reviewer feedback yet)."""
+    import os
+
+    from orchestrator.code_generator.nodes.prepare_workspace import prepare_workspace
+
+    monkeypatch.setenv("LOGS_DIR", str(tmp_path / "logs"))
+    state = {
+        "workflow_id": "wf-initial",
+        "ticket_key": "AOS-286",
+        "work_plan_data": {"tasks": []},
+    }
+
+    result = prepare_workspace(state)
+
+    assert result.get("pr_comments_path") == ""
+
+    for p in (result["work_plan_path"], result["summary_path"], result["reasoning_path"]):
+        os.unlink(p)
 
 
 # ---------------------------------------------------------------------------

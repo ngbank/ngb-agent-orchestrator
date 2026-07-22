@@ -11,5 +11,6 @@ cleanup = build_cleanup_node(
         "work_plan_path",
         "summary_path",
         "reasoning_path",
+        "pr_comments_path",
     )
 )
