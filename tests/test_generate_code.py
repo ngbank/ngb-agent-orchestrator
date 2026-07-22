@@ -9,6 +9,7 @@ import pytest
 from state.workflow_status import WorkflowStatus
 
 _PATCH_GOOSE_SESSION = "orchestrator.code_generator.nodes.run_goose.goose_session"
+_PATCH_RENDER = "orchestrator.context_items.render_context_block"
 
 
 @pytest.fixture(autouse=True)
@@ -209,7 +210,7 @@ def test_run_goose_passes_retrieved_context_in_a_separate_file(tmp_path):
             "orchestrator.code_generator.nodes.run_goose.get_ace_settings", return_value=settings
         ),
         patch(
-            "orchestrator.code_generator.nodes.run_goose.render_context_block",
+            _PATCH_RENDER,
             return_value="- [PATTERN] Prefer focused regression tests.",
         ),
     ):

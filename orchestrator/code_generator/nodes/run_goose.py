@@ -4,21 +4,14 @@ import json
 import logging
 import os
 import re
-import tempfile
 from pathlib import Path
 
 from ace.config import get_ace_settings
-from ace.retrieval import render_context_block
-from ace.retrieval.synthesizer import TicketContext
 from orchestrator.code_generator.state import RunGooseInputState
+from orchestrator.context_items import retrieve_context_items, write_context_items_file
 from orchestrator.utils import goose_session, run_and_tee
 
 logger = logging.getLogger(__name__)
-
-
-def _project_from_ticket_key(ticket_key: str) -> str:
-    """Return the JIRA project short-name from a ticket key."""
-    return ticket_key.split("-", 1)[0] if "-" in ticket_key else ticket_key
 
 
 def _write_context_items_file(
@@ -45,39 +38,14 @@ def _write_context_items_file(
         *affected_files,
         pr_comments,
     ]
-    query_text = " ".join(part for part in query_parts if part)
-    ticket_context = TicketContext(
+    block = retrieve_context_items(
         ticket_key=ticket_key,
         ticket_summary=work_plan_data.get("summary", ""),
-        project=_project_from_ticket_key(ticket_key),
         recipe_target="code_generator",
+        query_text=" ".join(part for part in query_parts if part),
+        top_k=settings.top_k,
     )
-
-    try:
-        block = render_context_block(
-            ticket_context,
-            query_text=query_text,
-            top_k=settings.top_k,
-        )
-    except Exception:  # noqa: BLE001 — retrieval must not block code generation
-        logger.warning(
-            "ACE context retrieval failed for %s — proceeding without context items",
-            ticket_key,
-            exc_info=True,
-        )
-        return None
-
-    if not block.strip():
-        return None
-
-    with tempfile.NamedTemporaryFile(
-        mode="w",
-        suffix="_context_items.md",
-        prefix=f"{ticket_key}_",
-        delete=False,
-    ) as context_file:
-        context_file.write(block)
-        return context_file.name
+    return write_context_items_file(ticket_key, block)
 
 
 def run_goose(state: RunGooseInputState) -> dict:

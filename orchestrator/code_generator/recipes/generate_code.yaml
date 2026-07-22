@@ -49,7 +49,7 @@ parameters:
   - key: context_items_path
     input_type: string
     requirement: optional
-    description: "Path to a JSON file containing applicable learned context items for this ticket. Passed separately from PR comments so their priority remains explicit."
+    description: "Path to a file containing applicable learned context items for this ticket. Passed separately from PR comments so their priority remains explicit."
     default: ""
 
   - key: branch_name

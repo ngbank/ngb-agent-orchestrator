@@ -271,7 +271,7 @@ def test_plan_recipe_bounds_runaway_streams():
 # ---------------------------------------------------------------------------
 
 
-_PATCH_RENDER = "orchestrator.work_planner.nodes.generate_plan.render_context_block"
+_PATCH_RENDER = "orchestrator.context_items.render_context_block"
 _PATCH_SETTINGS = "orchestrator.work_planner.nodes.generate_plan.get_ace_settings"
 
 
