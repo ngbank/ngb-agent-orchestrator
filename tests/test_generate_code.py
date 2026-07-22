@@ -2,6 +2,7 @@
 
 import json
 from contextlib import contextmanager
+from pathlib import Path
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
@@ -134,34 +135,55 @@ def test_prepare_workspace_creates_workspace_paths(monkeypatch, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_run_goose_passes_existing_branch_and_comments():
-    """run_goose passes existing_branch and pr_comments to the recipe on re-execution."""
+def test_run_goose_passes_distinct_temp_files_for_pr_rerun(tmp_path):
+    """run_goose keeps developer rules, PR feedback, and learned context separate."""
     from orchestrator.code_generator.nodes.run_goose import run_goose
 
+    work_plan_path = tmp_path / "workplan.json"
+    work_plan_path.write_text(
+        json.dumps(
+            {
+                "summary": "test work plan summary",
+                "tasks": [{"description": "Change a file", "files_likely_affected": ["app.py"]}],
+            }
+        )
+    )
     state = {
         "workflow_id": "wf-123",
         "ticket_key": "AOS-92",
-        "working_dir": "/tmp/test-dir",
-        "work_plan_path": "/tmp/workplan.json",
-        "summary_path": "/tmp/summary.json",
-        "reasoning_path": "/tmp/reasoning.txt",
+        "working_dir": str(tmp_path),
+        "work_plan_path": str(work_plan_path),
+        "summary_path": str(tmp_path / "summary.json"),
+        "reasoning_path": str(tmp_path / "reasoning.txt"),
         "code_generation_summary": {"branch": "feature/AOS-92+test"},
         "pr_comments": "Fix typo in line 42",
     }
 
-    work_plan_json = json.dumps({"summary": "test work plan summary"})
     with (
         patch("orchestrator.code_generator.nodes.run_goose.run_and_tee") as mock_run,
-        patch("builtins.open", mock_open(read_data=work_plan_json)),
-        patch("os.path.exists", return_value=False),
+        patch(
+            "orchestrator.code_generator.nodes.run_goose._get_developer_rules",
+            return_value=[{"id": "DR-1"}],
+        ),
+        patch(
+            "orchestrator.code_generator.nodes.run_goose._render_context_block",
+            return_value="[PATTERN] Add tests",
+        ),
+        patch("orchestrator.code_generator.nodes.run_goose.get_ace_settings") as mock_settings,
     ):
+        mock_settings.return_value.is_code_generator_active.return_value = False
+        mock_settings.return_value.is_pr_rerun_active.return_value = True
+        mock_settings.return_value.top_k = 10
         mock_run.return_value = MagicMock(returncode=0)
         run_goose(state)
 
-        cmd = mock_run.call_args[0][0]
-        assert "existing_branch=feature/AOS-92+test" in cmd
-        assert "pr_comments=Fix typo in line 42" in cmd
-        assert any(arg.startswith("branch_name=feature/AOS-92+") for arg in cmd)
+    cmd = mock_run.call_args[0][0]
+    assert "existing_branch=feature/AOS-92+test" in cmd
+    assert any(arg.startswith("developer_rules_path=") for arg in cmd)
+    assert any(arg.startswith("pr_comments_path=") for arg in cmd)
+    assert any(arg.startswith("context_items_path=") for arg in cmd)
+    assert any(arg.startswith("branch_name=feature/AOS-92+") for arg in cmd)
+    assert not any(arg.startswith("pr_comments=") for arg in cmd)
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +272,56 @@ def test_infer_branch_prefix_fails_when_no_model(monkeypatch):
     assert result["failed_node"] == "infer_branch_prefix"
 
 
+def test_run_goose_uses_developer_rules_temp_file_for_initial_generation(tmp_path):
+    """run_goose passes developer rules through a temporary-file recipe parameter."""
+    from orchestrator.code_generator.nodes.run_goose import run_goose
+
+    work_plan_path = tmp_path / "workplan.json"
+    work_plan_path.write_text(json.dumps({"summary": "test work plan summary", "tasks": []}))
+    state = {
+        "workflow_id": "wf-124",
+        "ticket_key": "AOS-93",
+        "working_dir": str(tmp_path),
+        "work_plan_path": str(work_plan_path),
+        "summary_path": str(tmp_path / "summary.json"),
+        "reasoning_path": str(tmp_path / "reasoning.txt"),
+    }
+
+    with (
+        patch("orchestrator.code_generator.nodes.run_goose.run_and_tee") as mock_run,
+        patch(
+            "orchestrator.code_generator.nodes.run_goose._get_developer_rules",
+            return_value=[{"id": "DR-1"}],
+        ),
+        patch("orchestrator.code_generator.nodes.run_goose.get_ace_settings") as mock_settings,
+    ):
+        mock_settings.return_value.is_code_generator_active.return_value = False
+        mock_settings.return_value.is_pr_rerun_active.return_value = False
+        mock_run.return_value = MagicMock(returncode=0)
+        run_goose(state)
+
+    cmd = mock_run.call_args[0][0]
+    assert any(arg.startswith("developer_rules_path=") for arg in cmd)
+    assert not any(arg.startswith("pr_comments_path=") for arg in cmd)
+    assert not any(arg.startswith("context_items_path=") for arg in cmd)
+
+
+def test_generate_code_recipe_renders_pr_feedback_before_learned_context():
+    """The recipe keeps mandatory PR feedback ahead of advisory learned context."""
+    recipe = (
+        Path(__file__).parents[1] / "orchestrator/code_generator/recipes/generate_code.yaml"
+    ).read_text()
+
+    assert "developer_rules_path" in recipe
+    assert "pr_comments_path" in recipe
+    assert "context_items_path" in recipe
+    assert recipe.index("## ⚠️ PR REVIEW MODE") < recipe.index(
+        "Then read the advisory learned-context file"
+    )
+    assert "must be fully addressed" in recipe
+    assert "advisory learned-context file" in recipe
+
+
 def test_run_goose_uses_inferred_branch_prefix():
     """run_goose uses branch_prefix from state when building branch_name."""
     from orchestrator.code_generator.nodes.run_goose import run_goose
@@ -267,6 +339,7 @@ def test_run_goose_uses_inferred_branch_prefix():
     work_plan_json = json.dumps({"summary": "fix null pointer in processor"})
     with (
         patch("orchestrator.code_generator.nodes.run_goose.run_and_tee") as mock_run,
+        patch("orchestrator.code_generator.nodes.run_goose._get_developer_rules", return_value=[]),
         patch("builtins.open", mock_open(read_data=work_plan_json)),
         patch("os.path.exists", return_value=False),
     ):
