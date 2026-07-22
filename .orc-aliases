@@ -1,0 +1,9 @@
+# Shell aliases for orchestrator-server-ctl
+# Source this file in your shell (e.g. via .envrc) to make the aliases available.
+
+alias orc-build='orchestrator-server-ctl start'
+alias orc-up='orchestrator-server-ctl start'
+alias orc-down='orchestrator-server-ctl stop'
+alias orc-status='orchestrator-server-ctl status'
+alias orc-logs='orchestrator-server-ctl logs'
+alias orc-restart='orchestrator-server-ctl restart'
