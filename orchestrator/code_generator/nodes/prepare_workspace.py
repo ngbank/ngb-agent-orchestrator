@@ -19,11 +19,17 @@ from orchestrator.code_generator.state import (
 def prepare_workspace(state: PrepareWorkspaceInputState) -> PrepareWorkspaceOutputState:
     """Write the work plan to a temp file and reserve summary/reasoning paths.
 
-    Reads:  workflow_id, ticket_key, work_plan_data
-    Writes: work_plan_path, summary_path, reasoning_path
+    Also materializes ``pr_comments`` (possibly multi-line) to a tempfile so the
+    Goose recipe can consume it via a path parameter instead of an inline
+    ``--params pr_comments=<text>`` value. Passing multi-line values inline
+    breaks Goose's argv parsing.
+
+    Reads:  workflow_id, ticket_key, work_plan_data, pr_comments
+    Writes: work_plan_path, summary_path, reasoning_path, pr_comments_path
     """
     workflow_id = state.get("workflow_id") or "unknown"
     work_plan_data = state.get("work_plan_data")
+    pr_comments = state.get("pr_comments") or ""
 
     with tempfile.NamedTemporaryFile(
         mode="w",
@@ -46,8 +52,20 @@ def prepare_workspace(state: PrepareWorkspaceInputState) -> PrepareWorkspaceOutp
     )
     os.close(reasoning_fd)
 
+    pr_comments_path = ""
+    if pr_comments:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix="_pr_comments.txt",
+            prefix=f"{workflow_id}_",
+            delete=False,
+        ) as pc_file:
+            pc_file.write(pr_comments)
+            pr_comments_path = pc_file.name
+
     return {
         "work_plan_path": work_plan_path,
         "summary_path": summary_path,
         "reasoning_path": reasoning_path,
+        "pr_comments_path": pr_comments_path,
     }

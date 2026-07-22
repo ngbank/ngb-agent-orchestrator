@@ -17,6 +17,7 @@ class PrepareWorkspaceInputState(TypedDict, total=False):
     workflow_id: str
     ticket_key: str
     work_plan_data: dict
+    pr_comments: Optional[str]
 
 
 class PrepareWorkspaceOutputState(TypedDict, total=False):
@@ -25,6 +26,7 @@ class PrepareWorkspaceOutputState(TypedDict, total=False):
     work_plan_path: str
     summary_path: str
     reasoning_path: str
+    pr_comments_path: str
 
 
 class RunGooseInputState(TypedDict, total=False):
@@ -36,6 +38,7 @@ class RunGooseInputState(TypedDict, total=False):
     work_plan_path: str
     summary_path: str
     reasoning_path: str
+    pr_comments_path: str
     code_generation_summary: Optional[dict]
     pr_comments: Optional[str]
     branch_prefix: str
@@ -95,6 +98,7 @@ class CleanupInputState(TypedDict, total=False):
     work_plan_path: str
     summary_path: str
     reasoning_path: str
+    pr_comments_path: str
     working_dir: str
 
 
@@ -137,4 +141,5 @@ class CodeGeneratorState(TypedDict, total=False):
     work_plan_path: str
     summary_path: str
     reasoning_path: str
+    pr_comments_path: str
     branch_prefix: str

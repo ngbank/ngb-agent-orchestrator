@@ -19,8 +19,8 @@ def run_goose(state: RunGooseInputState) -> dict:
     only node that requires a live Goose session.
 
     Reads:  workflow_id, ticket_key, working_dir, work_plan_path, summary_path,
-            reasoning_path, code_generation_summary (for existing_branch on PR re-runs),
-            pr_comments
+            reasoning_path, pr_comments_path,
+            code_generation_summary (for existing_branch on PR re-runs)
     Writes: nothing (summary written to summary_path on disk by the recipe)
     """
     workflow_id = state.get("workflow_id")
@@ -29,11 +29,11 @@ def run_goose(state: RunGooseInputState) -> dict:
     work_plan_path = state.get("work_plan_path", "")
     summary_path = state.get("summary_path", "")
     reasoning_path = state.get("reasoning_path", "")
+    pr_comments_path = state.get("pr_comments_path", "")
 
     # Existing branch is used on PR re-runs to avoid re-creating the branch.
     existing_exec_summary = state.get("code_generation_summary") or {}
     existing_branch = existing_exec_summary.get("branch", "")
-    pr_comments = state.get("pr_comments", "")
 
     branch_prefix = state.get("branch_prefix") or "feature"
 
@@ -81,7 +81,7 @@ def run_goose(state: RunGooseInputState) -> dict:
                 "--params",
                 f"existing_branch={existing_branch}",
                 "--params",
-                f"pr_comments={pr_comments}",
+                f"pr_comments_path={pr_comments_path}",
                 "--params",
                 f"branch_name={branch_name}",
             ],
