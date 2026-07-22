@@ -334,6 +334,19 @@ def test_retry_resolves_by_ticket(test_db, cli_runner):
     assert wf["retry_count"] == 1
 
 
+def test_retry_preserves_pr_comments_for_code_generation_reruns(test_db, cli_runner):
+    """PR review feedback remains available to the resumed code-generator state."""
+    workflow_id = state_store.create_workflow(
+        "TEST-238",
+        status=WorkflowStatus.PR_COMMENTED,
+    )
+    comments = "Please add regression coverage before merging."
+    state_store.update_pr_comments(workflow_id, comments)
+
+    stored_comments = state_store.get_workflow(workflow_id)["pr_comments"]
+    assert stored_comments[-1]["comments"] == comments
+
+
 def test_retry_resolves_by_workflow_id(test_db, cli_runner):
     wf_id = _failed_workflow("TEST-1", "generate_code")
     success_summary = {
