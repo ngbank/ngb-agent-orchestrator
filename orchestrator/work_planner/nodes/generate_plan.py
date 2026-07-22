@@ -10,8 +10,7 @@ from typing import Any
 import click
 
 from ace.config import get_ace_settings
-from ace.retrieval import render_context_block
-from ace.retrieval.synthesizer import TicketContext
+from orchestrator.context_items import retrieve_context_items, write_context_items_file
 from orchestrator.failure import mark_failure
 from orchestrator.litellm_callbacks import aggregate_token_usage
 from orchestrator.utils import goose_session, run_and_tee
@@ -26,64 +25,30 @@ _RECIPE_PATH = Path(__file__).resolve().parent.parent / "recipes" / "plan.yaml"
 logger = logging.getLogger(__name__)
 
 
-def _project_from_ticket_key(ticket_key: str) -> str:
-    """Return the JIRA project short-name from a ticket key (``AOS-237`` → ``AOS``)."""
-    return ticket_key.split("-", 1)[0] if "-" in ticket_key else ticket_key
-
-
 def _write_context_items_file(
     ticket_key: str,
     ticket: Any,
 ) -> str | None:
-    """Retrieve + render ACE context items for the planner and write to a temp file.
-
-    Returns the temp-file path when a non-empty block was written, or ``None``
-    when ACE is disabled, no items are available, or rendering raised. Errors
-    are logged and swallowed so retrieval never blocks plan generation — the
-    planner simply proceeds without prior-workflow context.
-    """
+    """Retrieve + render ACE context items for the planner and write to a temp file."""
     settings = get_ace_settings()
     if not settings.is_planner_active():
         return None
 
-    try:
-        ticket_summary = ""
-        query_text = ticket_key
-        if isinstance(ticket, dict):
-            ticket_summary = ticket.get("title") or ""
-            description = ticket.get("description") or ""
-            query_text = " ".join(part for part in (ticket_summary, description) if part)
+    ticket_summary = ""
+    query_text = ticket_key
+    if isinstance(ticket, dict):
+        ticket_summary = ticket.get("title") or ""
+        description = ticket.get("description") or ""
+        query_text = " ".join(part for part in (ticket_summary, description) if part)
 
-        ticket_context = TicketContext(
-            ticket_key=ticket_key,
-            ticket_summary=ticket_summary,
-            project=_project_from_ticket_key(ticket_key),
-            recipe_target="planner",
-        )
-        block = render_context_block(
-            ticket_context,
-            query_text=query_text,
-            top_k=settings.top_k,
-        )
-    except Exception:  # noqa: BLE001 — never let ACE retrieval fail plan generation
-        logger.warning(
-            "ACE context retrieval failed for %s — proceeding without context items",
-            ticket_key,
-            exc_info=True,
-        )
-        return None
-
-    if not block.strip():
-        return None
-
-    fd, path = tempfile.mkstemp(
-        suffix="_context_items.md",
-        prefix=f"{ticket_key}_",
+    block = retrieve_context_items(
+        ticket_key=ticket_key,
+        ticket_summary=ticket_summary,
+        recipe_target="planner",
+        query_text=query_text,
+        top_k=settings.top_k,
     )
-    os.close(fd)
-    with open(path, "w") as f:
-        f.write(block)
-    return path
+    return write_context_items_file(ticket_key, block)
 
 
 def generate_plan(state: GeneratePlanInputState) -> GeneratePlanOutputState:

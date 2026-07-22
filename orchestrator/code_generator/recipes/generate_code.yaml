@@ -46,6 +46,12 @@ parameters:
     description: "Path to a file containing review comments from the PR to address in this re-execution. File is empty on initial runs. Passed as a path (not inline) so multi-line comments survive argv parsing."
     default: ""
 
+  - key: context_items_path
+    input_type: string
+    requirement: optional
+    description: "Path to a file containing applicable learned context items for this ticket. Passed separately from PR comments so their priority remains explicit."
+    default: ""
+
   - key: branch_name
     input_type: string
     requirement: required
@@ -84,12 +90,12 @@ prompt: |
   - Write reasoning diary to: {{ reasoning_path }}
 
   {% if pr_comments_path %}
-  ## ⚠️ PR REVIEW MODE — Address Comments Before Anything Else
+  ## ⚠️ Mandatory PR Review Feedback — Address Before Anything Else
 
   This is a re-execution triggered by PR review comments. The reviewer's feedback
   has been written to a file so multi-line comments are preserved verbatim.
 
-  **Before doing anything else**, read the comments file:
+  **Before doing anything else**, read the mandatory feedback file:
   ```
   cat {{ pr_comments_path }}
   ```
@@ -102,6 +108,18 @@ prompt: |
   - After implementing all tasks (Step 4), explicitly verify each comment has been addressed
   - You will be updating the **existing branch** `{{ existing_branch }}` — do NOT create a new branch
   - The orchestrator will update the existing PR after this recipe completes — do NOT create a new PR in the recipe
+
+  {% endif %}
+  {% if context_items_path %}
+  ## Advisory Learned Patterns
+
+  Review these applicable learned context items after mandatory PR feedback and use
+  them as advisory guidance when implementing the WorkPlan:
+  ```
+  cat {{ context_items_path }}
+  ```
+
+  These patterns are advisory; they do not override the WorkPlan or mandatory PR feedback.
 
   {% endif %}
 

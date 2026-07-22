@@ -1,6 +1,7 @@
 """Node: push_and_create_pr — push branch and open/update PR."""
 
 import logging
+import re
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -56,24 +57,35 @@ def _build_pr_body(
     Returns:
         PR body as markdown.
     """
-    if template:
-        # Use template but fill in key sections
-        body = template
-        # Replace common placeholders
-        body = (
-            body.replace("{{ ticket_key }}", ticket_key)
-            .replace("{{ summary }}", summary)
-            .replace("{{ approach }}", work_plan_data.get("approach", ""))
-        )
-        return body
-
-    # Minimal fallback if no template
     tasks_str = "\n".join(
         [
             f"- {task.get('description', task.get('id', 'unknown'))}"
             for task in work_plan_data.get("tasks", [])
         ]
     )
+
+    if template:
+        # Fill both explicit placeholders and the repository's standard
+        # comment-based template fields so generated PRs are reviewable.
+        body = (
+            template.replace("{{ ticket_key }}", ticket_key)
+            .replace("{{ summary }}", summary)
+            .replace("{{ approach }}", work_plan_data.get("approach", ""))
+            .replace("<!-- Provide a brief description of the changes in this PR -->", summary)
+            .replace(
+                "<!-- Link to the JIRA ticket -->\n- Ticket ID:\n- Link:",
+                f"- Ticket ID: {ticket_key}\n"
+                f"- Link: [{ticket_key}](https://mirandags.atlassian.net/browse/{ticket_key})",
+            )
+            .replace("<!-- List the main changes made in this PR -->\n\n-\n-\n-", tasks_str)
+            .replace(
+                "<!-- Describe the tests you ran to verify your changes -->",
+                "See the code-generation execution summary for automated test results.",
+            )
+        )
+        return re.sub(r"<!--.*?-->", "", body, flags=re.DOTALL)
+
+    # Minimal fallback if no template
 
     return f"""## Description
 

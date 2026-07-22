@@ -9,6 +9,7 @@ import pytest
 from state.workflow_status import WorkflowStatus
 
 _PATCH_GOOSE_SESSION = "orchestrator.code_generator.nodes.run_goose.goose_session"
+_PATCH_RENDER = "orchestrator.context_items.render_context_block"
 
 
 @pytest.fixture(autouse=True)
@@ -162,9 +163,71 @@ def test_run_goose_passes_existing_branch_and_comments():
         cmd = mock_run.call_args[0][0]
         assert "existing_branch=feature/AOS-92+test" in cmd
         assert "pr_comments_path=/tmp/pr_comments.txt" in cmd
+        assert "context_items_path=" in cmd
         # Inline pr_comments must NOT be passed — multi-line values would break Goose argv.
         assert not any(arg.startswith("pr_comments=") for arg in cmd)
         assert any(arg.startswith("branch_name=feature/AOS-92+") for arg in cmd)
+
+
+def test_run_goose_passes_retrieved_context_in_a_separate_file(tmp_path):
+    """PR reruns keep mandatory comments and advisory context as distinct inputs."""
+    import os
+
+    from orchestrator.code_generator.nodes.run_goose import run_goose
+
+    state = {
+        "workflow_id": "wf-238",
+        "ticket_key": "AOS-238",
+        "working_dir": "/tmp/test-dir",
+        "work_plan_path": "/tmp/workplan.json",
+        "summary_path": "/tmp/summary.json",
+        "reasoning_path": "/tmp/reasoning.txt",
+        "pr_comments_path": "/tmp/pr_comments.txt",
+        "pr_comments": "Address this mandatory review feedback.",
+        "code_generation_summary": {"branch": "feature/AOS-238+test"},
+    }
+    settings = MagicMock()
+    settings.is_code_generator_active.return_value = True
+    captured_context = {}
+    work_plan_path = tmp_path / "workplan.json"
+    work_plan_path.write_text(json.dumps({"summary": "Context test", "tasks": []}))
+    state["work_plan_path"] = str(work_plan_path)
+
+    def capture_context(command, *_args, **_kwargs):
+        context_path = next(
+            arg.split("=", 1)[1] for arg in command if arg.startswith("context_items_path=")
+        )
+        captured_context["path"] = context_path
+        with open(context_path) as context_file:
+            captured_context["content"] = context_file.read()
+        return MagicMock(returncode=0)
+
+    with (
+        patch(
+            "orchestrator.code_generator.nodes.run_goose.run_and_tee", side_effect=capture_context
+        ),
+        patch(
+            "orchestrator.code_generator.nodes.run_goose.get_ace_settings", return_value=settings
+        ),
+        patch(
+            _PATCH_RENDER,
+            return_value="- [PATTERN] Prefer focused regression tests.",
+        ),
+    ):
+        run_goose(state)
+
+    assert captured_context["content"] == "- [PATTERN] Prefer focused regression tests."
+    assert not os.path.exists(captured_context["path"])
+
+
+def test_generate_recipe_renders_feedback_before_learned_patterns():
+    """Human PR feedback is visibly framed before advisory learned patterns."""
+    from pathlib import Path
+
+    recipe = Path("orchestrator/code_generator/recipes/generate_code.yaml").read_text()
+
+    assert recipe.index("Mandatory PR Review Feedback") < recipe.index("Advisory Learned Patterns")
+    assert recipe.index("cat {{ pr_comments_path }}") < recipe.index("cat {{ context_items_path }}")
 
 
 def test_prepare_workspace_writes_multiline_pr_comments_to_file(monkeypatch, tmp_path):

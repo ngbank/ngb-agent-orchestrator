@@ -26,6 +26,46 @@ def _base_state():
     }
 
 
+def test_build_pr_body_fills_repository_template_fields():
+    from orchestrator.code_generator.nodes.push_and_create_pr import _build_pr_body
+
+    template = """## Description
+
+<!-- Provide a brief description of the changes in this PR -->
+
+## JIRA Ticket
+
+<!-- Link to the JIRA ticket -->
+- Ticket ID:
+- Link:
+
+## Changes Made
+
+<!-- List the main changes made in this PR -->
+
+-
+-
+-
+
+## Testing
+
+<!-- Describe the tests you ran to verify your changes -->
+"""
+    work_plan = {
+        "approach": "Use the established workflow.",
+        "tasks": [{"id": 1, "description": "Add regression coverage"}],
+    }
+
+    body = _build_pr_body("AOS-238", "Populate PR templates", work_plan, template)
+
+    assert "<!--" not in body
+    assert "Populate PR templates" in body
+    assert "- Ticket ID: AOS-238" in body
+    assert "[AOS-238](https://mirandags.atlassian.net/browse/AOS-238)" in body
+    assert "- Add regression coverage" in body
+    assert "execution summary" in body
+
+
 def test_push_and_create_pr_creates_new_pr_when_none_exists():
     from orchestrator.code_generator.nodes.push_and_create_pr import push_and_create_pr
 
