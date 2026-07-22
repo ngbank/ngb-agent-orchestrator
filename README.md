@@ -197,6 +197,21 @@ ORCHESTRATOR_URL=http://localhost:8080
 
 See [docs/server.md](docs/server.md) for the full run story (endpoints, auth, SSE, Docker) and [docs/configuration.md](docs/configuration.md#dispatcher--orchestrator-transport) for the env-var contract.
 
+### Quick-reference aliases
+
+When `.envrc` is active (direnv), the following shorthand aliases are available:
+
+| Alias | Maps to | Description |
+|---|---|---|
+| `orc-build` | `orchestrator-server-ctl start` | Build and start the container |
+| `orc-up` | `orchestrator-server-ctl start` | Same as `orc-build` |
+| `orc-down` | `orchestrator-server-ctl stop` | Stop and remove the container |
+| `orc-status` | `orchestrator-server-ctl status` | Show container state + health |
+| `orc-logs` | `orchestrator-server-ctl logs` | Tail logs (pass `-f` to follow) |
+| `orc-restart` | `orchestrator-server-ctl restart` | Stop then start the container |
+
+All aliases forward extra arguments to the underlying command (e.g. `orc-logs -f`).
+
 ---
 
 ## Documentation
