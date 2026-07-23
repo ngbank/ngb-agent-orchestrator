@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: orc <command> [args]
+
+Commands:
+  build       Start container (build enabled)
+  up          Start container (skip rebuild)
+  down        Stop container
+  status      Show container state + health
+  logs        Show container logs (pass -f to follow)
+  restart     Restart container
+  ctl ...     Pass through directly to orchestrator-server-ctl
+  help        Show this help
+EOF
+}
+
+if [[ $# -lt 1 ]]; then
+  usage
+  exit 1
+fi
+
+cmd="$1"
+shift || true
+
+case "$cmd" in
+  build)
+    exec orchestrator-server-ctl start "$@"
+    ;;
+  up)
+    exec orchestrator-server-ctl start --no-build "$@"
+    ;;
+  down)
+    exec orchestrator-server-ctl stop "$@"
+    ;;
+  status)
+    exec orchestrator-server-ctl status "$@"
+    ;;
+  logs)
+    exec orchestrator-server-ctl logs "$@"
+    ;;
+  restart)
+    exec orchestrator-server-ctl restart "$@"
+    ;;
+  ctl)
+    exec orchestrator-server-ctl "$@"
+    ;;
+  help|-h|--help)
+    usage
+    ;;
+  *)
+    echo "Unknown command: $cmd" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
