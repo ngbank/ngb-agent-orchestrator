@@ -184,7 +184,6 @@ def call_foundry_chat(
         "messages": messages,
         "tools": TOOL_DEFINITIONS,
         "tool_choice": "auto",
-        "temperature": 0,
     }
 
     request = urllib.request.Request(
