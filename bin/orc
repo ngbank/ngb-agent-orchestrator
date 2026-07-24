@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# orchestrator-server-ctl — start / stop / inspect the orchestrator HTTP
+# orc — start / stop / inspect the orchestrator HTTP
 # server running as a container (via `docker compose`, see docker-compose.yml).
 #
 # Usage:
-#   orchestrator-server-ctl start [--no-build]   # up -d (rebuilds by default)
-#   orchestrator-server-ctl stop                 # docker compose down
-#   orchestrator-server-ctl restart [--no-build]
-#   orchestrator-server-ctl status               # container state + /healthz probe
-#   orchestrator-server-ctl logs [-f]             # tail (or follow) container logs
+#   orc start                # up -d --no-build
+#   orc build                # up -d (rebuilds by default)
+#   orc stop                 # docker compose down
+#   orc restart [--no-build]
+#   orc status               # container state + /healthz probe
+#   orc logs [-f]             # tail (or follow) container logs
 #
 # Lives at `bin/` and is put on $PATH by `.envrc` (via `PATH_add bin`), so
 # direnv-allowed shells can call it bare.
@@ -41,7 +42,7 @@ HEALTH_URL="http://127.0.0.1:$PORT/healthz"
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-log()  { printf '[orch-ctl] %s\n' "$*" >&2; }
+log()  { printf '[orc] %s\n' "$*" >&2; }
 die()  { log "ERROR: $*"; exit 1; }
 
 # Prefer docker; fall back to podman (which ships a docker-compatible CLI on
@@ -103,7 +104,7 @@ check_port_free() {
     die "port $PORT is already bound by PID $pid ($cmd) — not our container.
     full command: $full_cmd
     remediate:    kill $pid   (or: kill -9 $pid if it ignores SIGTERM)
-    then retry:   orchestrator-server-ctl start
+    then retry:   orc start
     common cause: a stray 'orchestrator-server' foreground process left running
                   from an earlier session. On Colima the container would come
                   up healthy but dispatcher traffic would still hit the stray."
@@ -147,7 +148,7 @@ cmd_start() {
         sleep 0.5
     done
 
-    log "started — healthcheck not green yet, see: orchestrator-server-ctl logs"
+    log "started — healthcheck not green yet, see: orc logs"
 }
 
 cmd_stop() {
@@ -206,7 +207,8 @@ usage() {
 # Dispatch
 # ---------------------------------------------------------------------------
 case "${1:-}" in
-    start)   shift; cmd_start   "$@" ;;
+    start)   shift; cmd_start --no-build "$@" ;;
+    build)   shift; cmd_start   "$@" ;;
     stop)    shift; cmd_stop    "$@" ;;
     restart) shift; cmd_restart "$@" ;;
     status)  shift; cmd_status  "$@" ;;

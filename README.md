@@ -40,18 +40,18 @@ See [docs/architecture.md](docs/architecture.md) for a full sequence diagram and
 
 ## Components
 
-| Component | Description |
-|---|-----------|
-| `dispatcher/run.py` | CLI entry point — orchestrates the full lifecycle |
-| `orchestrator/server/` | Optional FastAPI HTTP surface for `WorkflowService` (see [docs/server.md](docs/server.md)) |
-| `graph/` | LangGraph state machine — nodes, edges, approval interrupt |
-| `otel/` | OpenTelemetry instrumentation — tracing, exporters, LiteLLM callback |
-| `orchestrator/work_planner/recipes/plan.yaml` | Goose recipe: JIRA ticket → WorkPlan JSON |
-| `orchestrator/code_generator/recipes/generate_code.yaml` | Goose recipe: WorkPlan → feature branch + commit |
-| `state/` | SQLite persistence — workflows, audit log, migrations |
-| `orchestrator/work_planner/schemas/work_plan_v1.json` | JSON schema contract for WorkPlan documents |
-| `mcp_server/server.py` | MCP server: resolves JIRA project key → Git repo URL |
-| `config/project-repo-mapping.md` | Maps JIRA project keys to target Git repository URLs |
+| Component                                                | Description                                                                                |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `dispatcher/run.py`                                      | CLI entry point — orchestrates the full lifecycle                                          |
+| `orchestrator/server/`                                   | Optional FastAPI HTTP surface for `WorkflowService` (see [docs/server.md](docs/server.md)) |
+| `graph/`                                                 | LangGraph state machine — nodes, edges, approval interrupt                                 |
+| `otel/`                                                  | OpenTelemetry instrumentation — tracing, exporters, LiteLLM callback                       |
+| `orchestrator/work_planner/recipes/plan.yaml`            | Goose recipe: JIRA ticket → WorkPlan JSON                                                  |
+| `orchestrator/code_generator/recipes/generate_code.yaml` | Goose recipe: WorkPlan → feature branch + commit                                           |
+| `state/`                                                 | SQLite persistence — workflows, audit log, migrations                                      |
+| `orchestrator/work_planner/schemas/work_plan_v1.json`    | JSON schema contract for WorkPlan documents                                                |
+| `mcp_server/server.py`                                   | MCP server: resolves JIRA project key → Git repo URL                                       |
+| `config/project-repo-mapping.md`                         | Maps JIRA project keys to target Git repository URLs                                       |
 
 ---
 
@@ -166,11 +166,12 @@ dispatcher --clear-db
 By default, the dispatcher runs the orchestrator **in-process** — no server required. If you want to share one orchestrator across multiple dispatchers, IDEs, or the TUI, start the FastAPI server and point the dispatcher at it.
 
 ```bash
-# Option 1: container via orchestrator-server-ctl (recommended for local dev)
-orchestrator-server-ctl start          # docker compose up -d --build; survives terminal close
-orchestrator-server-ctl status         # container state + /healthz probe
-orchestrator-server-ctl logs -f        # follow container logs
-orchestrator-server-ctl stop           # docker compose down
+# Option 1: container via orc (recommended for local dev)
+orc start          # docker compose up -d --no-build; survives terminal close
+orc build          # docker compose up -d --build
+orc status         # container state + /healthz probe
+orc logs -f        # follow container logs
+orc stop           # docker compose down
 
 # Option 2: console script in the foreground (uses .env from your shell)
 orchestrator-server
@@ -178,14 +179,14 @@ orchestrator-server
 # Option 3: uvicorn directly (handy for --reload during dev)
 uvicorn orchestrator.server.app:app --host 0.0.0.0 --port 8080
 
-# Option 4: docker compose directly (same thing orchestrator-server-ctl wraps)
+# Option 4: docker compose directly (same thing orc wraps)
 docker compose up --build
 
 # Verify
 curl http://localhost:8080/healthz   # → {"status":"ok"}
 ```
 
-The `orchestrator-server-ctl` helper lives in [`bin/`](bin/orchestrator-server-ctl), is put on `PATH` by direnv (see [`.envrc`](.envrc)), and drives the container via `docker compose` (config lives in [`docker-compose.yml`](docker-compose.yml), not in the script). Requires a `docker compose` provider — `./setup-env.sh --docker` checks for and reports how to install one.
+The `orc` helper lives in [`bin/orc`](bin/orc), is put on `PATH` by direnv (see [`.envrc`](.envrc)), and drives the container via `docker compose` (config lives in [`docker-compose.yml`](docker-compose.yml), not in the script). Requires a `docker compose` provider — `./setup-env.sh --docker` checks for and reports how to install one.
 
 Then route the CLI through the server by setting two env vars (typically in `.env`):
 
@@ -197,35 +198,46 @@ ORCHESTRATOR_URL=http://localhost:8080
 
 See [docs/server.md](docs/server.md) for the full run story (endpoints, auth, SSE, Docker) and [docs/configuration.md](docs/configuration.md#dispatcher--orchestrator-transport) for the env-var contract.
 
-### Quick-reference aliases
+### Quick-reference command
 
-When `.envrc` is active (direnv), the following shorthand aliases are available:
+When `.envrc` is active (direnv), `bin/` is on your `PATH`, so the repo-local `orc`
+command is available automatically:
 
-| Alias | Maps to | Description |
-|---|---|---|
-| `orc-build` | `orchestrator-server-ctl start` | Build and start the container |
-| `orc-up` | `orchestrator-server-ctl start` | Same as `orc-build` |
-| `orc-down` | `orchestrator-server-ctl stop` | Stop and remove the container |
-| `orc-status` | `orchestrator-server-ctl status` | Show container state + health |
-| `orc-logs` | `orchestrator-server-ctl logs` | Tail logs (pass `-f` to follow) |
-| `orc-restart` | `orchestrator-server-ctl restart` | Stop then start the container |
+| Command       | Description                     |
+| ------------- | ------------------------------- |
+| `orc start`   | Start without rebuilding        |
+| `orc build`   | Build and start the container   |
+| `orc stop`    | Stop and remove the container   |
+| `orc status`  | Show container state + health   |
+| `orc logs`    | Tail logs (pass `-f` to follow) |
+| `orc restart` | Stop then start the container   |
 
-All aliases forward extra arguments to the underlying command (e.g. `orc-logs -f`).
+All subcommands accept the script's native arguments (e.g. `orc logs -f`).
+
+Examples:
+
+```bash
+orc start
+orc build
+orc status
+orc logs -f
+orc --help
+```
 
 ---
 
 ## Documentation
 
-| Topic | File |
-|---|---|
-| Architecture & flow diagram | [docs/architecture.md](docs/architecture.md) |
-| Environment variables & credentials | [docs/configuration.md](docs/configuration.md) |
-| Running workflows, approval, lifecycle | [docs/workflows.md](docs/workflows.md) |
-| Goose recipes (plan & execute) | [docs/recipes.md](docs/recipes.md) |
-| SQLite state store & migrations | [docs/state-store.md](docs/state-store.md) |
-| MCP server setup & repo mapping | [docs/mcp-server.md](docs/mcp-server.md) |
-| Orchestrator HTTP server (FastAPI) | [docs/server.md](docs/server.md) |
-| Development guide (tests, pre-commit, contributing) | [docs/development.md](docs/development.md) |
+| Topic                                               | File                                           |
+| --------------------------------------------------- | ---------------------------------------------- |
+| Architecture & flow diagram                         | [docs/architecture.md](docs/architecture.md)   |
+| Environment variables & credentials                 | [docs/configuration.md](docs/configuration.md) |
+| Running workflows, approval, lifecycle              | [docs/workflows.md](docs/workflows.md)         |
+| Goose recipes (plan & execute)                      | [docs/recipes.md](docs/recipes.md)             |
+| SQLite state store & migrations                     | [docs/state-store.md](docs/state-store.md)     |
+| MCP server setup & repo mapping                     | [docs/mcp-server.md](docs/mcp-server.md)       |
+| Orchestrator HTTP server (FastAPI)                  | [docs/server.md](docs/server.md)               |
+| Development guide (tests, pre-commit, contributing) | [docs/development.md](docs/development.md)     |
 
 ---
 

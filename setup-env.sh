@@ -169,7 +169,7 @@ if $DO_DOCKER; then
             error "Docker daemon is not reachable. Start Docker Desktop and retry."
         fi
     fi
-    # orchestrator-server-ctl and docker-compose.yml both drive the container
+    # orc and docker-compose.yml both drive the container
     # via `docker compose`. Docker Desktop bundles this as a built-in plugin,
     # but Podman's docker-compatible CLI does not — it shells out to a
     # separate `docker-compose` binary on PATH, which isn't installed by
