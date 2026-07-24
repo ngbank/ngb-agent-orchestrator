@@ -51,11 +51,11 @@ are doing right now.
 
 ### When to use which
 
-| Situation | Use | Lifetime |
-|---|---|---|
-| Quick debugging — want stdout in your face, will Ctrl-C when done | `orchestrator-server` | foreground; dies with terminal |
-| Hot reload while editing server code | `uvicorn orchestrator.server.app:app --reload` | foreground; dies with terminal |
-| Want it running in the background, isolated, prod-like (recommended) | `orchestrator-server-ctl start` | container; survives terminal close |
+| Situation                                                            | Use                                            | Lifetime                           |
+| -------------------------------------------------------------------- | ---------------------------------------------- | ---------------------------------- |
+| Quick debugging — want stdout in your face, will Ctrl-C when done    | `orchestrator-server`                          | foreground; dies with terminal     |
+| Hot reload while editing server code                                 | `uvicorn orchestrator.server.app:app --reload` | foreground; dies with terminal     |
+| Want it running in the background, isolated, prod-like (recommended) | `orc build`                                    | container; survives terminal close |
 
 ### 1 — Foreground console script
 
@@ -79,29 +79,29 @@ uvicorn orchestrator.server.app:app --host 0.0.0.0 --port 8080 --reload
 Restarts the server on file changes — useful when editing
 `orchestrator/server/` itself.
 
-### 3 — Container, via `orchestrator-server-ctl` (recommended for local dev)
+### 3 — Container, via `orc` (recommended for local dev)
 
 The repo ships a thin Bash wrapper at
-[`bin/orchestrator-server-ctl`](../bin/orchestrator-server-ctl) around
+[`bin/orc`](../bin/orc) around
 `docker compose` (see [Running with Docker](#running-with-docker) below
 for what's actually inside the image / compose file). `bin/` is placed
 on `$PATH` by `.envrc`, so any direnv-allowed shell can call the helper
 bare:
 
 ```bash
-orchestrator-server-ctl start          # docker compose up -d --build; ~10s readiness probe
-orchestrator-server-ctl start --no-build   # skip the rebuild, just (re)start the existing image
-orchestrator-server-ctl status         # container state + /healthz probe
-orchestrator-server-ctl logs           # tail container logs
-orchestrator-server-ctl logs -f        # follow them
-orchestrator-server-ctl restart
-orchestrator-server-ctl stop           # docker compose down
+orc start          # docker compose up -d --no-build; ~10s readiness probe
+orc build          # rebuild then (re)start the image/container
+orc status         # container state + /healthz probe
+orc logs           # tail container logs
+orc logs -f        # follow them
+orc restart
+orc stop           # docker compose down
 ```
 
 The container survives the terminal that launched it for free — `docker
 compose up -d` hands it off to the Docker Engine daemon, a separate
 long-running process tree from your shell. There's no PID file or
-`nohup`/`disown` involved; that's only needed for detaching *native*
+`nohup`/`disown` involved; that's only needed for detaching _native_
 child processes, and a container was never a child of your shell to
 begin with.
 
@@ -118,22 +118,22 @@ prints a fix hint if it doesn't.
 ### 4 — Container, via `docker compose` directly
 
 Same underlying mechanism as option 3, useful when you want raw compose
-output or flags `orchestrator-server-ctl` doesn't expose. See [Running
+output or flags `orc` doesn't expose. See [Running
 with Docker](#running-with-docker) below.
 
-### `orchestrator-server` vs `orchestrator-server-ctl`
+### `orchestrator-server` vs `orc`
 
 They live at different layers:
 
 - **`orchestrator-server`** is the Python console script (registered by
-    `pip install -e .` via [`pyproject.toml`](../pyproject.toml)) that
-    invokes `orchestrator.server.app:run()` and boots uvicorn in the
-    **foreground**. This is what actually runs inside the container
-    (it's the Dockerfile's `CMD`).
-- **`orchestrator-server-ctl`** is a Bash lifecycle wrapper
-    (`start` / `stop` / `restart` / `status` / `logs`) around `docker
-    compose`, which builds the image (containing `orchestrator-server`
-    as its entrypoint) and runs it as a container.
+  `pip install -e .` via [`pyproject.toml`](../pyproject.toml)) that
+  invokes `orchestrator.server.app:run()` and boots uvicorn in the
+  **foreground**. This is what actually runs inside the container
+  (it's the Dockerfile's `CMD`).
+- **`orc`** is a Bash lifecycle wrapper
+  (`start` / `stop` / `restart` / `status` / `logs`) around `docker
+  compose`, which builds the image (containing `orchestrator-server`
+  as its entrypoint) and runs it as a container.
 
 Once running:
 
@@ -168,7 +168,7 @@ appear on the host under `logs/<workflow_id>/`.
 > `docker cp` to pull `local.db` out of the container.
 
 > **Consequence for macOS users:** the local-mode CLI
-> (`ORCHESTRATOR_MODE` unset) writes to a *separate* host-side DB at
+> (`ORCHESTRATOR_MODE` unset) writes to a _separate_ host-side DB at
 > `~/.local/state/ngb-agent-orchestrator/db/local.db` and will not see
 > workflows created by the containerised server (and vice versa). While
 > the container is running, always drive it via `ORCHESTRATOR_MODE=remote`
@@ -187,9 +187,9 @@ The org standardises on **Docker Engine** across Windows and macOS.
 - **Windows:** Docker Engine via WSL2 (org-managed provisioning).
 - **Linux:** native Docker Engine (`apt install docker-ce` or equivalent).
 - **macOS:** Docker Engine can't run natively — use
-    [Colima](https://github.com/abiosoft/colima), which runs Docker
-    Engine inside a lightweight Linux VM (Apple Virtualization framework).
-    Docker Desktop, Podman, and OrbStack are **not** supported paths.
+  [Colima](https://github.com/abiosoft/colima), which runs Docker
+  Engine inside a lightweight Linux VM (Apple Virtualization framework).
+  Docker Desktop, Podman, and OrbStack are **not** supported paths.
 
 #### macOS setup with Colima
 
@@ -217,7 +217,7 @@ docker run --rm hello-world
 Auto-start on login (optional): `brew services start colima`.
 
 Colima registers itself as a Docker context (`docker context ls`), so
-the CLI, `orchestrator-server-ctl`, and `docker-compose.yml` all talk to
+the CLI, `orc`, and `docker-compose.yml` all talk to
 the same daemon without extra config.
 
 > **Corporate TLS (Zscaler / MITM proxy):** if `docker pull` fails with
@@ -262,10 +262,10 @@ docker run --rm -p 8080:8080 \
     ngb-orchestrator:dev
 ```
 
-> **Prefer `orchestrator-server-ctl` / `docker compose` over this.** Unlike
+> **Prefer `orc` / `docker compose` over this.** Unlike
 > Python's `load_dotenv()` (and unlike Compose's own `env_file` handling),
 > `docker run --env-file` does not strip quotes from values — `JIRA_URL="https://..."`
-> in `.env` gets passed through *including the quote characters*, which
+> in `.env` gets passed through _including the quote characters_, which
 > breaks anything that parses it as a URL. `docker-compose.yml` also sets
 > `GOOSE_MCP_PYTHON=python` to override `.env`'s host-absolute venv path
 > (which doesn't exist in the container); a bare `docker run` needs the
@@ -274,12 +274,12 @@ docker run --rm -p 8080:8080 \
 
 ### Layout inside the image
 
-| Path | Purpose |
-|---|---|
-| `/home/orchestrator/.local/state/ngb-agent-orchestrator/db/local.db` | SQLite DB — backed by a Docker named volume (`orchestrator-db`) to keep SQLite off the macOS bind-mount virtiofs/gRPC-FUSE layer |
-| `/home/orchestrator/.local/state/ngb-agent-orchestrator/logs/<workflow_id>/` | Per-workflow `workflow.log`, token usage, and `otel.jsonl` — bind-mounted to the host XDG state dir |
-| `/app/config/` | Read-only config baked into the image (recipes and the WorkPlan schema ship inside the installed `orchestrator` package) |
-| `/usr/local/bin/orchestrator-server` | Console script (the default `CMD`) |
+| Path                                                                         | Purpose                                                                                                                          |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `/home/orchestrator/.local/state/ngb-agent-orchestrator/db/local.db`         | SQLite DB — backed by a Docker named volume (`orchestrator-db`) to keep SQLite off the macOS bind-mount virtiofs/gRPC-FUSE layer |
+| `/home/orchestrator/.local/state/ngb-agent-orchestrator/logs/<workflow_id>/` | Per-workflow `workflow.log`, token usage, and `otel.jsonl` — bind-mounted to the host XDG state dir                              |
+| `/app/config/`                                                               | Read-only config baked into the image (recipes and the WorkPlan schema ship inside the installed `orchestrator` package)         |
+| `/usr/local/bin/orchestrator-server`                                         | Console script (the default `CMD`)                                                                                               |
 
 ### Smoke test
 
@@ -310,26 +310,26 @@ those.
 All `/workflows*` routes require a bearer token when
 `ORCHESTRATOR_API_TOKEN` is set; see [Auth](#auth-stub) below.
 
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/healthz` | Liveness probe — always 200, never auth-gated |
-| `POST` | `/workflows` | Start a new workflow from a JIRA ticket |
-| `GET` | `/workflows` | List workflows (optionally filter by `ticket_key`, `status`, `limit`) |
-| `GET` | `/workflows/{id}` | Fetch a full workflow record |
-| `POST` | `/workflows/{id}/cancel` | Cancel an in-flight workflow |
-| `POST` | `/workflows/{id}/approve-plan` | Approve a paused WorkPlan and resume |
-| `POST` | `/workflows/{id}/reject-plan` | Reject a paused WorkPlan and resume |
-| `POST` | `/workflows/{id}/clarification` | Submit clarification answers and resume |
-| `POST` | `/workflows/{id}/retry` | Retry a failed / interrupted workflow |
-| `POST` | `/workflows/{id}/approve-pr` | Approve the workflow's PR and mark COMPLETED |
-| `POST` | `/workflows/{id}/reject-pr` | Reject the workflow's PR and mark REJECTED |
-| `POST` | `/workflows/{id}/comment-pr` | Post review comments on the PR and resume |
-| `GET` | `/workflows/{id}/history` | Return the node traversal history |
-| `GET` | `/workflows/{id}/audit-log` | Return the audit log entries |
-| `GET` | `/workflows/{id}/events` | **SSE** — stream workflow lifecycle events |
-| `GET` | `/workflows/{id}/logs` | **SSE** — stream captured workflow log content |
-| `POST` | `/admin/clear-db` | **Admin** — wipe all workflows + checkpoints |
-| `POST` | `/admin/workflows/{id}/mark-interrupted` | **Admin** — mark in-flight workflow FAILED |
+| Method | Path                                     | Purpose                                                               |
+| ------ | ---------------------------------------- | --------------------------------------------------------------------- |
+| `GET`  | `/healthz`                               | Liveness probe — always 200, never auth-gated                         |
+| `POST` | `/workflows`                             | Start a new workflow from a JIRA ticket                               |
+| `GET`  | `/workflows`                             | List workflows (optionally filter by `ticket_key`, `status`, `limit`) |
+| `GET`  | `/workflows/{id}`                        | Fetch a full workflow record                                          |
+| `POST` | `/workflows/{id}/cancel`                 | Cancel an in-flight workflow                                          |
+| `POST` | `/workflows/{id}/approve-plan`           | Approve a paused WorkPlan and resume                                  |
+| `POST` | `/workflows/{id}/reject-plan`            | Reject a paused WorkPlan and resume                                   |
+| `POST` | `/workflows/{id}/clarification`          | Submit clarification answers and resume                               |
+| `POST` | `/workflows/{id}/retry`                  | Retry a failed / interrupted workflow                                 |
+| `POST` | `/workflows/{id}/approve-pr`             | Approve the workflow's PR and mark COMPLETED                          |
+| `POST` | `/workflows/{id}/reject-pr`              | Reject the workflow's PR and mark REJECTED                            |
+| `POST` | `/workflows/{id}/comment-pr`             | Post review comments on the PR and resume                             |
+| `GET`  | `/workflows/{id}/history`                | Return the node traversal history                                     |
+| `GET`  | `/workflows/{id}/audit-log`              | Return the audit log entries                                          |
+| `GET`  | `/workflows/{id}/events`                 | **SSE** — stream workflow lifecycle events                            |
+| `GET`  | `/workflows/{id}/logs`                   | **SSE** — stream captured workflow log content                        |
+| `POST` | `/admin/clear-db`                        | **Admin** — wipe all workflows + checkpoints                          |
+| `POST` | `/admin/workflows/{id}/mark-interrupted` | **Admin** — mark in-flight workflow FAILED                            |
 
 Mutating routes that drive the LangGraph state machine are now
 **fire-and-forget**: they enqueue the work on the server's
@@ -377,9 +377,9 @@ to opt out).
 
 ```json
 {
-    "ticket_key": "AOS-141",
-    "dry_run": false,
-    "workflow_id": null
+  "ticket_key": "AOS-141",
+  "dry_run": false,
+  "workflow_id": null
 }
 ```
 
@@ -394,7 +394,7 @@ Query parameters:
 
 - `ticket_key` — filter to one ticket
 - `status` — one of the `WorkflowStatus` values (`pending`, `in_progress`,
-    `pending_approval`, `completed`, …). Unknown values return `400`.
+  `pending_approval`, `completed`, …). Unknown values return `400`.
 - `limit` — 1..500 (default 50)
 
 ### `GET /workflows/{id}`
@@ -408,8 +408,8 @@ Optional JSON body:
 
 ```json
 {
-    "reason": "operator request",
-    "actor": "ops-bot"
+  "reason": "operator request",
+  "actor": "ops-bot"
 }
 ```
 
@@ -437,12 +437,12 @@ when another job is already in flight for the same workflow). The
 actual graph drive runs on the background dispatcher — watch the
 event stream to observe completion.
 
-| Route | Body |
-|---|---|
-| `POST /workflows/{id}/approve-plan` | – |
-| `POST /workflows/{id}/reject-plan` | `{"reason": "optional"}` |
+| Route                                | Body                                                      |
+| ------------------------------------ | --------------------------------------------------------- |
+| `POST /workflows/{id}/approve-plan`  | –                                                         |
+| `POST /workflows/{id}/reject-plan`   | `{"reason": "optional"}`                                  |
 | `POST /workflows/{id}/clarification` | `{"answers": [{"concern": "...", "answer": "..."}, ...]}` |
-| `POST /workflows/{id}/retry` | – |
+| `POST /workflows/{id}/retry`         | –                                                         |
 
 `concern` text in clarification answers must be non-empty; an empty list
 of answers is allowed but the server will surface whatever the
@@ -452,10 +452,10 @@ underlying graph state requires.
 
 Same response/error shape as the approval routes.
 
-| Route | Body |
-|---|---|
-| `POST /workflows/{id}/approve-pr` | – |
-| `POST /workflows/{id}/reject-pr` | `{"reason": "optional"}` |
+| Route                             | Body                                    |
+| --------------------------------- | --------------------------------------- |
+| `POST /workflows/{id}/approve-pr` | –                                       |
+| `POST /workflows/{id}/reject-pr`  | `{"reason": "optional"}`                |
 | `POST /workflows/{id}/comment-pr` | `{"comments": "non-empty review text"}` |
 
 ### `GET /workflows/{id}/history`
@@ -464,11 +464,11 @@ Returns the node traversal history, oldest first. Each entry has:
 
 ```json
 {
-    "step": 3,
-    "node": "generate_code",
-    "outcome": "ok",
-    "result_keys": ["code_generation_summary"],
-    "error": null
+  "step": 3,
+  "node": "generate_code",
+  "outcome": "ok",
+  "result_keys": ["code_generation_summary"],
+  "error": null
 }
 ```
 
@@ -481,11 +481,11 @@ Returns the audit log entries for the workflow, oldest first:
 
 ```json
 {
-    "workflow_id": "wf-1",
-    "actor": "dispatcher",
-    "action": "status_change",
-    "timestamp": "2026-06-22T00:00:00",
-    "details": {"to": "pending_approval"}
+  "workflow_id": "wf-1",
+  "actor": "dispatcher",
+  "action": "status_change",
+  "timestamp": "2026-06-22T00:00:00",
+  "details": { "to": "pending_approval" }
 }
 ```
 
@@ -516,7 +516,7 @@ the last seen sequence number either:
 
 - as the `after_seq` query parameter, or
 - via the standard `Last-Event-ID` header (set automatically by browser
-    `EventSource`).
+  `EventSource`).
 
 The query parameter takes precedence when both are present.
 
@@ -540,9 +540,9 @@ data: {"stage": "workflow", "offset": 0, "end_offset": 1024, "content": "..."}
 Query parameters:
 
 - `stage` — optional stream name. `workflow` is the canonical stream; when
-    omitted, `workflow` is followed.
+  omitted, `workflow` is followed.
 - `after_offset` — skip bytes already delivered. Can also be supplied via
-    `Last-Event-ID`.
+  `Last-Event-ID`.
 
 Same heartbeat (15s) and terminal-`stream_end`/close semantics as
 `/events`. The trailing event has no `id:` and looks like:
@@ -586,10 +586,10 @@ into memory on every tick. Regression guards for both invariants live in
 Authentication is a **placeholder** intended for early environments. It
 will be replaced by a production-grade scheme in a follow-up epic.
 
-| `ORCHESTRATOR_API_TOKEN` | Behaviour |
-|---|---|
-| unset / empty | Auth disabled — every `/workflows*` request allowed; warning logged at startup |
-| any non-empty value | `/workflows*` requires `Authorization: Bearer <token>` |
+| `ORCHESTRATOR_API_TOKEN` | Behaviour                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------ |
+| unset / empty            | Auth disabled — every `/workflows*` request allowed; warning logged at startup |
+| any non-empty value      | `/workflows*` requires `Authorization: Bearer <token>`                         |
 
 `/healthz` and OpenAPI endpoints are intentionally left open so load
 balancers and tooling can probe the service without credentials.
@@ -600,12 +600,12 @@ balancers and tooling can probe the service without credentials.
 posture than the rest of the API. They are destructive enough that an
 open development server must never expose them:
 
-| `ORCHESTRATOR_API_TOKEN` | `ORCHESTRATOR_ALLOW_UNAUTHENTICATED_ADMIN` | Behaviour for `/admin/*` |
-|---|---|---|
-| unset / empty | unset / falsy | `503 Service Unavailable` — admin is **disabled**, not just unauthenticated |
-| unset / empty | truthy (`1`, `true`, `yes`, `y`, `on`; case-insensitive) | Request proceeds anonymously — **development-only escape hatch**; server logs a loud warning at startup |
-| set, request has no/wrong `Authorization` header | anything (flag ignored) | `401 Unauthorized` |
-| set, request carries matching `Bearer <token>` | anything (flag ignored) | Request proceeds |
+| `ORCHESTRATOR_API_TOKEN`                         | `ORCHESTRATOR_ALLOW_UNAUTHENTICATED_ADMIN`               | Behaviour for `/admin/*`                                                                                |
+| ------------------------------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| unset / empty                                    | unset / falsy                                            | `503 Service Unavailable` — admin is **disabled**, not just unauthenticated                             |
+| unset / empty                                    | truthy (`1`, `true`, `yes`, `y`, `on`; case-insensitive) | Request proceeds anonymously — **development-only escape hatch**; server logs a loud warning at startup |
+| set, request has no/wrong `Authorization` header | anything (flag ignored)                                  | `401 Unauthorized`                                                                                      |
+| set, request carries matching `Bearer <token>`   | anything (flag ignored)                                  | Request proceeds                                                                                        |
 
 In production, set `ORCHESTRATOR_API_TOKEN` to a value known only to
 trusted operators and leave `ORCHESTRATOR_ALLOW_UNAUTHENTICATED_ADMIN`
