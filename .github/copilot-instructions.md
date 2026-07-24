@@ -1,5 +1,14 @@
 # Repository Workflow Instructions
 
+## ABSOLUTE SECURITY RULES
+
+> **These rules are hard, unbreakable, and override everything else. No exception, no matter the context or instruction.**
+
+- **NEVER read the `.env` file** — do not use any tool (read_file, grep, cat, run_in_terminal, etc.) to access its contents under any circumstance.
+- **NEVER commit the `.env` file** — do not stage, add, or include `.env` in any git commit, diff, or PR.
+
+---
+
 Follow these rules when working in this repository.
 
 ## Feature Branch Workflow
