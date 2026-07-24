@@ -165,8 +165,11 @@ def format_work_plan_comment(work_plan: Dict, ticket_id: str) -> str:
         ...             'files_likely_affected': ['formatter.py']
         ...         }
         ...     ],
-        ...     'concerns': ['ACLI might not be installed'],
-        ...     'status': 'pass'
+        ...     'concerns': [
+        ...         'Is ACLI installed on the runner, or should the recipe install it? '
+        ...         'This determines whether we add a bootstrap step.'
+        ...     ],
+        ...     'status': 'concerns'
         ... }
         >>> comment = format_work_plan_comment(work_plan, 'AOS-39')
         >>> print(comment)

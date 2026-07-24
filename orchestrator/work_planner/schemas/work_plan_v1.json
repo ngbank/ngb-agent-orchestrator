@@ -66,7 +66,7 @@
     },
     "concerns": {
       "type": "array",
-      "description": "List of identified concerns, risks, or open questions for a human reviewer.",
+      "description": "List of clarification requests for a human reviewer. Each entry MUST be a direct question ending with '?' followed by a brief one-sentence motivation explaining why the answer matters. Empty when the plan is ready to proceed.",
       "items": {
         "type": "string"
       }
