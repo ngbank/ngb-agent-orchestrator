@@ -184,10 +184,25 @@ prompt: |
         "files_likely_affected": ["<file1>", "<file2>"]
       }
     ],
-    "concerns": ["<risk or open question 1>", "<risk or open question 2>"] or [],
+    "concerns": ["<question ending in '?' followed by a one-sentence motivation>", "..."] or [],
     "status": "pass" | "concerns" | "blocked"
   }
   ```
+
+  ### Concern Phrasing (MUST follow):
+  Every entry in `concerns` is a clarification request sent to a human reviewer. Each entry MUST:
+  1. Be phrased as a **direct question** in interrogative form and end with `?`. Do not emit statements, observations, or bare topic labels.
+  2. Include a **brief motivation clause** — one short sentence (≤ ~20 words) that tells the reviewer *why* the answer matters (what decision, risk, or work hinges on it).
+  3. Be self-contained: the reviewer should not need to re-read the plan to understand what is being asked or why.
+
+  Good examples (interrogative + motivation):
+  - `"Should the rename migration recreate the table or use ALTER TABLE ... RENAME? SQLite ALTER support varies across the versions we run in prod and CI, and the choice affects whether we need a data-copy step."`
+  - `"Which existing feature flag should gate the new writer — is_pr_rerun_active or a new one? This changes whether the rollout piggybacks on the existing kill switch or needs its own."`
+
+  Bad examples (do NOT emit these shapes):
+  - `"Migration ordering is unclear."` — statement, no question, no motivation.
+  - `"Feature flag."` — bare label.
+  - `"Confirm the rename approach."` — imperative, not a question, no motivation.
 
   ### Status Classification:
   - **"pass"**: Ticket is clear, scope is well-defined, files are identifiable, no major blockers
