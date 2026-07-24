@@ -46,6 +46,7 @@ RUN pip install --prefix=/install -r requirements.txt
 
 COPY pyproject.toml README.md ./
 COPY dispatcher ./dispatcher
+COPY ace ./ace
 COPY orchestrator ./orchestrator
 COPY otel ./otel
 COPY state ./state
