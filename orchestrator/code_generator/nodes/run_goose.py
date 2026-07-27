@@ -54,16 +54,17 @@ def run_goose(state: RunGooseInputState) -> dict:
     goose_session is opened and closed entirely within this node — it is the
     only node that requires a live Goose session.
 
-    Reads:  workflow_id, ticket_key, working_dir, work_plan_path, summary_path,
+    Reads:  workflow_id, ticket_key, working_dir, work_plan_path, raw_results_path,
             reasoning_path, pr_comments_path, pr_comments,
             code_generation_summary (for existing_branch on PR re-runs)
-    Writes: nothing (summary written to summary_path on disk by the recipe)
+    Writes: nothing (raw_results written to raw_results_path on disk by the
+            recipe's deterministic finalizer step)
     """
     workflow_id = state.get("workflow_id")
     ticket_key = state.get("ticket_key", "")
     working_dir = state.get("working_dir", "")
     work_plan_path = state.get("work_plan_path", "")
-    summary_path = state.get("summary_path", "")
+    raw_results_path = state.get("raw_results_path", "")
     reasoning_path = state.get("reasoning_path", "")
     pr_comments_path = state.get("pr_comments_path", "")
     pr_comments = state.get("pr_comments") or ""
@@ -89,6 +90,7 @@ def run_goose(state: RunGooseInputState) -> dict:
     mcp_python = os.environ.get("GOOSE_MCP_PYTHON", "python")
     max_turns = os.environ.get("GOOSE_MAX_TURNS", "200")
     recipe_path = Path(__file__).resolve().parents[1] / "recipes" / "generate_code.yaml"
+    raw_results_script = Path(__file__).resolve().parents[1] / "scripts" / "write_raw_results.py"
 
     logger.info("Running generate recipe for %s...", ticket_key)
 
@@ -112,7 +114,9 @@ def run_goose(state: RunGooseInputState) -> dict:
                     "--params",
                     f"working_dir={working_dir}",
                     "--params",
-                    f"output_path={summary_path}",
+                    f"raw_results_path={raw_results_path}",
+                    "--params",
+                    f"raw_results_script={raw_results_script}",
                     "--params",
                     f"reasoning_path={reasoning_path}",
                     "--params",

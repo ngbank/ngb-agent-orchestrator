@@ -153,20 +153,25 @@ writing).
 **Adopted mitigation: do not use `response:` for autonomous coding recipes.**
 
 Both `orchestrator/code_generator/recipes/generate_code.yaml` and `orchestrator/work_planner/recipes/plan.yaml` were originally written with `response:`
-schemas, but the dispatcher reads structured results from a file (`output_path`), never from
+schemas, but the dispatcher reads structured results from a file (the recipe's designated output
+path — `output_path` for the planner, `raw_results_path` for the code generator), never from
 Goose's `final_output` payload. The `response:` block was therefore redundant — its only runtime
 effect was enabling the injection mechanism that killed every long execute run.
 
 Without `response:` registered, Goose treats text-only turns benignly: the assistant message is
 recorded and the loop continues to the next turn. The session ends when the model stops emitting
-tool calls (typically because the recipe instructs it to stop after writing the summary file).
+tool calls (typically because the recipe instructs it to stop after writing / invoking the
+finalizer for its output file).
 
 **Design rules for recipes that need to run autonomously:**
 
 1. **Do not declare a `response:` schema.** Have the recipe write results to a file and have the
    caller read that file.
-2. **Make the session end condition explicit and tool-anchored.** End the recipe with: "write the
-   summary JSON to `{{ output_path }}`, verify it exists, then stop emitting tool calls."
+2. **Make the session end condition explicit and tool-anchored.** End the recipe with: "invoke the
+   finalizer, verify the output file exists, then stop emitting tool calls." Prefer a
+   machine-authored finalizer (a small shell/python script the recipe calls) over asking the LLM
+   to write structured JSON as its final message — the recipe should not depend on the model
+   emitting one specific final tool call. See `orchestrator/code_generator/scripts/write_raw_results.py`.
 3. **Keep prose instructions clear and brief.** Without injection pressure, the model does not need
    lockstep diary writes or text-only-turn bans — those existed solely to defeat `response:`.
 4. **`response:` is still appropriate for short structured-output recipes** (classifiers, extractors,

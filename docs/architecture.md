@@ -235,7 +235,7 @@ Goose recipe that produces a `WorkPlan` JSON document from a JIRA ticket. Parame
 
 ### `orchestrator/code_generator/recipes/generate_code.yaml`
 
-Goose recipe that implements an approved WorkPlan. Parameters: `ticket_key`, `work_plan_path`, `output_path`. Creates a feature branch, implements tasks, runs checks, commits, and writes an execution summary JSON. Push and PR creation happen afterward in graph nodes using GitHub App auth. See [docs/recipes.md](recipes.md).
+Goose recipe that implements an approved WorkPlan. Parameters: `ticket_key`, `work_plan_path`, `raw_results_path`, `raw_results_script`, `reasoning_path`. Creates a feature branch, implements tasks, runs checks, commits, then invokes a deterministic finalizer (`orchestrator/code_generator/scripts/write_raw_results.py`) that composes `raw_results.json` from git state + `.ngb_status`/`.ngb_error` marker files. The recipe never authors the execution summary itself — the natural-language description is built afterwards by the `summarize_changes` graph node from the actual `git diff`. Push and PR creation happen afterward in graph nodes using GitHub App auth. See [docs/recipes.md](recipes.md).
 
 ### `state/`
 

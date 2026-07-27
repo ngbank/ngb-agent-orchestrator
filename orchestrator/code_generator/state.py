@@ -24,7 +24,7 @@ class PrepareWorkspaceOutputState(TypedDict, total=False):
     """Output produced by prepare_workspace node."""
 
     work_plan_path: str
-    summary_path: str
+    raw_results_path: str
     reasoning_path: str
     pr_comments_path: str
 
@@ -36,7 +36,7 @@ class RunGooseInputState(TypedDict, total=False):
     ticket_key: str
     working_dir: str
     work_plan_path: str
-    summary_path: str
+    raw_results_path: str
     reasoning_path: str
     pr_comments_path: str
     code_generation_summary: Optional[dict]
@@ -44,15 +44,48 @@ class RunGooseInputState(TypedDict, total=False):
     branch_prefix: str
 
 
-class ProcessResultsInputState(TypedDict, total=False):
-    """Input required by process_results node."""
+class LoadRawResultsInputState(TypedDict, total=False):
+    """Input required by load_raw_results node."""
 
     ticket_key: str
-    summary_path: str
+    raw_results_path: str
 
 
-class ProcessResultsOutputState(TypedDict, total=False):
-    """Output produced by process_results node."""
+class LoadRawResultsOutputState(TypedDict, total=False):
+    """Output produced by load_raw_results node.
+
+    On success: ``raw_results`` holds the parsed dict from the recipe.
+    On failure: ``exec_error`` + ``code_generation_summary`` (failure shape)
+    + ``failed_node`` are set so the subgraph routes straight to
+    ``persist_results`` and the workflow is marked failed. Unlike the old
+    ``process_results`` node this fails loud instead of silently continuing
+    to ``push_and_create_pr`` with an empty branch.
+    """
+
+    raw_results: Optional[dict]
+    code_generation_summary: Optional[dict]
+    exec_error: Optional[str]
+    failed_node: Optional[str]
+
+
+class SummarizeChangesInputState(TypedDict, total=False):
+    """Input required by summarize_changes node."""
+
+    ticket_key: str
+    work_plan_data: dict
+    raw_results: Optional[dict]
+    working_dir: str
+    reasoning_path: str
+
+
+class SummarizeChangesOutputState(TypedDict, total=False):
+    """Output produced by summarize_changes node.
+
+    Produces the merged ``code_generation_summary`` (raw_results + LLM
+    description) that downstream nodes and consumers expect. Best-effort:
+    on LLM failure the node falls back to a deterministic description so
+    the workflow keeps moving.
+    """
 
     code_generation_summary: Optional[dict]
 
@@ -96,7 +129,7 @@ class CleanupInputState(TypedDict, total=False):
     """Input required by cleanup node."""
 
     work_plan_path: str
-    summary_path: str
+    raw_results_path: str
     reasoning_path: str
     pr_comments_path: str
     working_dir: str
@@ -139,7 +172,14 @@ class CodeGeneratorState(TypedDict, total=False):
     repo_url: str
     working_dir: str
     work_plan_path: str
-    summary_path: str
+    raw_results_path: str
     reasoning_path: str
     pr_comments_path: str
     branch_prefix: str
+
+    # --- structured recipe output ---
+    # Deterministic dict written by the recipe finalizer
+    # (orchestrator/code_generator/scripts/write_raw_results.py) and parsed
+    # by load_raw_results. summarize_changes then merges it with an
+    # LLM-authored description into ``code_generation_summary``.
+    raw_results: Optional[dict]

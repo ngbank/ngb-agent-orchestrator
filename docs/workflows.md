@@ -100,16 +100,18 @@ python -m dispatcher.run --reject  --workflow-id b04fd4e0-... --reason "needs mo
 
 1. Workflow status → `APPROVED`
 2. The LangGraph graph resumes from the checkpoint
-3. The `generate_code` node is invoked:
-   - Runs `goose run --recipe orchestrator/code_generator/recipes/generate_code.yaml`
-  - The code-generator subgraph fetches a GitHub App token before cloning
-  - Goose creates a feature branch (`feature/{TICKET}+{slug}`), implements tasks, runs tests, commits
-  - A follow-up graph node pushes the branch and opens or updates the PR using GitHub App auth
-  - PR title: `[TICKET-KEY] <WorkPlan summary>`
-  - PR description: filled from `.github/pull_request_template.md` if present, otherwise a minimal body
-  - Execution summary JSON is updated with `pr_url` after the PR node succeeds and then stored in SQLite
-4. Dispatcher posts execution summary (with PR link) as a JIRA comment
-5. Workflow status → `COMPLETED` (or `FAILED` on error)
+3. The `generate_code` subgraph runs its ordered nodes:
+   - `run_goose` shells out to `goose run --recipe orchestrator/code_generator/recipes/generate_code.yaml`
+   - The subgraph fetches a GitHub App token before cloning
+   - Goose creates a feature branch (`feature/{TICKET}+{slug}`), implements tasks, runs tests, commits, drops a `.ngb_status` marker, and invokes the deterministic finalizer (`orchestrator/code_generator/scripts/write_raw_results.py`) which writes `raw_results.json`
+   - `load_raw_results` parses `raw_results.json`; **fails loud** if the file is missing (e.g. Goose ended without invoking the finalizer) — the workflow is marked `FAILED` and can be retried, instead of silently swallowing the truncated run
+   - `summarize_changes` reads the actual `git diff` + the reasoning diary and calls an LLM to author a natural-language `description`, merging it with `raw_results` into the final `code_generation_summary`. LLM failure falls back to a deterministic description; workflow is not blocked
+   - `push_and_create_pr` opens or updates the PR using GitHub App auth
+   - PR title: `[TICKET-KEY] <WorkPlan summary>`
+   - PR description: filled from `.github/pull_request_template.md` if present, otherwise a minimal body
+   - `persist_results` writes the merged summary and `pr_url` to SQLite
+4. Dispatcher posts the code generation summary (with PR link) as a JIRA comment
+5. Workflow status → `PENDING_PR_APPROVAL` (or `FAILED` on error)
 
 ### What Happens on Rejection
 

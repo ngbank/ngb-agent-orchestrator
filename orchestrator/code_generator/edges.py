@@ -41,6 +41,22 @@ def route_after_infer_branch_prefix(
     return "run_goose"
 
 
+def route_after_load_raw_results(
+    state: CodeGeneratorState,
+) -> Literal["summarize_changes", "persist_results"]:
+    """Skip to persist_results when load_raw_results failed loud.
+
+    ``load_raw_results`` sets ``exec_error`` + a failure ``code_generation_summary``
+    when the recipe's finalizer never wrote raw_results.json (e.g. the LLM
+    session ended prematurely — see AOS-239). In that case there is nothing
+    to summarize; go straight to persistence so the workflow is marked
+    FAILED and can be retried by the operator.
+    """
+    if state.get("exec_error"):
+        return "persist_results"
+    return "summarize_changes"
+
+
 def route_after_prepare_workspace(
     state: CodeGeneratorState,
 ) -> Literal["infer_branch_prefix", "run_goose"]:
