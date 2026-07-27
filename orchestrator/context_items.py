@@ -3,9 +3,12 @@
 import logging
 import os
 import tempfile
+from typing import Iterable
 
 from ace.retrieval import render_context_block
 from ace.retrieval.synthesizer import TicketContext
+from ace.telemetry import record_injection_event
+from otel.instrumentation import emit_ace_injection
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +39,36 @@ def retrieve_context_items(
         return ""
 
 
-def write_context_items_file(ticket_key: str, block: str) -> str | None:
-    """Materialize a non-empty context block for a Goose recipe invocation."""
+def write_context_items_file(
+    ticket_key: str,
+    block: str,
+    *,
+    workflow_id: str | None = None,
+    injection_point: str | None = None,
+    retrieved_item_ids: Iterable[str] = (),
+    block_cache_key: str | None = None,
+) -> str | None:
+    """Record and materialize a non-empty context block for a Goose invocation."""
     if not block.strip():
         return None
+
+    if workflow_id and injection_point:
+        item_ids = list(retrieved_item_ids)
+        record_injection_event(
+            workflow_id=workflow_id,
+            ticket_key=ticket_key,
+            injection_point=injection_point,
+            synthesizer="ace",
+            block_cache_key=block_cache_key,
+            retrieved_item_ids=item_ids,
+            rendered_length=len(block),
+        )
+        emit_ace_injection(
+            workflow_id=workflow_id,
+            injection_point=injection_point,
+            rendered_length=len(block),
+            item_ids=item_ids,
+        )
 
     fd, path = tempfile.mkstemp(suffix="_context_items.md", prefix=f"{ticket_key}_")
     os.close(fd)

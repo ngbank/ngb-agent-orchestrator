@@ -28,6 +28,7 @@ from ace.service import (
     ShowItemResult,
     StatsResult,
 )
+from state.sqlite_state_store import get_connection
 
 # ---------------------------------------------------------------------------
 # Test doubles
@@ -231,6 +232,37 @@ def test_format_stats_empty_live_store_shows_none_labels() -> None:
 # ---------------------------------------------------------------------------
 # ``ace stats --help``
 # ---------------------------------------------------------------------------
+
+
+def test_stats_exports_filtered_injection_event_joins(cli_runner: CliRunner, tmp_path) -> None:
+    from state.sqlite_state_store import run_migrations
+
+    run_migrations()
+    conn = get_connection()
+    conn.execute(
+        """INSERT INTO synthesized_context_blocks
+           (cache_key, rendered_markdown, provenance_manifest, input_item_ids, created_at)
+           VALUES ('block-1', 'rendered', '{\"rules\":[\"item-1\"]}', '[\"item-1\"]', '2026-01-01T00:00:00+00:00')"""
+    )
+    conn.execute("""INSERT INTO ace_injection_events
+           (workflow_id, ticket_key, injection_point, synthesizer, block_cache_key,
+            retrieved_item_ids, rendered_length, created_at)
+           VALUES ('workflow-1', 'AOS-239', 'planner', 'ace', 'block-1',
+                   '[\"item-1\"]', 8, '2026-01-02T00:00:00+00:00')""")
+    conn.commit()
+    conn.close()
+    output = tmp_path / "events.jsonl"
+
+    result = cli_runner.invoke(
+        run,
+        ["stats", "--ticket-key", "AOS-239", "--injection-events-jsonl", str(output)],
+        obj=FakeService(),
+    )
+
+    assert result.exit_code == 0, result.output
+    event = __import__("json").loads(output.read_text())
+    assert event["workflow_id"] == "workflow-1"
+    assert event["provenance_manifest"] == '{"rules":["item-1"]}'
 
 
 def test_stats_help(cli_runner: CliRunner) -> None:

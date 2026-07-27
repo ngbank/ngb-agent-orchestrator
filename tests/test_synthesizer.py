@@ -179,8 +179,8 @@ def test_synthesize_conflicts_with_passthrough():
 # ---------------------------------------------------------------------------
 
 
-def test_cache_hit_skips_llm(tmp_path: Any, monkeypatch: pytest.MonkeyPatch):
-    """Second call with same items/context uses cache; LLM called only once."""
+def test_durable_block_hit_skips_llm(tmp_path: Any, monkeypatch: pytest.MonkeyPatch):
+    """Second call with same synthesis input loads its durable block."""
     item = _make_item()
     ctx = _make_ticket_context()
 

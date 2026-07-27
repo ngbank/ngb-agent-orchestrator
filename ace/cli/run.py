@@ -271,7 +271,27 @@ def reject(
 
 @run.command("stats")
 @click.pass_context
-def stats(ctx: click.Context) -> None:
+@click.option("--ticket-key", default=None, help="Filter injection events by ticket key.")
+@click.option("--workflow-id", default=None, help="Filter injection events by workflow id.")
+@click.option(
+    "--since", default=None, help="Include injection events at or after this ISO-8601 time."
+)
+@click.option("--until", default=None, help="Include injection events before this ISO-8601 time.")
+@click.option(
+    "--injection-events-jsonl",
+    type=click.Path(),
+    default=None,
+    metavar="PATH",
+    help="Export filtered injection events with durable-block provenance as JSONL.",
+)
+def stats(
+    ctx: click.Context,
+    ticket_key: Optional[str],
+    workflow_id: Optional[str],
+    since: Optional[str],
+    until: Optional[str],
+    injection_events_jsonl: Optional[str],
+) -> None:
     """Print aggregate ACE store health metrics.
 
     Reports live-item counts by status, tier, and pattern_type; staging queue
@@ -280,7 +300,14 @@ def stats(ctx: click.Context) -> None:
     service = _resolve_service(ctx)
     from ace.cli.commands.stats import _handle_stats
 
-    _handle_stats(service)
+    _handle_stats(
+        service,
+        ticket_key=ticket_key,
+        workflow_id=workflow_id,
+        since=since,
+        until=until,
+        injection_events_jsonl=injection_events_jsonl,
+    )
 
 
 if __name__ == "__main__":

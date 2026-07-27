@@ -40,6 +40,33 @@ def test_db():
         del os.environ["DB_PATH"]
 
 
+def test_context_block_cache_is_renamed_and_injection_events_are_indexed(test_db):
+    """Migration 020 preserves blocks and migration 021 creates event indexes."""
+    conn = get_connection()
+    tables = {
+        row[0]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
+    }
+    assert "context_block_cache" not in tables
+    assert "synthesized_context_blocks" in tables
+    assert "ace_injection_events" in tables
+
+    indexes = {
+        row[0]
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'index' "
+            "AND tbl_name = 'ace_injection_events'"
+        ).fetchall()
+    }
+    assert {
+        "idx_ace_injection_events_workflow_id",
+        "idx_ace_injection_events_ticket_key",
+        "idx_ace_injection_events_created_at",
+        "idx_ace_injection_events_block_cache_key",
+    } <= indexes
+    conn.close()
+
+
 def test_create_workflow(test_db):
     """Test workflow creation with all fields."""
     work_plan = {"tasks": ["task1", "task2"], "description": "Test workflow"}

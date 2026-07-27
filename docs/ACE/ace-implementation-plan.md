@@ -156,7 +156,7 @@ below reflects the revised sequence; AOS-274 is the new ticket.
 | 4.3 | feat | Injection-time synthesizer (AOS-274) | `ace/retrieval/synthesizer.py` renders retrieved items into a structured markdown document (development_rules / architectural_approach / testing_approach / known_pitfalls) via LLM. Prompt at `ace/retrieval/prompts/synthesize.md`. Cache table `context_block_cache` keyed by `hash((ticket_key, applicability_filter, corpus_snapshot_id, recipe_target))`. See [15-ace-injection-synthesizer.md](15-ace-injection-synthesizer.md) |
 | 4.4 | feat | Planner injection (AOS-237) | `generate_plan`: temp-file `context_items_path` param (clarifications_path pattern); render synthesizer output in `plan.yaml` before Fetch Ticket step with "guidance, not constraints" framing |
 | 4.5 | feat | Code generator injection incl. PR re-run (AOS-238) | `run_goose`: same param pattern; `generate_code.yaml` Step 1 after `get_developer_rules`; on re-run keep `pr_comments` and synthesizer output as SEPARATE params, human feedback rendered first |
-| 4.6 | feat | Utilization telemetry (AOS-239) | Log retrieval events (workflow_id, retrieved item IDs, synthesizer input IDs, synthesizer output section IDs, tiers) to audit_log/otel; this is the Phase-2→3 gate evidence |
+| 4.6 | feat | Utilization telemetry (AOS-239) | Persist one best-effort `ace_injection_events` row per actual non-empty injection, emit metadata-only `ace.injection` OTel telemetry, and export filtered event-to-durable-block provenance joins from `ace stats`; this is the Phase-2→3 gate evidence |
 
 **Exit criteria:** with flags on, a live workflow's rendered recipes contain a synthesized context
 block; with flags off, zero behavior change; retrieved-item IDs and synthesizer inputs traceable

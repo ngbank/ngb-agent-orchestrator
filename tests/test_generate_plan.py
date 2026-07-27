@@ -348,6 +348,23 @@ def test_generate_plan_passes_context_items_path_when_planner_active(
     assert not os.path.exists(captured["path"])
 
 
+def test_generate_plan_records_context_injection(log_tmp, write_workplan_to_output):
+    rendered = "- [ESTABLISHED] Persist ACE injection metadata"
+    with (
+        patch(_PATCH_TEE) as mock_tee,
+        patch(_PATCH_SETTINGS, return_value=_make_settings(planner_active=True)),
+        patch(_PATCH_RENDER, return_value=rendered),
+        patch("orchestrator.context_items.record_injection_event") as mock_record,
+        patch("orchestrator.context_items.emit_ace_injection") as mock_emit,
+    ):
+        mock_tee.side_effect = write_workplan_to_output
+        generate_plan({"ticket_key": "AOS-51", "workflow_id": "test-wf", "ticket": None})
+
+    mock_record.assert_called_once()
+    assert mock_record.call_args.kwargs["injection_point"] == "planner"
+    assert mock_emit.call_args.kwargs["rendered_length"] == len(rendered)
+
+
 def test_generate_plan_skips_context_items_when_block_empty(log_tmp, write_workplan_to_output):
     """ACE planner on but no items retrieved → no param, no temp file."""
     with (

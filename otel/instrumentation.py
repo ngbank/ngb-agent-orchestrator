@@ -94,6 +94,23 @@ def setup_tracing(*, synchronous: bool = False) -> None:
         litellm.callbacks.append(otel_callback_instance)
 
 
+def emit_ace_injection(
+    *,
+    workflow_id: str,
+    injection_point: str,
+    rendered_length: int,
+    item_ids: list[str] | None = None,
+) -> None:
+    """Emit metadata-only telemetry for an ACE context injection."""
+    tracer = get_tracer()
+    with tracer.start_as_current_span("ace.injection") as span:
+        span.set_attribute("workflow.id", workflow_id)
+        span.set_attribute("ace.injection_point", injection_point)
+        span.set_attribute("ace.rendered_length", rendered_length)
+        if item_ids:
+            span.set_attribute("ace.retrieved_item_ids", item_ids)
+
+
 def get_tracer() -> trace.Tracer:
     """Return the module-level tracer, initialising tracing if necessary."""
     if _tracer is None:

@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 def _write_context_items_file(
     ticket_key: str,
     ticket: Any,
+    workflow_id: str,
 ) -> str | None:
     """Retrieve + render ACE context items for the planner and write to a temp file."""
     settings = get_ace_settings()
@@ -48,7 +49,12 @@ def _write_context_items_file(
         query_text=query_text,
         top_k=settings.top_k,
     )
-    return write_context_items_file(ticket_key, block)
+    return write_context_items_file(
+        ticket_key,
+        block,
+        workflow_id=workflow_id,
+        injection_point="planner",
+    )
 
 
 def generate_plan(state: GeneratePlanInputState) -> GeneratePlanOutputState:
@@ -88,7 +94,7 @@ def generate_plan(state: GeneratePlanInputState) -> GeneratePlanOutputState:
     # before Goose invocation. Same temp-file pattern as clarifications_path so
     # the recipe template controls placement/framing.
     # See docs/ACE/08-ace-orchestrator-injection-points.md.
-    context_items_path = _write_context_items_file(ticket_key, ticket)
+    context_items_path = _write_context_items_file(ticket_key, ticket, workflow_id)
 
     try:
         round_num = len(clarifications)

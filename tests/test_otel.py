@@ -27,6 +27,7 @@ from otel.context import (
 from otel.exporters import create_exporter
 from otel.instrumentation import (
     _record_node_output,
+    emit_ace_injection,
 )
 
 # ---------------------------------------------------------------------------
@@ -40,6 +41,29 @@ def _make_in_memory_provider() -> tuple[TracerProvider, InMemorySpanExporter]:
     provider = TracerProvider()
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     return provider, exporter
+
+
+# ---------------------------------------------------------------------------
+# ACE injection telemetry
+# ---------------------------------------------------------------------------
+
+
+def test_emit_ace_injection_records_metadata(monkeypatch):
+    provider, exporter = _make_in_memory_provider()
+    monkeypatch.setattr("otel.instrumentation.get_tracer", lambda: provider.get_tracer("test"))
+
+    emit_ace_injection(
+        workflow_id="workflow-1",
+        injection_point="planner",
+        rendered_length=42,
+        item_ids=["item-1"],
+    )
+
+    span = exporter.get_finished_spans()[0]
+    assert span.name == "ace.injection"
+    assert span.attributes["ace.injection_point"] == "planner"
+    assert span.attributes["ace.rendered_length"] == 42
+    assert tuple(span.attributes["ace.retrieved_item_ids"]) == ("item-1",)
 
 
 # ---------------------------------------------------------------------------

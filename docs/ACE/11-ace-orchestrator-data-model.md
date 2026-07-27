@@ -182,6 +182,19 @@ SQL handles scope filtering; Python handles semantic ranking and tier-label form
 
 ---
 
+## Durable synthesized blocks and injection-event history
+
+Migration 020 renames `context_block_cache` to `synthesized_context_blocks` without copying or deleting rows. Despite the old cache name, these are durable content-addressed synthesis records: `cache_key` identifies the exact ticket, applicability predicate, corpus snapshot, and recipe target that produced a rendered block. A matching key may skip a new LLM call; it does not make the stored block disposable.
+
+Migration 021 adds append-only `ace_injection_events` records:
+
+```sql
+workflow_id, ticket_key, injection_point, synthesizer, block_cache_key,
+retrieved_item_ids, rendered_length, created_at
+```
+
+The event table is indexed by workflow, ticket, time, and block key. **Retention invariant:** deleting or expiring event records must never delete `synthesized_context_blocks`; an event's `block_cache_key` is the provenance join to the durable rendered input. `ace stats --ticket-key/--workflow-id/--since/--until --injection-events-jsonl PATH` exports the filtered left join as JSONL for offline evaluation.
+
 ## What does NOT go in this schema
 
 **Embeddings.** For the first version, keyword-based similarity is sufficient — the context store will be small enough. Add a vector store when keyword retrieval starts missing relevant items.

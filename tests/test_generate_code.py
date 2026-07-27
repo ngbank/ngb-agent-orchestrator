@@ -220,6 +220,43 @@ def test_run_goose_passes_retrieved_context_in_a_separate_file(tmp_path):
     assert not os.path.exists(captured_context["path"])
 
 
+def test_run_goose_records_pr_rerun_context_injection(tmp_path):
+    """A rendered PR-rerun block produces exactly one persistence and OTel event."""
+    from orchestrator.code_generator.nodes.run_goose import run_goose
+
+    work_plan_path = tmp_path / "workplan.json"
+    work_plan_path.write_text(json.dumps({"summary": "Context test", "tasks": []}))
+    state = {
+        "workflow_id": "wf-239",
+        "ticket_key": "AOS-239",
+        "working_dir": "/tmp/test-dir",
+        "work_plan_path": str(work_plan_path),
+        "raw_results_path": "/tmp/summary.json",
+        "reasoning_path": "/tmp/reasoning.txt",
+        "pr_comments_path": "/tmp/comments.txt",
+        "pr_comments": "Fix this.",
+    }
+    settings = MagicMock()
+    settings.is_code_generator_active.return_value = True
+
+    with (
+        patch(
+            "orchestrator.code_generator.nodes.run_goose.run_and_tee",
+            return_value=MagicMock(returncode=0),
+        ),
+        patch(
+            "orchestrator.code_generator.nodes.run_goose.get_ace_settings", return_value=settings
+        ),
+        patch(_PATCH_RENDER, return_value="- context"),
+        patch("orchestrator.context_items.record_injection_event") as mock_record,
+        patch("orchestrator.context_items.emit_ace_injection") as mock_emit,
+    ):
+        run_goose(state)
+
+    assert mock_record.call_args.kwargs["injection_point"] == "pr_rerun"
+    assert mock_emit.call_args.kwargs["workflow_id"] == "wf-239"
+
+
 def test_generate_recipe_renders_feedback_before_learned_patterns():
     """Human PR feedback is visibly framed before advisory learned patterns."""
     from pathlib import Path
