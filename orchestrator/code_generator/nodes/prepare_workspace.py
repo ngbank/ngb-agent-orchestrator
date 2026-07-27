@@ -25,7 +25,7 @@ def prepare_workspace(state: PrepareWorkspaceInputState) -> PrepareWorkspaceOutp
     breaks Goose's argv parsing.
 
     Reads:  workflow_id, ticket_key, work_plan_data, pr_comments
-    Writes: work_plan_path, summary_path, reasoning_path, pr_comments_path
+    Writes: work_plan_path, raw_results_path, reasoning_path, pr_comments_path
     """
     workflow_id = state.get("workflow_id") or "unknown"
     work_plan_data = state.get("work_plan_data")
@@ -40,11 +40,11 @@ def prepare_workspace(state: PrepareWorkspaceInputState) -> PrepareWorkspaceOutp
         json.dump(work_plan_data, wp_file, indent=2)
         work_plan_path = wp_file.name
 
-    summary_fd, summary_path = tempfile.mkstemp(
-        suffix="_exec_summary.json",
+    raw_results_fd, raw_results_path = tempfile.mkstemp(
+        suffix="_raw_results.json",
         prefix=f"{workflow_id}_",
     )
-    os.close(summary_fd)
+    os.close(raw_results_fd)
 
     reasoning_fd, reasoning_path = tempfile.mkstemp(
         suffix="_reasoning.txt",
@@ -65,7 +65,7 @@ def prepare_workspace(state: PrepareWorkspaceInputState) -> PrepareWorkspaceOutp
 
     return {
         "work_plan_path": work_plan_path,
-        "summary_path": summary_path,
+        "raw_results_path": raw_results_path,
         "reasoning_path": reasoning_path,
         "pr_comments_path": pr_comments_path,
     }

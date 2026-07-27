@@ -79,7 +79,8 @@ Use `goose run --recipe orchestrator/work_planner/recipes/plan.yaml --explain` t
 | `ticket_key` | Yes | JIRA ticket key |
 | `work_plan_path` | Yes | Path to the approved WorkPlan JSON file |
 | `working_dir` | Yes | Absolute path to the cloned target repository |
-| `output_path` | Yes | Path to write the execution summary JSON |
+| `raw_results_path` | Yes | Path where the finalizer will write `raw_results.json` |
+| `raw_results_script` | Yes | Absolute path to `orchestrator/code_generator/scripts/write_raw_results.py` (invoked as the recipe's final shell step) |
 | `reasoning_path` | Yes | Path to write the pre-execution reasoning and execution diary (not committed) |
 
 **What it does**:
@@ -92,20 +93,24 @@ Use `goose run --recipe orchestrator/work_planner/recipes/plan.yaml --explain` t
 7. Runs build and test checks:
    - Build: `python -m py_compile` on modified files
    - Tests: `python -m pytest tests/ -q --tb=short`
-8. Commits all changes (governed by developer rules from Step 1)
-9. Pushes the branch and creates a GitHub PR
-10. Writes an execution diary and execution summary JSON to `output_path`
+8. Commits all changes (governed by developer rules from Step 1) and drops a `.ngb_status` marker (`success | partial | failed`) plus an optional `.ngb_error` file in `working_dir`
+9. Appends an execution diary to `reasoning_path`
+10. Invokes the deterministic finalizer script — `python {{ raw_results_script }} --ticket-key ... --working-dir ... --output {{ raw_results_path }}` — which composes `raw_results.json` from git state + marker files
 
-**Execution summary format**:
+**Note**: The recipe intentionally does not author the execution summary itself. This avoids the AOS-239 failure mode where the LLM ended its session without writing the summary. The natural-language description is produced afterwards by the `summarize_changes` graph node from the actual `git diff`.
+
+**raw_results.json format** (machine-authored by the finalizer):
 ```json
 {
   "ticket_key": "AOS-41",
-  "branch": "feature/AOS-41-goose-execute-recipe",
+  "branch": "feature/AOS-41+goose-execute-recipe",
+  "commit_sha": "a1b2c3d...",
+  "files_changed": ["orchestrator/code_generator/recipes/generate_code.yaml"],
   "build": "pass",
   "tests": "pass",
-  "files_changed": ["graph/nodes/generate_code.py", "orchestrator/code_generator/recipes/generate_code.yaml"],
-  "commit_sha": "a1b2c3d...",
-  "status": "success"
+  "pr_url": "",
+  "status": "success",
+  "diff_base_sha": "d4e5f6a..."
 }
 ```
 

@@ -120,7 +120,7 @@ sequenceDiagram
             rect rgb(235, 255, 235)
                 Note over Dispatcher,ExecRecipe: Step 9: Execute WorkPlan
                 Dispatcher->>FileSystem: Write WorkPlan JSON<br/>to /tmp/{workflow_id}_workplan.json
-                Dispatcher->>Goose: goose run --recipe orchestrator/code_generator/recipes/generate_code.yaml<br/>--params ticket_key={ticket_key}<br/>--params work_plan_path=...<br/>--params output_path=...
+                Dispatcher->>Goose: goose run --recipe orchestrator/code_generator/recipes/generate_code.yaml<br/>--params ticket_key={ticket_key}<br/>--params work_plan_path=...<br/>--params raw_results_path=...<br/>--params raw_results_script=...
                 Goose->>ExecRecipe: Initialize recipe
                 ExecRecipe->>FileSystem: Read WorkPlan JSON
                 FileSystem-->>ExecRecipe: tasks, summary, approach
@@ -138,11 +138,15 @@ sequenceDiagram
                 FileSystem-->>ExecRecipe: build: pass|fail<br/>tests: pass|fail|skipped
                 ExecRecipe->>FileSystem: git add -A && git commit
                 FileSystem-->>ExecRecipe: commit_sha
-                ExecRecipe->>FileSystem: Write execution summary JSON<br/>to /tmp/{workflow_id}_exec_summary.json
+                ExecRecipe->>FileSystem: echo "success|partial|failed" > .ngb_status
+                ExecRecipe->>FileSystem: python write_raw_results.py<br/>--working-dir ... --output {raw_results_path}<br/>(machine-authored — no LLM output)
+                FileSystem-->>ExecRecipe: raw_results.json written
                 Goose-->>Dispatcher: Recipe complete
-                Dispatcher->>FileSystem: Read execution summary JSON
-                FileSystem-->>Dispatcher: { status, build, tests, branch, commit_sha }
-                Dispatcher->>SQLite: update_execution_summary()<br/>Store summary JSON
+                Dispatcher->>FileSystem: load_raw_results: read raw_results.json<br/>(fails loud if missing — routes to persist_results)
+                FileSystem-->>Dispatcher: { status, branch, commit_sha, files_changed, ... }
+                Dispatcher->>LLM: summarize_changes: describe git diff<br/>(fallback to deterministic summary on LLM error)
+                LLM-->>Dispatcher: description (natural language)
+                Dispatcher->>SQLite: update_code_generation_summary()<br/>(raw_results + description merged)
                 SQLite-->>Dispatcher: ✅ Stored
                 alt status: success or partial
                     Dispatcher->>SQLite: update_status(COMPLETED)

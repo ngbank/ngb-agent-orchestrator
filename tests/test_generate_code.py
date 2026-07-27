@@ -117,16 +117,16 @@ def test_prepare_workspace_creates_workspace_paths(monkeypatch, tmp_path):
 
     result = prepare_workspace(state)
 
-    for key in ("work_plan_path", "summary_path", "reasoning_path"):
+    for key in ("work_plan_path", "raw_results_path", "reasoning_path"):
         assert result.get(key), f"{key} missing or empty"
     assert os.path.isfile(result["work_plan_path"])
     with open(result["work_plan_path"]) as f:
         assert json.load(f) == state["work_plan_data"]
-    assert os.path.isfile(result["summary_path"])
+    assert os.path.isfile(result["raw_results_path"])
     assert os.path.isfile(result["reasoning_path"])
     assert "exec_log_path" not in result
 
-    for p in (result["work_plan_path"], result["summary_path"], result["reasoning_path"]):
+    for p in (result["work_plan_path"], result["raw_results_path"], result["reasoning_path"]):
         os.unlink(p)
 
 
@@ -144,7 +144,7 @@ def test_run_goose_passes_existing_branch_and_comments():
         "ticket_key": "AOS-92",
         "working_dir": "/tmp/test-dir",
         "work_plan_path": "/tmp/workplan.json",
-        "summary_path": "/tmp/summary.json",
+        "raw_results_path": "/tmp/summary.json",
         "reasoning_path": "/tmp/reasoning.txt",
         "pr_comments_path": "/tmp/pr_comments.txt",
         "code_generation_summary": {"branch": "feature/AOS-92+test"},
@@ -180,7 +180,7 @@ def test_run_goose_passes_retrieved_context_in_a_separate_file(tmp_path):
         "ticket_key": "AOS-238",
         "working_dir": "/tmp/test-dir",
         "work_plan_path": "/tmp/workplan.json",
-        "summary_path": "/tmp/summary.json",
+        "raw_results_path": "/tmp/summary.json",
         "reasoning_path": "/tmp/reasoning.txt",
         "pr_comments_path": "/tmp/pr_comments.txt",
         "pr_comments": "Address this mandatory review feedback.",
@@ -264,7 +264,7 @@ def test_prepare_workspace_writes_multiline_pr_comments_to_file(monkeypatch, tmp
 
     for p in (
         result["work_plan_path"],
-        result["summary_path"],
+        result["raw_results_path"],
         result["reasoning_path"],
         result["pr_comments_path"],
     ):
@@ -288,7 +288,7 @@ def test_prepare_workspace_skips_pr_comments_file_when_empty(monkeypatch, tmp_pa
 
     assert result.get("pr_comments_path") == ""
 
-    for p in (result["work_plan_path"], result["summary_path"], result["reasoning_path"]):
+    for p in (result["work_plan_path"], result["raw_results_path"], result["reasoning_path"]):
         os.unlink(p)
 
 
@@ -387,7 +387,7 @@ def test_run_goose_uses_inferred_branch_prefix():
         "ticket_key": "AOS-99",
         "working_dir": "/tmp/test-dir",
         "work_plan_path": "/tmp/workplan.json",
-        "summary_path": "/tmp/summary.json",
+        "raw_results_path": "/tmp/summary.json",
         "reasoning_path": "/tmp/reasoning.txt",
         "branch_prefix": "bugfix",
     }

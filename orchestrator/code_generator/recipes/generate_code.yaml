@@ -18,10 +18,15 @@ parameters:
     requirement: required
     description: "Absolute path to the cloned target repository (e.g. /tmp/ngb-execute-<uuid>)"
 
-  - key: output_path
+  - key: raw_results_path
     input_type: string
     requirement: required
-    description: "Path where the execution summary JSON will be written"
+    description: "Path where the recipe finalizer will write raw_results.json (structured, machine-authored — not LLM output)"
+
+  - key: raw_results_script
+    input_type: string
+    requirement: required
+    description: "Absolute path to orchestrator/code_generator/scripts/write_raw_results.py — invoked as the recipe's final shell step to write raw_results.json deterministically from git state + .ngb_status marker"
 
   - key: reasoning_path
     input_type: string
@@ -86,8 +91,12 @@ prompt: |
   - Ticket: {{ ticket_key }}
   - WorkPlan: {{ work_plan_path }}
   - Working directory (cloned repo): {{ working_dir }}
-  - Write execution summary to: {{ output_path }}
   - Write reasoning diary to: {{ reasoning_path }}
+
+  When the implementation attempt is finished, a machine-authored finalizer
+  will write raw_results.json to `{{ raw_results_path }}`. You do NOT write
+  that file yourself; you signal the result by writing a small marker file
+  (see Step 6) and then invoking the finalizer (see Step 7).
 
   {% if pr_comments_path %}
   ## ⚠️ Mandatory PR Review Feedback — Address Before Anything Else
@@ -125,17 +134,18 @@ prompt: |
 
   ## Goal
 
-  Implement the approved WorkPlan and produce a committed feature branch with an
-  accurate execution summary. Pull request creation is handled after this recipe by
-  the LangGraph code-generator nodes using GitHub App authentication.
+  Implement the approved WorkPlan and produce a committed feature branch plus a
+  small `raw_results.json` file (written by the Step 7 finalizer). The human-
+  facing description and the pull request itself are created after this recipe
+  by the LangGraph code-generator nodes.
 
   ## CRITICAL EXECUTION RULES
 
   - **You are running fully autonomously. There is no user to respond to.** Never ask for permission, confirmation, or approval. Never announce what you are *about to* do — just do it by emitting the next tool call.
   - **Never end your turn with a status update or summary of progress.** Status recaps like "I'm ready to proceed", "Next I'll...", or "So far completed: ..." without a tool call cause the session to terminate prematurely. If you have more work to do, your reply MUST end with a tool call, not prose.
-  - **The session ends ONLY when** the execution summary JSON has been written to `{{ output_path }}` AND you have verified it exists (e.g. via `ls {{ output_path }}` or `cat {{ output_path }}`). Stop emitting tool calls only at that point. Under no other circumstance should you stop.
+  - **The session ends ONLY when** you have invoked the finalizer script in Step 7 AND verified that `{{ raw_results_path }}` exists (e.g. via `ls {{ raw_results_path }}`). Stop emitting tool calls only at that point. Under no other circumstance should you stop.
   - **If you find yourself wanting to narrate progress, instead emit the next tool call.** The reasoning diary at `{{ reasoning_path }}` is where progress notes go — not the chat response.
-  - **The summary must reflect reality:** this recipe only owns branch creation, local implementation, checks, and commit status. Leave `pr_url` empty; PR creation happens after the recipe returns.
+  - **You do not author the execution summary.** The orchestrator's `summarize_changes` node builds the human-facing description after this recipe returns, using the actual git diff and the structured `raw_results.json` you produce via the Step 7 finalizer. Your job is to make the code changes and drop the small marker files described in Step 6.
   - **Single-file reads only:** Never combine multiple file reads in one shell command. Issue one `cat` or `read_file` per file per turn.
   - **No broad searches before editing:** Do NOT use `rg`, `grep`, `find`, or `tree` to survey the codebase before starting Task 1. The WorkPlan's `files_likely_affected` is the authoritative list. Go directly to reading and editing those files.
   - **No `cd && cmd` compound patterns** that chain across files or directories in one call.
@@ -265,10 +275,15 @@ prompt: |
      git commit -m "{filled-in commit message}"
      ```
 
-  3. **If the commit succeeds (exit 0)** — you are done with this step. Record:
-     - `tests`: `"pass"` if the pytest hook passed, `"fail"` if it failed, `"skipped"` if unavailable
-     - `build`: `"pass"`
-     - Proceed to Step 6.
+  3. **If the commit succeeds (exit 0)** — you are done with this step. Record the outcome
+     by writing a status marker file so the Step 7 finalizer can classify the result
+     without inspecting hook output:
+     ```
+     echo -n "success" > .ngb_status
+     ```
+     If the pytest hook did not run (no test hook configured), write `partial` only if
+     something else went wrong; a plain successful commit is `success`.
+     Proceed to Step 6.
 
   4. **If the commit fails because hooks auto-fixed files** — the hooks rewrote files
      and aborted the commit so you can inspect the changes. Go back to step 1 and retry.
@@ -279,8 +294,20 @@ prompt: |
      - Fix the code
      - Go back to step 1 and retry
      - Classifying failures as "infrastructure limitations" or "acceptable" is not permitted
-     - If you cannot fix the failures after a genuine attempt, write a failed execution
-       summary and stop
+     - If you cannot fix the failures after a genuine attempt, record the failure and stop:
+       ```
+       echo -n "failed" > .ngb_status
+       printf '%s' "<one-line description of the failure>" > .ngb_error
+       ```
+       Then jump to Step 7 (finalizer) to close out the recipe cleanly.
+
+  Special case — build passes but tests fail unrecoverably after genuine attempts:
+  ```
+  echo -n "partial" > .ngb_status
+  printf '%s' "<what tests failed and why>" > .ngb_error
+  ```
+  Then continue to Step 6 and Step 7. `partial` allows the PR to still be opened for
+  human review.
 
   Get the commit SHA after a successful commit:
   ```
@@ -288,8 +315,8 @@ prompt: |
   ```
 
   ### Files Changed
-  Run `vcs.files_changed_command` from Step 2. Combine the results into a single
-  list of changed and new files.
+  The Step 7 finalizer computes files_changed from `git diff` automatically —
+  you do not need to gather them yourself.
 
   ## Step 6: Write Execution Diary
 
@@ -299,7 +326,8 @@ prompt: |
   - NEVER delete branches
 
   Append an execution diary to `{{ reasoning_path }}` (do not overwrite — append).
-  This is for debugging only and will NOT be committed.
+  This is for debugging only and will NOT be committed. The `summarize_changes` node
+  reads this diary alongside the git diff when it builds the PR description.
 
   ```
   === EXECUTION DIARY ===
@@ -317,49 +345,31 @@ prompt: |
   <Anything you had to guess at or work around>
   ```
 
-  ## Step 7: Write Summary File
+  ## Step 7: Invoke the Finalizer
 
-  Write the execution summary JSON to `{{ output_path }}` using the developer extension's
-  file writing tool (do not use a shell heredoc). The dispatcher reads this file to
-  determine workflow outcome — it is the authoritative result.
+  Invoke the machine-authored finalizer to write `raw_results.json` from git state
+  plus the `.ngb_status` / `.ngb_error` markers you dropped in Step 5:
 
-  On success the content should be:
-  ```json
-  {
-    "ticket_key": "{{ ticket_key }}",
-    "branch": "{{ branch_name }}",
-    "build": "pass",
-    "tests": "pass",
-    "files_changed": ["list of changed files"],
-    "commit_sha": "<full sha>",
-    "pr_url": "",
-    "status": "success"
-  }
+  ```
+  {{ GOOSE_MCP_PYTHON }} {{ raw_results_script }} \
+      --ticket-key {{ ticket_key }} \
+      --working-dir {{ working_dir }} \
+      --output {{ raw_results_path }}
   ```
 
-  If any unrecoverable error occurred:
-  ```json
-  {
-    "ticket_key": "{{ ticket_key }}",
-    "branch": "",
-    "build": "fail",
-    "tests": "skipped",
-    "files_changed": [],
-    "commit_sha": "",
-    "pr_url": "",
-    "status": "failed",
-    "error": "<description of the error>"
-  }
-  ```
+  This is a **deterministic** script — it reads:
+  - `{{ working_dir }}/.ngb_status`  (success | partial | failed; missing → failed)
+  - `{{ working_dir }}/.ngb_error`   (optional error message)
+  - `git rev-parse HEAD`, `git diff --name-only origin/main..HEAD` (or `main`)
 
-  Status rules:
-  - `"success"`: build=pass AND tests=pass AND a commit was produced
-  - `"partial"`: build=pass AND tests=fail
-  - `"failed"`: build=fail or no commit was produced
+  and writes `raw_results.json` with `ticket_key`, `branch`, `commit_sha`,
+  `files_changed`, `build`, `tests`, `status`, `error`, `diff_base_sha`. You do
+  not author the JSON; the downstream `summarize_changes` node adds the natural-
+  language description from the actual diff.
 
   Verify the file exists:
   ```
-  test -f {{ output_path }} && echo "✅ summary written" || echo "❌ summary missing"
+  test -f {{ raw_results_path }} && echo "✅ raw_results written" || echo "❌ raw_results missing"
   ```
 
-  After the summary is verified, the session is complete. Stop emitting tool calls.
+  After the finalizer succeeds, the session is complete. Stop emitting tool calls.

@@ -57,7 +57,7 @@ def test_run_goose_logs_nonzero_exit(caplog, tmp_path):
         "ticket_key": "AOS-166",
         "working_dir": str(tmp_path),
         "work_plan_path": str(work_plan_path),
-        "summary_path": str(tmp_path / "summary.json"),
+        "raw_results_path": str(tmp_path / "raw_results.json"),
         "reasoning_path": str(reasoning_path),
     }
 

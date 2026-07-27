@@ -9,9 +9,13 @@ Graph topology:
         ↓ (error → persist_results)
     prepare_workspace
         ↓
+    infer_branch_prefix
+        ↓
     run_goose
         ↓
-    process_results
+    load_raw_results
+        ↓ (missing raw_results.json → persist_results)
+    summarize_changes
         ↓
     push_and_create_pr
         ↓
@@ -29,17 +33,19 @@ from langgraph.graph import END, StateGraph
 
 from orchestrator.code_generator.edges import (
     route_after_infer_branch_prefix,
+    route_after_load_raw_results,
     route_after_prepare_workspace,
     route_after_repo_setup,
 )
 from orchestrator.code_generator.nodes.cleanup import cleanup
 from orchestrator.code_generator.nodes.infer_branch_prefix import infer_branch_prefix
+from orchestrator.code_generator.nodes.load_raw_results import load_raw_results
 from orchestrator.code_generator.nodes.mark_generating_code import mark_generating_code
 from orchestrator.code_generator.nodes.persist_results import persist_results
 from orchestrator.code_generator.nodes.prepare_workspace import prepare_workspace
-from orchestrator.code_generator.nodes.process_results import process_results
 from orchestrator.code_generator.nodes.push_and_create_pr import push_and_create_pr
 from orchestrator.code_generator.nodes.run_goose import run_goose
+from orchestrator.code_generator.nodes.summarize_changes import summarize_changes
 from orchestrator.code_generator.state import CodeGeneratorState
 from orchestrator.shared.repo_setup import build_repo_setup_subgraph
 
@@ -59,7 +65,8 @@ def build_code_generator():
     builder.add_node("prepare_workspace", prepare_workspace)
     builder.add_node("infer_branch_prefix", infer_branch_prefix)
     builder.add_node("run_goose", run_goose)
-    builder.add_node("process_results", process_results)
+    builder.add_node("load_raw_results", load_raw_results)
+    builder.add_node("summarize_changes", summarize_changes)
     builder.add_node("push_and_create_pr", push_and_create_pr)
     builder.add_node("persist_results", persist_results)
     builder.add_node("cleanup", cleanup)
@@ -82,8 +89,13 @@ def build_code_generator():
         route_after_infer_branch_prefix,
         {"run_goose": "run_goose", "persist_results": "persist_results"},
     )
-    builder.add_edge("run_goose", "process_results")
-    builder.add_edge("process_results", "push_and_create_pr")
+    builder.add_edge("run_goose", "load_raw_results")
+    builder.add_conditional_edges(
+        "load_raw_results",
+        route_after_load_raw_results,
+        {"summarize_changes": "summarize_changes", "persist_results": "persist_results"},
+    )
+    builder.add_edge("summarize_changes", "push_and_create_pr")
     builder.add_edge("push_and_create_pr", "persist_results")
     builder.add_edge("persist_results", "cleanup")
     builder.add_edge("cleanup", END)
