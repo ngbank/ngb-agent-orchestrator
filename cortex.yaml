@@ -1,0 +1,9 @@
+openapi: 3.0.1
+info:
+  title: ngb-agent-orchestrator
+  description:
+    service bcebc
+  x-cortex-tag: ngb-agent-orchestrator
+  x-cortex-type: service
+  x-cortex-groups:
+  - frontend

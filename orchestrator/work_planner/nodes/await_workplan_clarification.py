@@ -3,6 +3,7 @@
 import click
 from langgraph.types import interrupt
 
+from orchestrator.event_publisher import publish_status_event
 from orchestrator.failure import mark_failure
 from orchestrator.utils import _get_actor
 from orchestrator.work_planner.state import (
@@ -57,6 +58,11 @@ def await_workplan_clarification(
             WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION,
             actor="dispatcher",
             reason=f"Awaiting workplan clarification (round {current_round})",
+        )
+        publish_status_event(
+            workflow_id=workflow_id,
+            status_value=WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION.value,
+            ticket_id=state.get("ticket_key"),
         )
         # Persist the work_plan_data so _handle_clarify can read concerns
         # from the state store (store_plan is skipped when we route here).

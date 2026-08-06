@@ -3,6 +3,7 @@
 import click
 
 from orchestrator.code_generator.state import PersistResultsInputState, PersistResultsOutputState
+from orchestrator.event_publisher import publish_status_event
 from orchestrator.litellm_callbacks import aggregate_token_usage
 from state.workflow_repository import (
     update_code_generation_summary,
@@ -51,6 +52,12 @@ def persist_results(state: PersistResultsInputState) -> PersistResultsOutputStat
             pr_url=pr_url_for_status or None,
             actor="generate_code",
         )
+        if new_status == WorkflowStatus.FAILED:
+            publish_status_event(
+                workflow_id=workflow_id,
+                status_value=WorkflowStatus.FAILED.value,
+                error_message=str(exec_error) if exec_error else None,
+            )
         click.echo(
             f"{chr(0x2705) if new_status == WorkflowStatus.PENDING_PR_APPROVAL else chr(0x274c)} "
             f"Execution {code_generation_summary.get('status')} — "
