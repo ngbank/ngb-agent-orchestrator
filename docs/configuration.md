@@ -146,6 +146,32 @@ Remote mode currently supports the subset of operations the server exposes
 `--retry`, and `--clarify` will land in remote mode in a follow-up epic; use
 `ORCHESTRATOR_MODE=local` for those today.
 
+### Azure Service Bus (FleetOps notifications)
+
+The orchestrator publishes workflow status events to an Azure Service Bus topic so `eqb-fleetops-service` can reconcile its `executions` table without polling. Publishing is fire-and-forget: failures are logged and never block graph execution. When `AZURE_SERVICE_BUS_CONNECTION_STRING` is unset or empty, publishing is disabled (no-op) — this is the default for local development.
+
+See [eqb-fleetops-service/docs/execution-events-topic-contract.md](../../eqb-fleetops-service/docs/execution-events-topic-contract.md) for the full message contract.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `AZURE_SERVICE_BUS_CONNECTION_STRING` | No | *(empty — publishing disabled)* | Full namespace connection string. Obtain from the Azure portal or Key Vault. Never commit this value. |
+| `AZURE_SERVICE_BUS_EXECUTION_EVENTS_TOPIC` | No | `execution-events` | Topic name to publish execution-status events to. |
+
+Events are published at the following lifecycle points:
+
+| Trigger | eventType | status |
+|---|---|---|
+| Workflow starts / resumes (`create_workflow_record`) | `execution.started` | `RUNNING` |
+| Awaiting developer approval (`await_approval`) | `approval.pending` | `PENDING_APPROVAL` |
+| Awaiting PR review (`await_pr_approval`) | `pr_approval.pending` | `PENDING_PR_APPROVAL` |
+| Awaiting WorkPlan clarification (`await_workplan_clarification`) | `workplan_clarification.pending` | `PENDING_WORKPLAN_CLARIFICATION` |
+| PR approved — workflow completes (`await_pr_approval`) | `execution.completed` | `SUCCEEDED` |
+| Code generation failed (`persist_results`) | `execution.failed` | `FAILED` |
+| Routing / planning error (`error_handler`) | `execution.failed` | `FAILED` |
+| PR rejected (`await_pr_approval`) | `execution.failed` | `FAILED` |
+| Workflow cancelled (`cancel`) | `execution.failed` | `CANCELLED` |
+| Workflow interrupted or force-failed | `execution.failed` | `FAILED` |
+
 ### OpenTelemetry (Day-0 Tracing)
 
 Tracing is always enabled. Configure the exporter via environment variables — no code changes needed to switch.

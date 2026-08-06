@@ -47,7 +47,11 @@ htmlcov/
 
 # Logs
 *.log
+*.pid
 logs/
+
+# Runtime process files (orchestrator server PID, logs)
+.run/
 
 # Goose proxy LiteLLM config files. Current code writes these under
 # $XDG_STATE_HOME/ngb-agent-orchestrator/proxy-sessions/ (outside the

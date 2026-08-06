@@ -4,6 +4,7 @@ import logging
 
 from langgraph.types import interrupt
 
+from orchestrator.event_publisher import publish_status_event
 from orchestrator.state import PRApprovalInputState, PRApprovalOutputState
 from orchestrator.utils import _get_actor
 from state.workflow_repository import get_workflow, update_pr_comments, update_status
@@ -44,6 +45,12 @@ def await_pr_approval(state: PRApprovalInputState) -> PRApprovalOutputState:
             actor="dispatcher",
             reason="Awaiting PR review",
         )
+        publish_status_event(
+            workflow_id=workflow_id,
+            status_value=WorkflowStatus.PENDING_PR_APPROVAL.value,
+            pr_url=pr_url,
+            ticket_id=state.get("ticket_key"),
+        )
 
     ticket_key = state.get("ticket_key", workflow_id)
     message = "⏸️  Pull request is ready for review.\n   Workflow ID: %s"
@@ -79,6 +86,12 @@ def await_pr_approval(state: PRApprovalInputState) -> PRApprovalOutputState:
             reason="PR approved by reviewer",
             pr_approval_decision="approved",
         )
+        publish_status_event(
+            workflow_id=workflow_id,
+            status_value=WorkflowStatus.COMPLETED.value,
+            pr_url=pr_url,
+            ticket_id=state.get("ticket_key"),
+        )
         logger.info("PR approved by %s", actor)
         return {"pr_approval_decision": "approved"}
 
@@ -102,6 +115,11 @@ def await_pr_approval(state: PRApprovalInputState) -> PRApprovalOutputState:
             actor=actor,
             reason=reason or "PR rejected by reviewer",
             pr_approval_decision="rejected",
+        )
+        publish_status_event(
+            workflow_id=workflow_id,
+            status_value=WorkflowStatus.REJECTED.value,
+            ticket_id=state.get("ticket_key"),
         )
         if reason:
             logger.warning("PR rejected by %s: %s", actor, reason)
