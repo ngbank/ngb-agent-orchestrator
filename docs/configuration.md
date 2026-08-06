@@ -162,7 +162,7 @@ Events are published at the following lifecycle points:
 | Trigger | eventType | status |
 |---|---|---|
 | Workflow starts / resumes (`create_workflow_record`) | `execution.started` | `RUNNING` |
-| WorkPlan stored (`store_plan`) | `plan.generated` | *(none — triggers FleetOps auto-approval)* |
+| WorkPlan stored (`store_plan`) | `plan.generated` | *(none)* |
 | Awaiting developer approval (`await_approval`) | `approval.pending` | `APPROVAL_PENDING` |
 | Awaiting PR review (`await_pr_approval`) | `approval.pending` | `APPROVAL_PENDING` |
 | Awaiting WorkPlan clarification (`await_workplan_clarification`) | `approval.pending` | `APPROVAL_PENDING` |

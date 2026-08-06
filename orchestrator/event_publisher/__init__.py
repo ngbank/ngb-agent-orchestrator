@@ -52,11 +52,7 @@ def publish_plan_generated_event(
     ticket_id: Optional[str] = None,
     work_plan: Optional[Any] = None,
 ) -> None:
-    """Publish a plan.generated event carrying the work-plan payload.
-
-    FleetOps uses this event to trigger auto-approval policy evaluation when
-    the payload includes workPlan.
-    """
+    """Publish a plan.generated event carrying the work-plan payload."""
     event = ExecutionStatusEvent(
         execution_id=workflow_id,
         event_type=plan_generated_event_type(),
