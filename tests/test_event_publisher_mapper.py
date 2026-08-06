@@ -13,12 +13,12 @@ class TestMapStatus:
         "status, expected_event_type, expected_status",
         [
             (WorkflowStatus.IN_PROGRESS, "execution.started", "RUNNING"),
-            (WorkflowStatus.PENDING_APPROVAL, "approval.pending", "APPROVAL_PENDING"),
-            (WorkflowStatus.PENDING_PR_APPROVAL, "approval.pending", "APPROVAL_PENDING"),
+            (WorkflowStatus.PENDING_APPROVAL, "approval.pending", "PENDING_APPROVAL"),
+            (WorkflowStatus.PENDING_PR_APPROVAL, "pr_approval.pending", "PENDING_PR_APPROVAL"),
             (
                 WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION,
-                "approval.pending",
-                "APPROVAL_PENDING",
+                "workplan_clarification.pending",
+                "PENDING_WORKPLAN_CLARIFICATION",
             ),
             (WorkflowStatus.COMPLETED, "execution.completed", "SUCCEEDED"),
             (WorkflowStatus.FAILED, "execution.failed", "FAILED"),

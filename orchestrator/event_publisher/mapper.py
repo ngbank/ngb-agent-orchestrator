@@ -13,9 +13,12 @@ from state.workflow_status import WorkflowStatus
 # (eventType, status) — status is None for events that carry no execution status
 _STATUS_MAP: dict[str, Tuple[str, Optional[str]]] = {
     WorkflowStatus.IN_PROGRESS.value: ("execution.started", "RUNNING"),
-    WorkflowStatus.PENDING_APPROVAL.value: ("approval.pending", "APPROVAL_PENDING"),
-    WorkflowStatus.PENDING_PR_APPROVAL.value: ("approval.pending", "APPROVAL_PENDING"),
-    WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION.value: ("approval.pending", "APPROVAL_PENDING"),
+    WorkflowStatus.PENDING_APPROVAL.value: ("approval.pending", "PENDING_APPROVAL"),
+    WorkflowStatus.PENDING_PR_APPROVAL.value: ("pr_approval.pending", "PENDING_PR_APPROVAL"),
+    WorkflowStatus.PENDING_WORKPLAN_CLARIFICATION.value: (
+        "workplan_clarification.pending",
+        "PENDING_WORKPLAN_CLARIFICATION",
+    ),
     WorkflowStatus.COMPLETED.value: ("execution.completed", "SUCCEEDED"),
     WorkflowStatus.FAILED.value: ("execution.failed", "FAILED"),
     WorkflowStatus.CANCELLED.value: ("execution.failed", "CANCELLED"),
