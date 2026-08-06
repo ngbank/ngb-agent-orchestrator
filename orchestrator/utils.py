@@ -253,7 +253,20 @@ def goose_session(
     config_dir = Path(
         tempfile.mkdtemp(prefix="goose_proxy_session_", dir=str(proxy_sessions_dir()))
     )
-    (config_dir / "otel").symlink_to(repo_root / "otel")
+    # On Windows, creating a symlink requires SeCreateSymbolicLinkPrivilege
+    # (admin or Developer Mode enabled). Use an NTFS junction instead, which
+    # requires no special privileges. On macOS/Linux a regular symlink works.
+    _otel_link = config_dir / "otel"
+    if sys.platform == "win32":
+        import subprocess as _sp
+
+        _sp.run(
+            ["cmd", "/c", "mklink", "/J", str(_otel_link), str(repo_root / "otel")],
+            check=True,
+            capture_output=True,
+        )
+    else:
+        _otel_link.symlink_to(repo_root / "otel")
     config_path = str(config_dir / "goose_proxy_litellm.yaml")
     proxy_log_fh: Optional[IO[str]] = None
     try:
@@ -332,6 +345,10 @@ def goose_session(
             env["OPENAI_BASE_URL"] = f"http://127.0.0.1:{port}"
             env["OPENAI_API_KEY"] = "sk-local"
             env["NGB_ORCHESTRATOR_ROOT"] = str(repo_root)
+            # Force agent mode so goose actually executes tool calls.
+            # The global goose config may set GOOSE_MODE=chat which disables
+            # tool use; the orchestrator always needs auto/agent mode.
+            env["GOOSE_MODE"] = "auto"
             yield env
         finally:
             try:

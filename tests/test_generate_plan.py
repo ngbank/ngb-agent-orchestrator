@@ -250,7 +250,7 @@ def test_plan_recipe_bounds_runaway_streams():
         / "recipes"
         / "plan.yaml"
     )
-    recipe_text = recipe_path.read_text()
+    recipe_text = recipe_path.read_text(encoding="utf-8")
 
     assert (
         "max_retries: 1" in recipe_text
@@ -497,7 +497,7 @@ def test_plan_recipe_declares_context_items_path_parameter():
         / "recipes"
         / "plan.yaml"
     )
-    recipe_text = recipe_path.read_text()
+    recipe_text = recipe_path.read_text(encoding="utf-8")
 
     assert (
         "key: context_items_path" in recipe_text

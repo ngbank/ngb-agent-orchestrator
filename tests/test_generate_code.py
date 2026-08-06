@@ -224,7 +224,9 @@ def test_generate_recipe_renders_feedback_before_learned_patterns():
     """Human PR feedback is visibly framed before advisory learned patterns."""
     from pathlib import Path
 
-    recipe = Path("orchestrator/code_generator/recipes/generate_code.yaml").read_text()
+    recipe = Path("orchestrator/code_generator/recipes/generate_code.yaml").read_text(
+        encoding="utf-8"
+    )
 
     assert recipe.index("Mandatory PR Review Feedback") < recipe.index("Advisory Learned Patterns")
     assert recipe.index("cat {{ pr_comments_path }}") < recipe.index("cat {{ context_items_path }}")

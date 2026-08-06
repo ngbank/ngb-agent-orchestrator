@@ -37,6 +37,8 @@ from typing import Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 _HAS_KILLPG = hasattr(os, "killpg") and hasattr(os, "getpgid")
+# SIGKILL is POSIX-only; fall back to SIGTERM on Windows so the module imports cleanly.
+_SIGKILL: signal.Signals = getattr(signal, "SIGKILL", signal.SIGTERM)
 
 
 class SubprocessRegistry:
@@ -121,7 +123,7 @@ def _terminate_procs(
                 grace_s,
                 context,
             )
-            _signal_group(proc, signal.SIGKILL, context)
+            _signal_group(proc, _SIGKILL, context)
             try:
                 proc.wait(timeout=grace_s)
             except subprocess.TimeoutExpired:
@@ -141,7 +143,7 @@ def _signal_group(proc: subprocess.Popen, sig: signal.Signals, context: str) -> 
         return
     if _HAS_KILLPG:
         try:
-            os.killpg(os.getpgid(proc.pid), sig)
+            getattr(os, "killpg")(getattr(os, "getpgid")(proc.pid), sig)
             return
         except ProcessLookupError:
             return
