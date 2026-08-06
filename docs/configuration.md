@@ -162,7 +162,6 @@ Events are published at the following lifecycle points:
 | Trigger | eventType | status |
 |---|---|---|
 | Workflow starts / resumes (`create_workflow_record`) | `execution.started` | `RUNNING` |
-| WorkPlan stored (`store_plan`) | `plan.generated` | *(none)* |
 | Awaiting developer approval (`await_approval`) | `approval.pending` | `PENDING_APPROVAL` |
 | Awaiting PR review (`await_pr_approval`) | `pr_approval.pending` | `PENDING_PR_APPROVAL` |
 | Awaiting WorkPlan clarification (`await_workplan_clarification`) | `workplan_clarification.pending` | `PENDING_WORKPLAN_CLARIFICATION` |

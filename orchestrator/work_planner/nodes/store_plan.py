@@ -2,7 +2,6 @@
 
 import click
 
-from orchestrator.event_publisher import publish_plan_generated_event
 from orchestrator.node_result import WorkPlannerNodeResult
 from orchestrator.work_planner.state import (
     StorePlanInputState,
@@ -26,9 +25,4 @@ def store_plan(state: StorePlanInputState) -> WorkPlannerNodeResult:
         reason=f"WorkPlan generated for {ticket_key}",
     )
     click.echo("✅ WorkPlan stored to SQLite")
-    publish_plan_generated_event(
-        workflow_id=workflow_id,
-        ticket_id=ticket_key or None,
-        work_plan=work_plan_data,
-    )
     return {}

@@ -2,7 +2,7 @@
 
 import pytest
 
-from orchestrator.event_publisher.mapper import map_status, plan_generated_event_type
+from orchestrator.event_publisher.mapper import map_status
 from state.workflow_status import WorkflowStatus
 
 
@@ -46,8 +46,3 @@ class TestMapStatus:
     def test_unknown_string_raises(self):
         with pytest.raises(ValueError, match="No event mapping"):
             map_status("completely_unknown")
-
-
-class TestPlanGeneratedEventType:
-    def test_returns_plan_generated(self):
-        assert plan_generated_event_type() == "plan.generated"

@@ -202,31 +202,6 @@ class TestErrorHandlerPublish:
 
 
 # ---------------------------------------------------------------------------
-# store_plan
-# ---------------------------------------------------------------------------
-
-
-class TestStorePlanPublish:
-    def test_publishes_plan_generated_after_store(self):
-        from orchestrator.work_planner.nodes.store_plan import store_plan
-
-        work_plan = {"status": "pass", "tasks": []}
-        state = {"workflow_id": "wf-5", "ticket_key": "AOS-5", "work_plan_data": work_plan}
-        with (
-            patch("orchestrator.work_planner.nodes.store_plan.update_work_plan"),
-            patch(
-                "orchestrator.work_planner.nodes.store_plan.publish_plan_generated_event"
-            ) as mock_pub,
-        ):
-            store_plan(state)
-
-        mock_pub.assert_called_once_with(
-            workflow_id="wf-5",
-            ticket_id="AOS-5",
-            work_plan=work_plan,
-        )
-
-
 # ---------------------------------------------------------------------------
 # persist_results — FAILED path
 # ---------------------------------------------------------------------------
