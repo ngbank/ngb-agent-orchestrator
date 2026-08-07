@@ -2,7 +2,9 @@
 
 import os
 import sqlite3
+import sys
 import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -527,6 +529,8 @@ def test_get_db_path_falls_back_to_home_local_state(monkeypatch, tmp_path):
     monkeypatch.delenv("XDG_STATE_HOME", raising=False)
     fake_home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(fake_home))
+    if sys.platform == "win32":
+        monkeypatch.setenv("USERPROFILE", str(fake_home))
 
     db_path = state_store.get_db_path()
 
@@ -545,7 +549,7 @@ def test_get_db_path_from_env(test_db):
     # Mock mkdir to prevent directory creation during test
     with patch("pathlib.Path.mkdir"):
         db_path = state_store.get_db_path()
-        assert db_path == custom_path
+        assert Path(db_path) == Path(custom_path)
 
 
 def test_get_db_path_env_overrides_xdg(monkeypatch, tmp_path):

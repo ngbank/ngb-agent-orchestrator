@@ -316,6 +316,7 @@ def test_cancel_terminates_registered_subprocess() -> None:
         dispatcher.shutdown(wait=True)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="killpg not available on Windows")
 def test_cancel_terminates_process_group() -> None:
     """A parent that forks a child should have both killed via killpg."""
     dispatcher = BackgroundDispatcher(max_workers=1)
