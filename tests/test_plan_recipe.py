@@ -32,7 +32,7 @@ RECIPE_PATH = (
 def test_recipe_yaml_parses() -> None:
     """The recipe must be valid YAML — a syntax error would break the
     plan node in production and this is the cheapest thing to check."""
-    with RECIPE_PATH.open() as fh:
+    with RECIPE_PATH.open(encoding="utf-8") as fh:
         data = yaml.safe_load(fh)
     assert isinstance(data, dict), "recipe root must be a mapping"
 
@@ -45,7 +45,7 @@ def test_recipe_does_not_reference_removed_dispatcher_validator() -> None:
     subprocess with ``ModuleNotFoundError`` and enter an
     ``on_failure``-driven retry loop up to ``--max-turns 200``.
     """
-    text = RECIPE_PATH.read_text()
+    text = RECIPE_PATH.read_text(encoding="utf-8")
     assert "from work_plan_validator" not in text, (
         "plan.yaml still imports from the removed dispatcher/work_plan_validator "
         "module. Replace with 'from orchestrator.work_planner.utilities import "
@@ -67,7 +67,7 @@ def test_recipe_uses_importable_validator_target() -> None:
     # Sanity: the recipe should mention this exact import so the check
     # above is meaningful. If the recipe migrates to a different (still
     # importable) path in future, update this assertion accordingly.
-    text = RECIPE_PATH.read_text()
+    text = RECIPE_PATH.read_text(encoding="utf-8")
     assert "from orchestrator.work_planner.utilities import validate_work_plan" in text, (
         "plan.yaml no longer imports validate_work_plan from "
         "orchestrator.work_planner.utilities — update this test if the "
@@ -90,7 +90,7 @@ def test_recipe_clarification_rules_require_concern_removal() -> None:
     """
     # Collapse whitespace so YAML line-wrapping doesn't break substring
     # matches against multi-word phrases.
-    text = " ".join(RECIPE_PATH.read_text().split())
+    text = " ".join(RECIPE_PATH.read_text(encoding="utf-8").split())
     assert "**REMOVE that concern from the new `concerns` array.**" in text, (
         "plan.yaml no longer instructs the planner to remove resolved "
         "concerns from the array. Reviewer-answer processing must apply "
@@ -108,7 +108,7 @@ def test_recipe_forbids_verbatim_concern_repetition() -> None:
     into rounds 2 and 3 even after the reviewer resolved them, hitting
     MAX_CLARIFICATION_ROUNDS.
     """
-    text = " ".join(RECIPE_PATH.read_text().split())
+    text = " ".join(RECIPE_PATH.read_text(encoding="utf-8").split())
     assert "**NEVER re-emit a concern whose text appears verbatim" in text, (
         "plan.yaml no longer forbids verbatim re-emission of prior-round "
         "concerns. This rule is required to prevent the clarification "
@@ -124,7 +124,7 @@ def test_recipe_binds_pass_status_to_empty_concerns() -> None:
     must reflect this so the planner emits an approvable plan when the
     reviewer has answered every concern.
     """
-    text = " ".join(RECIPE_PATH.read_text().split())
+    text = " ".join(RECIPE_PATH.read_text(encoding="utf-8").split())
     assert '`status="pass"` REQUIRES `concerns=[]`' in text, (
         "plan.yaml no longer binds status='pass' to empty concerns. "
         "The Status Invariants section must state this rule without an "

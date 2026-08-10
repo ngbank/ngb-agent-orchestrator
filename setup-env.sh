@@ -99,6 +99,23 @@ if $DO_CLEAN; then
 fi
 
 VENV_DIR="$(pwd)/.venv"
+
+# Detect OS type for platform-specific behaviour (macOS, Linux, or Windows via Git Bash/MSYS2/Cygwin)
+OS_TYPE=""
+case "$(uname -s)" in
+    Darwin*)              OS_TYPE="mac" ;;
+    Linux*)               OS_TYPE="linux" ;;
+    MINGW*|MSYS*|CYGWIN*) OS_TYPE="windows" ;;
+    *)                    OS_TYPE="unknown" ;;
+esac
+
+# On Windows (Git Bash / MSYS2 / Cygwin), Python venvs use Scripts/ instead of bin/
+if [[ "$OS_TYPE" == "windows" ]]; then
+    VENV_BIN="${VENV_DIR}/Scripts"
+else
+    VENV_BIN="${VENV_DIR}/bin"
+fi
+
 REQUIRED_PYTHON_VERSION=""
 
 if [[ -f .python-version ]]; then
@@ -129,8 +146,10 @@ fi
 info "Checking prerequisites..."
 
 if $DO_ENV; then
-    command -v direnv &>/dev/null \
-        || error "'direnv' is not installed or not on PATH. Install from: https://direnv.net/docs/installation.html"
+    if [[ "$OS_TYPE" != "windows" ]]; then
+        command -v direnv &>/dev/null \
+            || error "'direnv' is not installed or not on PATH. Install from: https://direnv.net/docs/installation.html"
+    fi
     command -v az &>/dev/null \
         || error "'az' CLI is not installed or not on PATH. Install from: https://learn.microsoft.com/cli/azure/install-azure-cli"
     if ! az account show &>/dev/null; then
@@ -140,8 +159,13 @@ if $DO_ENV; then
 fi
 
 if $DO_PYTHON; then
-    command -v pyenv &>/dev/null \
-        || error "'pyenv' is not installed or not on PATH. Install from: https://github.com/pyenv/pyenv#installation"
+    if [[ "$OS_TYPE" == "windows" ]]; then
+        command -v pyenv &>/dev/null \
+            || error "'pyenv' (pyenv-win) is not installed or not on PATH. Install from: https://github.com/pyenv-win/pyenv-win#installation"
+    else
+        command -v pyenv &>/dev/null \
+            || error "'pyenv' is not installed or not on PATH. Install from: https://github.com/pyenv/pyenv#installation"
+    fi
 fi
 
 if $DO_GOOSE; then
@@ -176,7 +200,11 @@ if $DO_DOCKER; then
     # default. Check the actual capability (not just the binary) so this
     # works regardless of which provider satisfies it.
     if ! "$DOCKER_BIN" compose version &>/dev/null; then
-        error "'docker compose' is not available via ${DOCKER_BIN}. Install with: brew install docker-compose"
+        if [[ "$OS_TYPE" == "windows" ]]; then
+            error "'docker compose' is not available via ${DOCKER_BIN}. Install Docker Desktop for Windows from: https://docs.docker.com/desktop/install/windows-install/"
+        else
+            error "'docker compose' is not available via ${DOCKER_BIN}. Install with: brew install docker-compose"
+        fi
     fi
 fi
 
@@ -196,7 +224,11 @@ if $DO_PYTHON; then
         install_rc=$?
 
         if [[ $install_rc -ne 0 ]]; then
-            error "Could not install pinned Python ${REQUIRED_PYTHON_VERSION}. Install/update pyenv definitions and retry:\n  brew update && brew upgrade pyenv\n  pyenv install ${REQUIRED_PYTHON_VERSION}"
+            if [[ "$OS_TYPE" == "windows" ]]; then
+                error "Could not install pinned Python ${REQUIRED_PYTHON_VERSION}. Update pyenv-win and retry:\n  pyenv update\n  pyenv install ${REQUIRED_PYTHON_VERSION}"
+            else
+                error "Could not install pinned Python ${REQUIRED_PYTHON_VERSION}. Install/update pyenv definitions and retry:\n  brew update && brew upgrade pyenv\n  pyenv install ${REQUIRED_PYTHON_VERSION}"
+            fi
         fi
     fi
 
@@ -224,14 +256,42 @@ if $DO_DEPS; then
         "$PYTHON_BIN" -m venv "$VENV_DIR"
     fi
 
+    # On Windows, Python venvs use Scripts/ instead of bin/. Pre-commit's
+    # health check uses os.path.isfile() on the entry path, so .venv/bin/python
+    # must exist as a real file (not just python.exe). Create a junction from
+    # .venv/bin → .venv/Scripts and shell shims named 'python' and 'pip'
+    # (no extension) so pre-commit finds them and runs them via their shebang.
+    if [[ "$OS_TYPE" == "windows" ]]; then
+        if [[ ! -d "$VENV_DIR/bin" ]]; then
+            "$PYTHON_BIN" -c "
+import subprocess, sys
+r = subprocess.run(['cmd', '/c', 'mklink /J .venv\\\\bin .venv\\\\Scripts'], shell=True, capture_output=True, text=True)
+if r.returncode != 0:
+    print(r.stderr, file=sys.stderr)
+    sys.exit(1)
+" || error "Failed to create .venv/bin junction. Enable Developer Mode or run as Administrator."
+            info "Created .venv/bin → .venv/Scripts junction."
+        fi
+        "$PYTHON_BIN" -c "
+import os, stat
+for name in ('python', 'pip'):
+    path = os.path.join('.venv', 'Scripts', name)
+    if not os.path.isfile(path):
+        with open(path, 'w', newline='\n') as f:
+            f.write(f'#!/usr/bin/env bash\nexec \"\$(dirname \"\$0\")/{name}.exe\" \"\$@\"\n')
+        os.chmod(path, os.stat(path).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+"
+        info "Created .venv/bin/python and .venv/bin/pip shims for pre-commit compatibility."
+    fi
+
     info "Installing/updating dependencies..."
-    "$VENV_DIR/bin/pip" install --quiet --upgrade pip
-    "$VENV_DIR/bin/pip" install --quiet --prefer-binary -r requirements.txt
-    "$VENV_DIR/bin/pip" install --quiet --prefer-binary -r requirements-dev.txt
-    "$VENV_DIR/bin/pip" install --quiet -e .
+    "$VENV_BIN/python" -m pip install --quiet --upgrade pip
+    "$VENV_BIN/python" -m pip install --quiet --prefer-binary -r requirements.txt
+    "$VENV_BIN/python" -m pip install --quiet --prefer-binary -r requirements-dev.txt
+    "$VENV_BIN/python" -m pip install --quiet -e .
 
     info "Installing pre-commit hooks..."
-    "$VENV_DIR/bin/pre-commit" install \
+    "$VENV_BIN/pre-commit" install \
         --hook-type pre-commit \
         --hook-type post-checkout \
         --hook-type post-merge \
@@ -249,8 +309,8 @@ fi
 # with ModuleNotFoundError on the new or renamed packages. Refreshing on
 # every setup-env.sh run — regardless of --deps — is a no-op when nothing
 # has changed and self-heals drift otherwise.
-if [[ -x "$VENV_DIR/bin/pip" ]] && ! $DO_DEPS; then
-    "$VENV_DIR/bin/pip" install --quiet -e . \
+if [[ -d "$VENV_BIN" ]] && ! $DO_DEPS; then
+    "$VENV_BIN/python" -m pip install --quiet -e . \
         || error "Editable install refresh failed."
 fi
 
@@ -391,8 +451,9 @@ if $DO_ENV; then
     GITHUB_APP_ID=$(resolve_secret_value "GITHUB_APP_ID" "GITHUB-APP-ID")
     GITHUB_APP_PRIVATE_KEY=$(resolve_secret_value "GITHUB_APP_PRIVATE_KEY" "GITHUB-APP-PRIVATE-KEY")
     GITHUB_APP_INSTALLATION_ID=$(resolve_secret_value "GITHUB_APP_INSTALLATION_ID" "GITHUB-APP-INSTALLATION-ID")
+    AZURE_SERVICE_BUS_CONNECTION_STRING=$(resolve_secret_value "AZURE_SERVICE_BUS_CONNECTION_STRING" "ASB-CONNECTION-STRING")
 
-    GOOSE_MCP_PYTHON="${VENV_DIR}/bin/python"
+    GOOSE_MCP_PYTHON="${VENV_BIN}/python"
 
     JIRA_URL_Q=$(quote_env_value "$JIRA_URL")
     JIRA_OAUTH_CLIENT_ID_Q=$(quote_env_value "$JIRA_OAUTH_CLIENT_ID")
@@ -404,12 +465,14 @@ if $DO_ENV; then
     GITHUB_APP_ID_Q=$(quote_env_value "$GITHUB_APP_ID")
     GITHUB_APP_PRIVATE_KEY_Q=$(quote_env_value "$GITHUB_APP_PRIVATE_KEY")
     GITHUB_APP_INSTALLATION_ID_Q=$(quote_env_value "$GITHUB_APP_INSTALLATION_ID")
+    AZURE_SERVICE_BUS_CONNECTION_STRING_Q=$(quote_env_value "$AZURE_SERVICE_BUS_CONNECTION_STRING")
     GOOSE_MCP_PYTHON_Q=$(quote_env_value "$GOOSE_MCP_PYTHON")
 
     # Export bash variables so Python script can access them
     export JIRA_URL JIRA_OAUTH_CLIENT_ID JIRA_OAUTH_CLIENT_SECRET AZURE_API_KEY ANTHROPIC_API_KEY
     export OTEL_BETTERSTACK_ENDPOINT OTEL_BETTERSTACK_SOURCE_TOKEN
     export GITHUB_APP_ID GITHUB_APP_PRIVATE_KEY GITHUB_APP_INSTALLATION_ID
+    export AZURE_SERVICE_BUS_CONNECTION_STRING
     export GOOSE_MCP_PYTHON
 
     # Escape characters that would break sed's | delimiter (& and \)
@@ -428,7 +491,7 @@ if $DO_ENV; then
     fi
 
     # Use Python for template substitution to avoid sed issues with multiline values
-    python3 << 'PYTHON_EOF'
+    "$PYTHON_BIN" << 'PYTHON_EOF'
 import os
 
 env_file = ".env"
@@ -443,6 +506,7 @@ replacements = {
     "__GITHUB_APP_ID__": os.environ.get("GITHUB_APP_ID", ""),
     "__GITHUB_APP_PRIVATE_KEY__": os.environ.get("GITHUB_APP_PRIVATE_KEY", ""),
     "__GITHUB_APP_INSTALLATION_ID__": os.environ.get("GITHUB_APP_INSTALLATION_ID", ""),
+    "__AZURE_SERVICE_BUS_CONNECTION_STRING__": os.environ.get("AZURE_SERVICE_BUS_CONNECTION_STRING", ""),
     "__GOOSE_MCP_PYTHON__": os.environ.get("GOOSE_MCP_PYTHON", ""),
 }
 
@@ -460,6 +524,10 @@ for placeholder, value in replacements.items():
             normalized = value
             if "\n" not in normalized and "\\n" in normalized:
                 normalized = normalized.replace("\\n", "\n")
+            # Strip carriage returns: on Windows, `az` CLI outputs CRLF and
+            # bash $() strips trailing \n but not \r, leaving \r embedded in
+            # the value. This is a no-op on macOS/Linux where \r is absent.
+            normalized = normalized.replace("\r", "")
             quoted_value = (
                 normalized.replace("\\", "\\\\")
                 .replace('"', '\\"')
@@ -487,9 +555,13 @@ PYTHON_EOF
     fi
     success "Validated: all keys from .env.example are present in .env."
 
-    info "Allowing direnv to load .env..."
-    direnv allow .
-    success "direnv configured. The .env will be loaded automatically on shell entry."
+    if command -v direnv &>/dev/null; then
+        info "Allowing direnv to load .env..."
+        direnv allow .
+        success "direnv configured. The .env will be loaded automatically on shell entry."
+    else
+        info "Note: direnv not found — load .env manually (e.g. 'set -a; source .env; set +a')."
+    fi
 fi
 
 # ---------------------------------------------------------------------------

@@ -106,22 +106,27 @@ def generate_plan(state: GeneratePlanInputState) -> GeneratePlanOutputState:
         else:
             click.echo(f"🪿 Running plan recipe for {ticket_key}...")
 
+        # Use as_posix() for all paths so that Windows backslashes are
+        # converted to forward slashes before being passed to goose.  Goose
+        # parses --params values as YAML; backslash sequences such as \U
+        # (from C:\Users\...) are treated as YAML Unicode escapes and cause a
+        # parse error.  as_posix() is a no-op on macOS/Linux.
         cmd = [
             "goose",
             "run",
             "--recipe",
-            str(_RECIPE_PATH),
+            _RECIPE_PATH.as_posix(),
             "--max-turns",
             os.environ.get("GOOSE_MAX_TURNS", "200"),
             "--params",
             f"ticket_key={ticket_key}",
             "--params",
-            f"output_path={output_path}",
+            f"output_path={Path(output_path).as_posix()}",
         ]
         if clarifications_path:
-            cmd.extend(["--params", f"clarifications_path={clarifications_path}"])
+            cmd.extend(["--params", f"clarifications_path={Path(clarifications_path).as_posix()}"])
         if context_items_path:
-            cmd.extend(["--params", f"context_items_path={context_items_path}"])
+            cmd.extend(["--params", f"context_items_path={Path(context_items_path).as_posix()}"])
 
         if working_dir and not os.path.isdir(working_dir):
             return mark_failure(

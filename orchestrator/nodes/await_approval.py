@@ -4,6 +4,7 @@ import logging
 
 from langgraph.types import interrupt
 
+from orchestrator.event_publisher import publish_status_event
 from orchestrator.state import ApprovalInputState, ApprovalOutputState
 from orchestrator.utils import _get_actor
 from state.workflow_repository import get_workflow, update_status
@@ -42,6 +43,11 @@ def await_approval(state: ApprovalInputState) -> ApprovalOutputState:
             WorkflowStatus.PENDING_APPROVAL,
             actor="dispatcher",
             reason="Awaiting developer approval",
+        )
+        publish_status_event(
+            workflow_id=workflow_id,
+            status_value=WorkflowStatus.PENDING_APPROVAL.value,
+            ticket_id=state.get("ticket_key"),
         )
 
     ticket_key = state.get("ticket_key", workflow_id)

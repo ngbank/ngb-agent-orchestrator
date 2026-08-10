@@ -30,6 +30,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.errors import GraphInterrupt
 from langgraph.types import Command
 
+from orchestrator.event_publisher import publish_status_event
 from orchestrator.logging_setup import WORKFLOW_LOG_FILENAME
 from orchestrator.paths import workflow_logs_dir
 from orchestrator.retry import prepare_retry
@@ -296,6 +297,11 @@ class LocalWorkflowService:
             actor=actor,
             reason=reason or "Cancelled by user",
         )
+        publish_status_event(
+            workflow_id=workflow_id,
+            status_value=WorkflowStatus.CANCELLED.value,
+            error_message=reason,
+        )
 
     def mark_interrupted(
         self,
@@ -306,15 +312,21 @@ class LocalWorkflowService:
         workflow = self._repo.get_workflow(workflow_id)
         if workflow is None or workflow["status"].is_terminal():
             return
+        interrupt_reason = (
+            f"Interrupted by user (Ctrl-C) at node '{failed_node}'"
+            if failed_node
+            else "Interrupted by user (Ctrl-C)"
+        )
         self._repo.update_status(
             workflow_id,
             WorkflowStatus.FAILED,
             actor=actor,
-            reason=(
-                f"Interrupted by user (Ctrl-C) at node '{failed_node}'"
-                if failed_node
-                else "Interrupted by user (Ctrl-C)"
-            ),
+            reason=interrupt_reason,
+        )
+        publish_status_event(
+            workflow_id=workflow_id,
+            status_value=WorkflowStatus.FAILED.value,
+            error_message=interrupt_reason,
         )
 
     def mark_failed(
@@ -331,6 +343,11 @@ class LocalWorkflowService:
             WorkflowStatus.FAILED,
             actor=actor,
             reason=reason,
+        )
+        publish_status_event(
+            workflow_id=workflow_id,
+            status_value=WorkflowStatus.FAILED.value,
+            error_message=reason,
         )
 
     def clear_db(self) -> tuple[int, int]:

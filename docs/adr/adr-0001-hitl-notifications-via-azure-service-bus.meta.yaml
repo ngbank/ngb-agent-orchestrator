@@ -1,0 +1,50 @@
+schema_version: "1.0"
+adr_id: "0001"
+title: "Human-in-the-Loop Notifications via Azure Service Bus"
+slug: "hitl-notifications-via-azure-service-bus"
+status: "NOT STARTED"
+impact: "HIGH"
+approver:
+  name: "Kedar"
+  role: "Enterprise Architect"
+group: "AI Platform"
+completion_date: null
+decision: "Publish a structured message to an Azure Service Bus queue/topic at every HITL graph node boundary before interrupt() suspends execution."
+positions:
+  - name: "Azure Service Bus Queue/Topic"
+    description: "Publish a structured JSON message to an ASB queue or topic at each HITL node boundary before interrupt() fires. Consumers subscribe and react asynchronously."
+    estimated_cost: "MEDIUM"
+    chosen: true
+  - name: "Polling the REST API / SSE"
+    description: "Consumers poll GET /workflows or subscribe to the SSE /events stream, filtering for suspended workflows. No new infrastructure required."
+    estimated_cost: "SMALL"
+    chosen: false
+  - name: "Azure Event Grid"
+    description: "Publish CloudEvents to Azure Event Grid at each HITL boundary. Consumers subscribe via Event Grid subscriptions for fine-grained fan-out and filtering."
+    estimated_cost: "LARGE"
+    chosen: false
+supersedes: []
+superseded_by: []
+references:
+  - description: "LangGraph interrupt() — HITL mechanism used in await_approval node"
+    type: "Related artifacts"
+    link: "orchestrator/graph/builder.py"
+  - description: "WorkflowService boundary (local vs remote topology)"
+    type: "Related artifacts"
+    link: "docs/architecture.md"
+  - description: "Azure Service Bus SDK for Python"
+    type: "Related artifacts"
+    link: "https://pypi.org/project/azure-servicebus/"
+  - description: "ASB publish failures must not block graph execution"
+    type: "Implications"
+    link: "docs/adr/adr-0001-hitl-notifications-via-azure-service-bus.md"
+  - description: "Message schema versioning required for independent consumer evolution"
+    type: "Related requirements"
+    link: "docs/adr/adr-0001-hitl-notifications-via-azure-service-bus.md"
+tags:
+  - azure-service-bus
+  - human-in-the-loop
+  - langgraph
+  - messaging
+  - ai-platform
+  - orchestrator

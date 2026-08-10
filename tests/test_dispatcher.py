@@ -1,5 +1,6 @@
 """Integration tests for dispatcher/run.py (LangGraph-based orchestrator)"""
 
+import gc
 import os
 import tempfile
 from unittest.mock import Mock, patch
@@ -48,7 +49,8 @@ def test_db():
 
     yield db_path
 
-    # Cleanup
+    # Cleanup — flush lingering SQLite connections (ObservableSqliteSaver) before unlink on Windows
+    gc.collect()
     if os.path.exists(db_path):
         os.unlink(db_path)
 

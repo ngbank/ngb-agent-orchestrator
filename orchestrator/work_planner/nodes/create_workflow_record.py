@@ -2,6 +2,7 @@
 
 import click
 
+from orchestrator.event_publisher import publish_status_event
 from orchestrator.work_planner.state import (
     CreateWorkflowRecordInputState,
     CreateWorkflowRecordOutputState,
@@ -29,6 +30,11 @@ def create_workflow_record(
             actor="dispatcher",
             reason="Resuming workflow execution",
         )
+        publish_status_event(
+            workflow_id=pre_seeded_id,
+            status_value=WorkflowStatus.IN_PROGRESS.value,
+            ticket_id=ticket_key or None,
+        )
         return {"workflow_id": pre_seeded_id}
 
     click.echo("📝 Creating workflow record...")
@@ -43,6 +49,11 @@ def create_workflow_record(
         WorkflowStatus.IN_PROGRESS,
         actor="dispatcher",
         reason="Starting workflow execution",
+    )
+    publish_status_event(
+        workflow_id=workflow_id,
+        status_value=WorkflowStatus.IN_PROGRESS.value,
+        ticket_id=ticket_key or None,
     )
     click.echo(f"✅ Workflow created: {workflow_id}")
     return {"workflow_id": workflow_id}

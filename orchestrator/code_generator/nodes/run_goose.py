@@ -107,34 +107,42 @@ def run_goose(state: RunGooseInputState) -> dict:
         with goose_session(
             workflow_id=workflow_id, stage="generate_code", ticket_key=ticket_key
         ) as goose_env:
+            # Use as_posix() for all paths so that Windows backslashes are
+            # converted to forward slashes before being passed to goose.  Goose
+            # parses --params values as YAML; backslash sequences such as \U
+            # (from C:\Users\...) are treated as YAML Unicode escapes and cause
+            # a parse error.  as_posix() is a no-op on macOS/Linux.
+            def _posix(p: str) -> str:
+                return Path(p).as_posix() if p else p
+
             result = run_and_tee(
                 [
                     "goose",
                     "run",
                     "--recipe",
-                    str(recipe_path),
+                    recipe_path.as_posix(),
                     "--max-turns",
                     max_turns,
                     "--params",
                     f"ticket_key={ticket_key}",
                     "--params",
-                    f"work_plan_path={work_plan_path}",
+                    f"work_plan_path={_posix(work_plan_path)}",
                     "--params",
-                    f"working_dir={working_dir}",
+                    f"working_dir={_posix(working_dir)}",
                     "--params",
-                    f"raw_results_path={raw_results_path}",
+                    f"raw_results_path={_posix(raw_results_path)}",
                     "--params",
-                    f"raw_results_script={raw_results_script}",
+                    f"raw_results_script={raw_results_script.as_posix()}",
                     "--params",
-                    f"reasoning_path={reasoning_path}",
+                    f"reasoning_path={_posix(reasoning_path)}",
                     "--params",
                     f"GOOSE_MCP_PYTHON={mcp_python}",
                     "--params",
                     f"existing_branch={existing_branch}",
                     "--params",
-                    f"pr_comments_path={pr_comments_path}",
+                    f"pr_comments_path={_posix(pr_comments_path)}",
                     "--params",
-                    f"context_items_path={context_items_path or ''}",
+                    f"context_items_path={_posix(context_items_path or '')}",
                     "--params",
                     f"branch_name={branch_name}",
                 ],
