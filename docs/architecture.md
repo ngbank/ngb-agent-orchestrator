@@ -39,20 +39,26 @@ LangGraph Graph (graph/)
  │    Marks workflow PENDING_APPROVAL in SQLite
  │    Prints instructions for approve/reject CLI
  │
- └── generate_code
-            Runs code_generator subgraph:
-                - Resolves repo URL
-                - Fetches GitHub App installation token
-                - Clones the repo over HTTPS
-                - Invokes Goose generate recipe
-                - Pushes the branch and opens or updates the PR
-            Goose generate recipe:
-        - Creates feature branch
-        - Implements WorkPlan tasks
-        - Runs build + test checks
-        - Commits changes
-      Persists execution summary to SQLite
-      Updates status → COMPLETED or FAILED
+ ├── generate_code
+ │           Runs code_generator subgraph:
+ │               - Resolves repo URL
+ │               - Fetches GitHub App installation token
+ │               - Clones the repo over HTTPS
+ │               - Invokes Goose generate recipe
+ │               - Pushes the branch and opens or updates the PR
+ │           Goose generate recipe:
+ │       - Creates feature branch
+ │       - Implements WorkPlan tasks
+ │       - Runs build + test checks
+ │       - Commits changes
+ │     Persists execution summary to SQLite
+ │     Updates status → COMPLETED or FAILED
+ │
+ └── run_learning_pipeline      ← tail node on every terminal path
+         Runs the ACE mining pipeline (Evaluator → Reflector → Curator) for
+         the just-finished workflow. Try/except-isolated: a pipeline failure
+         is logged and audited via `learning_pipeline_failed` but never
+         affects the workflow's terminal status.
 ```
 
 ---
@@ -217,7 +223,7 @@ children cleanly).
 
 LangGraph state machine. Two levels:
 
-- **Top-level graph** (`graph/builder.py`): `work_planner → await_approval → generate_code`
+- **Top-level graph** (`graph/builder.py`): `work_planner → await_approval → generate_code → await_pr_approval → run_learning_pipeline → END`. Every terminal edge (approved, rejected, failed) funnels through `run_learning_pipeline` so the ACE mining pipeline runs automatically at workflow completion. The tail node is try/except-isolated: a mining failure never affects the workflow's already-persisted terminal status.
 - **`work_planner` subgraph** (`graph/work_planner/`): planning + repo setup + cleanup nodes
 - **Shared repo setup module** (`orchestrator/shared/repo_setup/`): reusable repo setup primitives (`resolve_repository_url`, `fetch_token_for_repo`, `clone_repository`, `cleanup_working_dir`) and a nested shared repo setup subgraph (`build_repo_setup_subgraph`) used by both `work_planner` and `code_generator`.
 

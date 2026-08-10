@@ -181,6 +181,18 @@ sequenceDiagram
         end
     end
 
+    rect rgb(255, 245, 220)
+        Note over Dispatcher,SQLite: Step 11: run_learning_pipeline tail node<br/>Fires on every terminal path — approved, rejected, and failed —<br/>so the ACE mining pipeline runs the moment a workflow reaches a<br/>terminal status. Try/except-isolated: mining failures never affect<br/>the workflow's terminal status.
+        Dispatcher->>SQLite: fetch_trace_by_id(workflow_id)<br/>(reads the just-persisted terminal workflow)
+        SQLite-->>Dispatcher: TraceBundle
+        Dispatcher->>Dispatcher: Evaluator → Reflector → Curator<br/>(may skip / flag / proceed)
+        alt Pipeline succeeded
+            Dispatcher->>SQLite: insert context_extraction_log row<br/>+ context_items_staged rows
+        else Pipeline raised
+            Dispatcher->>SQLite: audit_log: action=learning_pipeline_failed<br/>(row absent from context_extraction_log → retried by next ace mine sweep)
+        end
+    end
+
     Note over User,Formatter: WorkPlan Status Classification:<br/>• "pass" - Clear scope, ready to implement<br/>• "concerns" - Has risks or dependencies<br/>• "blocked" - Missing info or ambiguous<br/><br/>WorkPlan Comment Sections:<br/>• Plan Summary (approach and status)<br/>• Task List (with files affected)<br/>• Risks<br/>• Questions for Reviewer<br/>• Approval Instructions<br/>  - dispatcher approve {ticket_key}<br/>  - dispatcher reject {ticket_key}
 
     Note over User,Dispatcher: Remote-mode submission contract:<br/>In ORCHESTRATOR_MODE=remote every mutation route (POST /workflows,<br/>approve-plan, retry, comment-pr, ...) returns 202 Accepted immediately<br/>and runs the graph drive on the server's BackgroundDispatcher thread<br/>pool. The dispatcher CLI subscribes to GET /workflows/{id}/events (SSE)<br/>by default so the operator sees the same node_start / node_end /<br/>interrupt / completed lifecycle they got from the old synchronous calls.<br/>Pass --detach to submit and exit without following; press Ctrl-C to<br/>detach mid-stream without affecting the server-side workflow.
