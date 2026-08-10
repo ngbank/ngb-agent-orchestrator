@@ -22,7 +22,7 @@ import os as _os
 import re
 from pathlib import Path
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 
 _CONFIG_ROOT = (
     Path(_os.environ.get("NGB_ORCHESTRATOR_ROOT", str(Path(__file__).parent.parent))) / "config"
@@ -31,7 +31,7 @@ _MAPPING_FILE = _CONFIG_ROOT / "project-repo-mapping.md"
 _RULES_FILE = _CONFIG_ROOT / "developer-rules.json"
 _SETUP_FILE = _CONFIG_ROOT / "project-setup.json"
 
-mcp = FastMCP(
+mcp = MCPServer(
     name="agent-harness",
     instructions=(
         "Use get_repo_for_project to resolve a JIRA project key to its Git repository URL"
