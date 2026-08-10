@@ -55,15 +55,37 @@ def test_emit_ace_injection_records_metadata(monkeypatch):
     emit_ace_injection(
         workflow_id="workflow-1",
         injection_point="planner",
+        synthesizer="synthesizer",
         rendered_length=42,
-        item_ids=["item-1"],
+        block_cache_key="cache-key-abc",
+        item_ids=["item-1", "item-2"],
     )
 
     span = exporter.get_finished_spans()[0]
     assert span.name == "ace.injection"
     assert span.attributes["ace.injection_point"] == "planner"
+    assert span.attributes["ace.synthesizer"] == "synthesizer"
     assert span.attributes["ace.rendered_length"] == 42
-    assert tuple(span.attributes["ace.retrieved_item_ids"]) == ("item-1",)
+    assert span.attributes["ace.retrieved_item_count"] == 2
+    assert span.attributes["ace.block_cache_key"] == "cache-key-abc"
+    assert tuple(span.attributes["ace.retrieved_item_ids"]) == ("item-1", "item-2")
+
+
+def test_ace_retrieved_item_ids_not_redacted_by_default():
+    """Item IDs are opaque identifiers and stay observable under default redaction."""
+    from otel.redaction import redact_attributes
+
+    attrs = {"ace.retrieved_item_ids": ("item-1", "item-2")}
+    assert redact_attributes(attrs)["ace.retrieved_item_ids"] == ("item-1", "item-2")
+
+
+def test_ace_retrieved_item_ids_observable_when_redaction_disabled(monkeypatch):
+    """OTEL_REDACT_PAYLOADS=false preserves item IDs (defensive regression guard)."""
+    from otel.redaction import redact_attributes
+
+    monkeypatch.setenv("OTEL_REDACT_PAYLOADS", "false")
+    attrs = {"ace.retrieved_item_ids": ("item-1",)}
+    assert redact_attributes(attrs)["ace.retrieved_item_ids"] == ("item-1",)
 
 
 # ---------------------------------------------------------------------------

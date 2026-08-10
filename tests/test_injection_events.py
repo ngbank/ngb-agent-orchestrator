@@ -12,7 +12,7 @@ def test_record_injection_event_persists_metadata():
         workflow_id="workflow-1",
         ticket_key="AOS-239",
         injection_point="planner",
-        synthesizer="ace",
+        synthesizer="synthesizer",
         block_cache_key="block-key",
         retrieved_item_ids=["item-1", "item-2"],
         rendered_length=42,
@@ -23,6 +23,7 @@ def test_record_injection_event_persists_metadata():
     conn.close()
     assert row["workflow_id"] == "workflow-1"
     assert row["ticket_key"] == "AOS-239"
+    assert row["synthesizer"] == "synthesizer"
     assert row["block_cache_key"] == "block-key"
     assert row["retrieved_item_ids"] == '["item-1", "item-2"]'
     assert row["rendered_length"] == 42
@@ -36,7 +37,7 @@ def test_record_injection_event_swallows_database_errors(caplog):
             workflow_id="workflow-1",
             ticket_key="AOS-239",
             injection_point="planner",
-            synthesizer="ace",
+            synthesizer="flat_list",
             block_cache_key=None,
             retrieved_item_ids=[],
             rendered_length=0,

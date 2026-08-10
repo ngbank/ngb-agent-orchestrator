@@ -94,6 +94,7 @@ class SynthesizedBlock:
 
     sections: dict[str, str] = field(default_factory=dict)
     provenance: dict[str, list[str]] = field(default_factory=dict)
+    cache_key: Optional[str] = None
 
     def to_markdown(self) -> str:
         """Render the block as a single markdown document for prompt injection.
@@ -143,6 +144,7 @@ def synthesize_context_block(
             ticket_context.ticket_key,
             ticket_context.recipe_target,
         )
+        cached.cache_key = cache_key
         return cached
 
     logger.debug(
@@ -152,6 +154,7 @@ def synthesize_context_block(
         len(items),
     )
     block = _call_llm_and_parse(items, ticket_context)
+    block.cache_key = cache_key
     _save_synthesized_block(cache_key, block, items, ticket_context)
     return block
 

@@ -70,7 +70,6 @@ def redact_attributes(attributes: dict[str, Any]) -> dict[str, Any]:
         "llm.tool_use.output",
         "user.input",
         "user.payload",
-        "ace.retrieved_item_ids",
     }
 
     for key in sensitive_keys:

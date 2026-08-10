@@ -12,6 +12,18 @@ _PATCH_GOOSE_SESSION = "orchestrator.code_generator.nodes.run_goose.goose_sessio
 _PATCH_RENDER = "orchestrator.context_items.render_context_block"
 
 
+def _rendered_block(markdown, *, item_ids=None, block_cache_key=None, mode="synthesizer"):
+    """Build a RenderedContextBlock for patching ``render_context_block``."""
+    from ace.retrieval import RenderedContextBlock
+
+    return RenderedContextBlock(
+        markdown=markdown,
+        item_ids=list(item_ids or []),
+        block_cache_key=block_cache_key,
+        mode=mode,
+    )
+
+
 @pytest.fixture(autouse=True)
 def mock_goose_session():
     """Prevent goose_session from starting a real litellm proxy in tests."""
@@ -211,7 +223,7 @@ def test_run_goose_passes_retrieved_context_in_a_separate_file(tmp_path):
         ),
         patch(
             _PATCH_RENDER,
-            return_value="- [PATTERN] Prefer focused regression tests.",
+            return_value=_rendered_block("- [PATTERN] Prefer focused regression tests."),
         ),
     ):
         run_goose(state)
@@ -239,6 +251,7 @@ def test_run_goose_records_pr_rerun_context_injection(tmp_path):
     settings = MagicMock()
     settings.is_code_generator_active.return_value = True
 
+    rendered = _rendered_block("- context", item_ids=["ci-9"], block_cache_key="k-9")
     with (
         patch(
             "orchestrator.code_generator.nodes.run_goose.run_and_tee",
@@ -247,13 +260,18 @@ def test_run_goose_records_pr_rerun_context_injection(tmp_path):
         patch(
             "orchestrator.code_generator.nodes.run_goose.get_ace_settings", return_value=settings
         ),
-        patch(_PATCH_RENDER, return_value="- context"),
+        patch(_PATCH_RENDER, return_value=rendered),
         patch("orchestrator.context_items.record_injection_event") as mock_record,
         patch("orchestrator.context_items.emit_ace_injection") as mock_emit,
     ):
         run_goose(state)
 
-    assert mock_record.call_args.kwargs["injection_point"] == "pr_rerun"
+    record_kwargs = mock_record.call_args.kwargs
+    assert record_kwargs["injection_point"] == "pr_rerun"
+    assert record_kwargs["workflow_id"] == "wf-239"
+    assert record_kwargs["synthesizer"] == "synthesizer"
+    assert record_kwargs["block_cache_key"] == "k-9"
+    assert list(record_kwargs["retrieved_item_ids"]) == ["ci-9"]
     assert mock_emit.call_args.kwargs["workflow_id"] == "wf-239"
 
 

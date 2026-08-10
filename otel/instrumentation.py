@@ -98,7 +98,9 @@ def emit_ace_injection(
     *,
     workflow_id: str,
     injection_point: str,
+    synthesizer: str,
     rendered_length: int,
+    block_cache_key: str | None = None,
     item_ids: list[str] | None = None,
 ) -> None:
     """Emit metadata-only telemetry for an ACE context injection."""
@@ -106,7 +108,11 @@ def emit_ace_injection(
     with tracer.start_as_current_span("ace.injection") as span:
         span.set_attribute("workflow.id", workflow_id)
         span.set_attribute("ace.injection_point", injection_point)
+        span.set_attribute("ace.synthesizer", synthesizer)
         span.set_attribute("ace.rendered_length", rendered_length)
+        span.set_attribute("ace.retrieved_item_count", len(item_ids) if item_ids else 0)
+        if block_cache_key:
+            span.set_attribute("ace.block_cache_key", block_cache_key)
         if item_ids:
             span.set_attribute("ace.retrieved_item_ids", item_ids)
 

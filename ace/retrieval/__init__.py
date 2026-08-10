@@ -10,16 +10,47 @@ serialisation into one call, respecting the ``ace_synthesizer_enabled`` flag:
 - When the synthesizer is **off**, items are rendered as a legacy flat list
   (tier-labelled bullets) so that callers can be wired up before the
   synthesizer is production-ready.
+
+The function returns a :class:`RenderedContextBlock` carrying the rendered
+markdown plus the metadata callers need to persist an injection event: the
+list of retrieved item IDs, the durable block cache key (when the synthesizer
+produced one), and the rendering mode.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Optional
 
 from ace.config import confidence_to_tier, get_ace_settings
 from ace.models import ContextItem
 from ace.retrieval.retrieve import retrieve_context_items
 from ace.retrieval.synthesizer import SynthesizedBlock, TicketContext, synthesize_context_block
+
+# Rendering modes recorded on ``ace_injection_events.synthesizer``.
+MODE_SYNTHESIZER = "synthesizer"
+MODE_FLAT_LIST = "flat_list"
+MODE_EMPTY = "empty"
+
+
+@dataclass
+class RenderedContextBlock:
+    """Rendered context block plus metadata for injection-event persistence.
+
+    ``markdown`` is the string passed to Goose; ``item_ids`` are the retrieved
+    ``ContextItem`` identifiers that shaped the block; ``block_cache_key`` is
+    the durable ``synthesized_context_blocks.cache_key`` when the synthesizer
+    ran (``None`` for flat-list / empty renderings); ``mode`` records which
+    rendering path produced the block.
+    """
+
+    markdown: str = ""
+    item_ids: list[str] = field(default_factory=list)
+    block_cache_key: Optional[str] = None
+    mode: str = MODE_EMPTY
+
+    def is_empty(self) -> bool:
+        return not self.markdown.strip()
 
 
 def render_context_block(
@@ -29,30 +60,14 @@ def render_context_block(
     file_path: Optional[str] = None,
     query_text: str = "",
     top_k: Optional[int] = None,
-) -> str:
+) -> RenderedContextBlock:
     """Retrieve context items and render them for injection into a prompt.
 
     Retrieval uses *ticket_context* for applicability filtering (project, repo,
     platform) and the caller-supplied *query_text* / *task_type* / *file_path*
     for keyword ranking and scope filtering.
 
-    Returns an empty string when no items are available.
-
-    Parameters
-    ----------
-    ticket_context:
-        Describes the current task.  Used for applicability dimensions and as
-        the synthesizer context.
-    task_type:
-        Optional scope filter — matches items scoped to this task type.
-    file_path:
-        Optional scope filter — matches items whose ``scope_value`` glob pattern
-        matches this path.
-    query_text:
-        Text used for keyword ranking against item descriptions.
-    top_k:
-        Override for the maximum number of items.  Defaults to the value from
-        ``ACESettings.top_k``.
+    Returns an empty :class:`RenderedContextBlock` when no items are available.
     """
     settings = get_ace_settings()
     effective_top_k = top_k if top_k is not None else settings.top_k
@@ -68,13 +83,25 @@ def render_context_block(
     )
 
     if not items:
-        return ""
+        return RenderedContextBlock()
+
+    item_ids = [item.id for item in items]
 
     if settings.is_synthesizer_active():
         block: SynthesizedBlock = synthesize_context_block(items, ticket_context)
-        return block.to_markdown()
+        return RenderedContextBlock(
+            markdown=block.to_markdown(),
+            item_ids=item_ids,
+            block_cache_key=block.cache_key,
+            mode=MODE_SYNTHESIZER,
+        )
 
-    return _flat_list_format(items)
+    return RenderedContextBlock(
+        markdown=_flat_list_format(items),
+        item_ids=item_ids,
+        block_cache_key=None,
+        mode=MODE_FLAT_LIST,
+    )
 
 
 def _flat_list_format(items: list[ContextItem]) -> str:
@@ -92,3 +119,12 @@ def _flat_list_format(items: list[ContextItem]) -> str:
             conflicts_note = f" ⚠ conflicts with: {', '.join(item.conflicts_with)}"
         lines.append(f"- [{tier}] {item.description}{conflicts_note}")
     return "\n".join(lines)
+
+
+__all__ = [
+    "RenderedContextBlock",
+    "MODE_SYNTHESIZER",
+    "MODE_FLAT_LIST",
+    "MODE_EMPTY",
+    "render_context_block",
+]
