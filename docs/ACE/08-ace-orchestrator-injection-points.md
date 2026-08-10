@@ -110,6 +110,12 @@ The recipe renders them in priority order: human feedback first (mandatory frami
 
 ---
 
+## Injection recording and OTel contract
+
+Every non-empty rendered block is recorded exactly once after rendering and before its temporary file is passed to Goose. The best-effort writer appends `ace_injection_events` metadata (`workflow_id`, ticket, injection point, synthesizer, durable block key when available, retrieved identifiers, rendered length, and timestamp). SQLite failures are logged and never interrupt planner or code-generation orchestration.
+
+The same invocation emits an `ace.injection` child span carrying metadata only: `workflow.id`, `ace.injection_point`, `ace.rendered_length`, and `ace.retrieved_item_ids` when known. Item identifiers use the established OTel redaction switch (`OTEL_REDACT_PAYLOADS`; `OTEL_DEBUG_LOCAL` disables redaction for local troubleshooting); rendered context content is never attached to telemetry.
+
 ## What you are not injecting, and why
 
 **LangGraph state.** You could put context items in `OrchestratorState` as a field. The problem: LangGraph state is checkpointed to SQLite. Large context blobs make checkpoints heavier and state harder to inspect. Temp files passed as recipe parameters keep context out of durable state, consistent with the existing `clarifications_path` pattern.

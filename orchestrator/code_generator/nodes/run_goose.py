@@ -18,6 +18,7 @@ def _write_context_items_file(
     ticket_key: str,
     work_plan_data: dict,
     pr_comments: str,
+    workflow_id: str | None,
 ) -> str | None:
     """Retrieve applicable context items and materialize them for the recipe."""
     settings = get_ace_settings()
@@ -38,14 +39,19 @@ def _write_context_items_file(
         *affected_files,
         pr_comments,
     ]
-    block = retrieve_context_items(
+    rendered = retrieve_context_items(
         ticket_key=ticket_key,
         ticket_summary=work_plan_data.get("summary", ""),
         recipe_target="code_generator",
         query_text=" ".join(part for part in query_parts if part),
         top_k=settings.top_k,
     )
-    return write_context_items_file(ticket_key, block)
+    return write_context_items_file(
+        ticket_key,
+        rendered,
+        workflow_id=workflow_id,
+        injection_point="pr_rerun" if pr_comments else "code_generator",
+    )
 
 
 def run_goose(state: RunGooseInputState) -> dict:
@@ -85,7 +91,9 @@ def run_goose(state: RunGooseInputState) -> dict:
         .rstrip("-")
     )
     branch_name = f"{branch_prefix}/{ticket_key}+{_slug}-{str(workflow_id)[:8]}"
-    context_items_path = _write_context_items_file(ticket_key, _work_plan, pr_comments)
+    context_items_path = _write_context_items_file(
+        ticket_key, _work_plan, pr_comments, str(workflow_id) if workflow_id else None
+    )
 
     mcp_python = os.environ.get("GOOSE_MCP_PYTHON", "python")
     max_turns = os.environ.get("GOOSE_MAX_TURNS", "200")

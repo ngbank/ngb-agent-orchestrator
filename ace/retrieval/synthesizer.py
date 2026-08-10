@@ -11,11 +11,11 @@ scope conditions and rationale are preserved because the LLM chooses how to
 weave them.  Conflict pairs (``ContextItem.conflicts_with``) are surfaced
 rather than silently resolved.
 
-**Caching.** Every synthesis result is persisted in the ``context_block_cache``
-SQLite table.  The cache key is
+**Durable storage.** Every synthesis result is persisted in the
+``synthesized_context_blocks`` SQLite table.  Its content-addressed block key is
 ``SHA-256(ticket_key + "|" + filter_predicate + "|" + corpus_snapshot_id + "|" + recipe_target)``
 where ``corpus_snapshot_id`` is the maximum ``updated_at`` across the retrieved
-items (changes whenever the store changes, invalidating the cache implicitly).
+items (changes whenever the store changes, producing a new block implicitly).
 An empty item list short-circuits the LLM call and returns an empty block.
 
 **Feature flag.**  The synthesizer is gated by ``ACESettings.synthesizer_enabled``
@@ -59,7 +59,7 @@ class TicketContext:
     """Context about the current task passed to the synthesizer.
 
     ``recipe_target`` distinguishes planner from code-generator injection so
-    the synthesizer can emphasise different sections and so the cache key is
+    the synthesizer can emphasise different sections and so the block key is
     per injection point.
     """
 
@@ -94,6 +94,7 @@ class SynthesizedBlock:
 
     sections: dict[str, str] = field(default_factory=dict)
     provenance: dict[str, list[str]] = field(default_factory=dict)
+    cache_key: Optional[str] = None
 
     def to_markdown(self) -> str:
         """Render the block as a single markdown document for prompt injection.
@@ -127,8 +128,8 @@ def synthesize_context_block(
     Returns an empty ``SynthesizedBlock`` when *items* is empty (safe no-op).
     Raises ``SynthesizerError`` on LLM call or parse failure.
 
-    The result is cached in ``context_block_cache``; a cache hit skips the LLM
-    call entirely.
+    The result is loaded from ``synthesized_context_blocks`` when available; a
+    matching content-addressed block skips the LLM call entirely.
     """
     if not items:
         return SynthesizedBlock()
@@ -136,33 +137,35 @@ def synthesize_context_block(
     corpus_snapshot_id = max(item.updated_at for item in items)
     cache_key = _make_cache_key(ticket_context, corpus_snapshot_id)
 
-    cached = _load_from_cache(cache_key)
+    cached = _load_synthesized_block(cache_key)
     if cached is not None:
         logger.debug(
-            "synthesizer cache hit for ticket=%s target=%s",
+            "synthesizer durable block hit for ticket=%s target=%s",
             ticket_context.ticket_key,
             ticket_context.recipe_target,
         )
+        cached.cache_key = cache_key
         return cached
 
     logger.debug(
-        "synthesizer cache miss — calling LLM for ticket=%s target=%s items=%d",
+        "synthesizer durable block miss — calling LLM for ticket=%s target=%s items=%d",
         ticket_context.ticket_key,
         ticket_context.recipe_target,
         len(items),
     )
     block = _call_llm_and_parse(items, ticket_context)
-    _save_to_cache(cache_key, block, items, ticket_context)
+    block.cache_key = cache_key
+    _save_synthesized_block(cache_key, block, items, ticket_context)
     return block
 
 
 # ---------------------------------------------------------------------------
-# Cache helpers
+# Durable synthesized-block helpers
 # ---------------------------------------------------------------------------
 
 
 def _make_cache_key(ticket_context: TicketContext, corpus_snapshot_id: str) -> str:
-    """Stable SHA-256 cache key for (ticket_context, corpus_snapshot_id)."""
+    """Stable SHA-256 content-addressed block key for the synthesis input."""
     raw = "|".join(
         [
             ticket_context.ticket_key,
@@ -174,11 +177,11 @@ def _make_cache_key(ticket_context: TicketContext, corpus_snapshot_id: str) -> s
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
-def _load_from_cache(cache_key: str) -> Optional[SynthesizedBlock]:
+def _load_synthesized_block(cache_key: str) -> Optional[SynthesizedBlock]:
     conn = get_connection()
     try:
         row = conn.execute(
-            "SELECT rendered_markdown, provenance_manifest FROM context_block_cache"
+            "SELECT rendered_markdown, provenance_manifest FROM synthesized_context_blocks"
             " WHERE cache_key = ?",
             (cache_key,),
         ).fetchone()
@@ -191,12 +194,12 @@ def _load_from_cache(cache_key: str) -> Optional[SynthesizedBlock]:
     provenance: dict[str, list[str]] = json.loads(row["provenance_manifest"] or "{}")
     # Re-materialise sections from the stored markdown by reverse-parsing the
     # rendered document.  This avoids storing sections separately and keeps the
-    # cache schema minimal.
+    # durable storage schema minimal.
     sections = _parse_markdown_sections(row["rendered_markdown"])
     return SynthesizedBlock(sections=sections, provenance=provenance)
 
 
-def _save_to_cache(
+def _save_synthesized_block(
     cache_key: str,
     block: SynthesizedBlock,
     items: list[ContextItem],
@@ -210,7 +213,7 @@ def _save_to_cache(
     try:
         conn.execute(
             """
-            INSERT OR REPLACE INTO context_block_cache
+            INSERT OR REPLACE INTO synthesized_context_blocks
                 (cache_key, rendered_markdown, provenance_manifest,
                  ticket_key, recipe_target, input_item_ids, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?)

@@ -48,7 +48,7 @@ Three properties of the read-time merge dissolve the write-time problems:
 
 ## Tradeoffs
 
-**One extra LLM call per injection.** Retrieval used to be a SQL + Python-side rank operation. The synthesizer adds a model call before the planner runs. This is mitigated by caching: cache key is `hash((ticket_key, applicability_filter_predicate, corpus_snapshot_id, recipe_target))` where `corpus_snapshot_id` is the max `updated_at` across matching staged items. Cache invalidation is implicit — when the store changes, the snapshot ID changes, and the cache key changes.
+**One extra LLM call per injection.** Retrieval used to be a SQL + Python-side rank operation. The synthesizer adds a model call before the planner runs. This is mitigated by the durable content-addressed `synthesized_context_blocks` store: block key is `hash((ticket_key, applicability_filter_predicate, corpus_snapshot_id, recipe_target))` where `corpus_snapshot_id` is the max `updated_at` across matching staged items. A matching block skips the LLM call; a changed store produces a new block while preserving prior provenance for injection-event joins.
 
 **Non-determinism at injection.** The same set of retrieved items can render slightly differently across runs. This is acceptable given that the retrieved *set* is deterministic given the filter and store snapshot; the LLM's phrasing choices vary but the source items don't. The provenance manifest records which source item IDs contributed to which section, so utilization telemetry still works.
 
@@ -62,7 +62,7 @@ Three properties of the read-time merge dissolve the write-time problems:
 
 **Topic 8 (orchestrator injection points).** The insertion points are the same. What flows through them changes: `context_items_path` now points at synthesizer output, not a formatted retrieval block.
 
-**Topic 11 (data model).** Add a `conflicts_with` JSON column to `context_items` and `context_items_staged` so the flag has a home. Add a `context_block_cache` table for synthesizer output caching.
+**Topic 11 (data model).** Add a `conflicts_with` JSON column to `context_items` and `context_items_staged` so the flag has a home. Migration 020 renames the former `context_block_cache` to the durable `synthesized_context_blocks` table, and migration 021 records each injection against that provenance key.
 
 ## Reference implementations: how they handle deduplication
 

@@ -60,6 +60,10 @@ Primary cross-session source index:
 | 14  | End-to-end rollout blueprint — phased adoption plan for your framework                                  | [14-ace-rollout-blueprint.md](14-ace-rollout-blueprint.md)                        | ✅ Covered     |
 | 15  | Injection-time synthesizer — merging at read time, not write time                                       | [15-ace-injection-synthesizer.md](15-ace-injection-synthesizer.md)                | ✅ Covered     |
 
+## AOS-239 implementation update
+
+AOS-239 completes the durable synthesized-block and injection-observability contract: migration 020 preserves and renames the old cache, migration 021 appends indexed injection history, each non-empty injection emits a best-effort database record plus metadata-only `ace.injection` telemetry, and `ace stats` can export filtered event-to-block provenance joins as JSONL. See [11-ace-orchestrator-data-model.md](11-ace-orchestrator-data-model.md), [08-ace-orchestrator-injection-points.md](08-ace-orchestrator-injection-points.md), and [13-ace-measurement.md](13-ace-measurement.md).
+
 ## Supplemental deep-dive track (evaluation epistemology)
 
 This section is intentionally separate from the base primer.

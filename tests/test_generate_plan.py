@@ -301,7 +301,15 @@ def test_generate_plan_passes_context_items_path_when_planner_active(
     log_tmp, write_workplan_to_output
 ):
     """ACE planner on + non-empty block → temp file written, param passed."""
-    rendered = "- [ESTABLISHED] Approach: use migrations for schema changes"
+    from ace.retrieval import RenderedContextBlock
+
+    rendered_markdown = "- [ESTABLISHED] Approach: use migrations for schema changes"
+    rendered = RenderedContextBlock(
+        markdown=rendered_markdown,
+        item_ids=["ci-1"],
+        block_cache_key="k1",
+        mode="synthesizer",
+    )
     captured = {}
 
     def _tee(cmd, logger_name, **kwargs):
@@ -342,18 +350,91 @@ def test_generate_plan_passes_context_items_path_when_planner_active(
 
     # Recipe param was rendered to a temp file that contains the block
     assert "path" in captured, "context_items_path param not passed to goose"
-    assert captured["contents"] == rendered
+    assert captured["contents"] == rendered_markdown
 
     # Temp file cleaned up after the run
     assert not os.path.exists(captured["path"])
 
 
-def test_generate_plan_skips_context_items_when_block_empty(log_tmp, write_workplan_to_output):
-    """ACE planner on but no items retrieved → no param, no temp file."""
+def test_generate_plan_records_context_injection(log_tmp, write_workplan_to_output):
+    from ace.retrieval import RenderedContextBlock
+
+    rendered_markdown = "- [ESTABLISHED] Persist ACE injection metadata"
+    rendered = RenderedContextBlock(
+        markdown=rendered_markdown,
+        item_ids=["ci-1", "ci-2"],
+        block_cache_key="block-key-xyz",
+        mode="synthesizer",
+    )
     with (
         patch(_PATCH_TEE) as mock_tee,
         patch(_PATCH_SETTINGS, return_value=_make_settings(planner_active=True)),
-        patch(_PATCH_RENDER, return_value=""),
+        patch(_PATCH_RENDER, return_value=rendered),
+        patch("orchestrator.context_items.record_injection_event") as mock_record,
+        patch("orchestrator.context_items.emit_ace_injection") as mock_emit,
+    ):
+        mock_tee.side_effect = write_workplan_to_output
+        generate_plan({"ticket_key": "AOS-51", "workflow_id": "test-wf", "ticket": None})
+
+    mock_record.assert_called_once()
+    record_kwargs = mock_record.call_args.kwargs
+    assert record_kwargs["injection_point"] == "planner"
+    assert record_kwargs["synthesizer"] == "synthesizer"
+    assert record_kwargs["block_cache_key"] == "block-key-xyz"
+    assert list(record_kwargs["retrieved_item_ids"]) == ["ci-1", "ci-2"]
+
+    emit_kwargs = mock_emit.call_args.kwargs
+    assert emit_kwargs["rendered_length"] == len(rendered_markdown)
+    assert emit_kwargs["synthesizer"] == "synthesizer"
+    assert emit_kwargs["block_cache_key"] == "block-key-xyz"
+    assert emit_kwargs["item_ids"] == ["ci-1", "ci-2"]
+
+
+def test_generate_plan_records_one_event_per_clarification_reround(
+    log_tmp, write_workplan_to_output
+):
+    """Each clarification loop re-invokes the planner and appends one row."""
+    from ace.retrieval import RenderedContextBlock
+
+    rendered = RenderedContextBlock(
+        markdown="- [ESTABLISHED] Persist ACE injection metadata",
+        item_ids=["ci-1"],
+        block_cache_key="k1",
+        mode="synthesizer",
+    )
+    with (
+        patch(_PATCH_TEE) as mock_tee,
+        patch(_PATCH_SETTINGS, return_value=_make_settings(planner_active=True)),
+        patch(_PATCH_RENDER, return_value=rendered),
+        patch("orchestrator.context_items.record_injection_event") as mock_record,
+        patch("orchestrator.context_items.emit_ace_injection"),
+    ):
+        mock_tee.side_effect = write_workplan_to_output
+        # First planner pass
+        generate_plan({"ticket_key": "AOS-51", "workflow_id": "wf-1", "ticket": None})
+        # Second pass triggered by a clarification-loop re-run
+        generate_plan(
+            {
+                "ticket_key": "AOS-51",
+                "workflow_id": "wf-1",
+                "ticket": None,
+                "clarifications": [{"question": "?", "answer": "!"}],
+            }
+        )
+
+    assert mock_record.call_count == 2
+    assert all(c.kwargs["workflow_id"] == "wf-1" for c in mock_record.call_args_list)
+    assert all(c.kwargs["injection_point"] == "planner" for c in mock_record.call_args_list)
+
+
+def test_generate_plan_skips_context_items_when_block_empty(log_tmp, write_workplan_to_output):
+    """ACE planner on but no items retrieved → no param, no temp file."""
+    from ace.retrieval import RenderedContextBlock
+
+    with (
+        patch(_PATCH_TEE) as mock_tee,
+        patch(_PATCH_SETTINGS, return_value=_make_settings(planner_active=True)),
+        patch(_PATCH_RENDER, return_value=RenderedContextBlock()),
     ):
         mock_tee.side_effect = write_workplan_to_output
         generate_plan({"ticket_key": "AOS-51", "workflow_id": "test-wf", "ticket": None})

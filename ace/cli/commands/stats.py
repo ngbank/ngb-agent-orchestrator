@@ -7,15 +7,76 @@ pipeline code is called from here — all aggregation lives in the service.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+from typing import Optional
+
 import click
 
 from ace.service import AgentContextEngineService, StatsResult
+from state.sqlite_state_store import get_connection
 
 
-def _handle_stats(service: AgentContextEngineService) -> None:
-    """Fetch and print aggregate ACE store health metrics."""
+def _handle_stats(
+    service: AgentContextEngineService,
+    *,
+    ticket_key: Optional[str] = None,
+    workflow_id: Optional[str] = None,
+    since: Optional[str] = None,
+    until: Optional[str] = None,
+    injection_events_jsonl: Optional[str] = None,
+) -> None:
+    """Fetch health metrics and optionally export filtered injection events."""
     result = service.stats()
     click.echo(_format_stats(result))
+    if injection_events_jsonl:
+        count = _export_injection_events(
+            Path(injection_events_jsonl), ticket_key, workflow_id, since, until
+        )
+        click.echo(f"Exported {count} injection events to {injection_events_jsonl}")
+
+
+def _export_injection_events(
+    output_path: Path,
+    ticket_key: Optional[str],
+    workflow_id: Optional[str],
+    since: Optional[str],
+    until: Optional[str],
+) -> int:
+    """Export filtered event-to-durable-block provenance joins as JSONL."""
+    clauses: list[str] = []
+    params: list[str] = []
+    for column, value, operator in (
+        ("e.ticket_key", ticket_key, "="),
+        ("e.workflow_id", workflow_id, "="),
+        ("e.created_at", since, ">="),
+        ("e.created_at", until, "<"),
+    ):
+        if value:
+            clauses.append(f"{column} {operator} ?")
+            params.append(value)
+
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            f"""
+            SELECT e.*, b.rendered_markdown, b.provenance_manifest,
+                   b.input_item_ids AS block_input_item_ids
+            FROM ace_injection_events e
+            LEFT JOIN synthesized_context_blocks b ON b.cache_key = e.block_cache_key
+            {where}
+            ORDER BY e.created_at
+            """,
+            params,
+        ).fetchall()
+    finally:
+        conn.close()
+
+    with output_path.open("w") as output:
+        for row in rows:
+            output.write(json.dumps(dict(row), sort_keys=True) + "\n")
+    return len(rows)
 
 
 def _format_stats(result: StatsResult) -> str:

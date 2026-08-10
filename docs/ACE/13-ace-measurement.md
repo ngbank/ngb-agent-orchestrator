@@ -126,6 +126,12 @@ Controls:
 
 A common anti-pattern is celebrating improved first-pass approvals while contradiction and rollback indicators worsen. That should be treated as a warning, not a win.
 
+## Persisted injection-event measurement source
+
+`ace_injection_events` is the denominator source for injection exposure: each actual non-empty planner, code-generator, or PR-rerun invocation appends one row after rendering and before Goose input. The event records the injection point, workflow/ticket, rendered length, retrieved identifiers, and durable synthesized-block key. Offline evaluation must query this append-only history rather than infer injections from prompt logs.
+
+Use `ace stats --ticket-key TICKET --workflow-id ID --since ISO --until ISO --injection-events-jsonl PATH` to extract a JSONL event-to-block join. The join supplies the stored rendered markdown, provenance manifest, and synthesis input identifiers needed to attribute a utilization judgement to the exact injected block. Durable blocks outlive events, so retention of event history cannot break provenance joins.
+
 ## Instrumentation contract in orchestrator
 
 To make these metrics reliable, define explicit telemetry in planner/code generator outputs:
