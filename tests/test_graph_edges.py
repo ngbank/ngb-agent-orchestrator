@@ -5,6 +5,7 @@ destination — no I/O, no side-effects.
 """
 
 from orchestrator.builder import (
+    _route_after_approval,
     _route_after_generate_code,
     _route_after_pr_approval,
     _route_after_work_planner,
@@ -281,21 +282,21 @@ def test_route_after_pr_approval_commented():
 
 
 def test_route_after_pr_approval_approved():
-    """Approved decision must route to END."""
+    """Approved decision must route through the learning pipeline before END."""
     state = {"ticket_key": "AOS-50", "pr_approval_decision": "approved"}
-    assert _route_after_pr_approval(state) == "__end__"
+    assert _route_after_pr_approval(state) == "run_learning_pipeline"
 
 
 def test_route_after_pr_approval_rejected():
-    """Rejected decision must route to END."""
+    """Rejected decision must route through the learning pipeline before END."""
     state = {"ticket_key": "AOS-50", "pr_approval_decision": "rejected"}
-    assert _route_after_pr_approval(state) == "__end__"
+    assert _route_after_pr_approval(state) == "run_learning_pipeline"
 
 
 def test_route_after_pr_approval_missing():
-    """Missing pr_approval_decision must route to END."""
+    """Missing pr_approval_decision must route through the learning pipeline."""
     state = {"ticket_key": "AOS-50"}
-    assert _route_after_pr_approval(state) == "__end__"
+    assert _route_after_pr_approval(state) == "run_learning_pipeline"
 
 
 # ---------------------------------------------------------------------------
@@ -317,18 +318,18 @@ def test_route_after_work_planner_no_failure():
 
 def test_route_after_work_planner_error_only():
     state = {"ticket_key": "AOS-50", "error": "boom"}
-    assert _route_after_work_planner(state) == "__end__"
+    assert _route_after_work_planner(state) == "run_learning_pipeline"
 
 
 def test_route_after_work_planner_failed_node_only():
     """Regression: previously slipped through to await_approval."""
     state = {"ticket_key": "AOS-50", "failed_node": "validate_input"}
-    assert _route_after_work_planner(state) == "__end__"
+    assert _route_after_work_planner(state) == "run_learning_pipeline"
 
 
 def test_route_after_work_planner_both():
     state = {"ticket_key": "AOS-50", "error": "boom", "failed_node": "validate_input"}
-    assert _route_after_work_planner(state) == "__end__"
+    assert _route_after_work_planner(state) == "run_learning_pipeline"
 
 
 def test_route_after_generate_code_no_failure():
@@ -339,14 +340,35 @@ def test_route_after_generate_code_no_failure():
 def test_route_after_generate_code_error_only():
     """Regression: previously slipped through to await_pr_approval."""
     state = {"ticket_key": "AOS-50", "error": "boom"}
-    assert _route_after_generate_code(state) == "__end__"
+    assert _route_after_generate_code(state) == "run_learning_pipeline"
 
 
 def test_route_after_generate_code_failed_node_only():
     state = {"ticket_key": "AOS-50", "failed_node": "generate_code"}
-    assert _route_after_generate_code(state) == "__end__"
+    assert _route_after_generate_code(state) == "run_learning_pipeline"
 
 
 def test_route_after_generate_code_both():
     state = {"ticket_key": "AOS-50", "error": "boom", "failed_node": "generate_code"}
-    assert _route_after_generate_code(state) == "__end__"
+    assert _route_after_generate_code(state) == "run_learning_pipeline"
+
+
+# ---------------------------------------------------------------------------
+# _route_after_approval — every terminal path (rejection / missing decision)
+# funnels through the learning-pipeline tail before END.
+# ---------------------------------------------------------------------------
+
+
+def test_route_after_approval_approved():
+    state = {"ticket_key": "AOS-50", "approval_decision": "approved"}
+    assert _route_after_approval(state) == "generate_code"
+
+
+def test_route_after_approval_rejected():
+    state = {"ticket_key": "AOS-50", "approval_decision": "rejected"}
+    assert _route_after_approval(state) == "run_learning_pipeline"
+
+
+def test_route_after_approval_missing():
+    state = {"ticket_key": "AOS-50"}
+    assert _route_after_approval(state) == "run_learning_pipeline"

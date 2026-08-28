@@ -3,9 +3,12 @@ Top-level orchestrator graph builder.
 
 Creates a pipeline with a human-in-the-loop approval gate:
 
-    START → work_planner (subgraph) → await_approval → generate_code → await_pr_approval → END
-                                            ↓ rejected                        ↓ comment
-                                           END                          generate_code (loop)
+    START → work_planner (subgraph) → await_approval → generate_code →
+    await_pr_approval → run_learning_pipeline → END
+
+    Terminal branches (rejected / failed) short-circuit to
+    run_learning_pipeline. The PR-approval loop re-enters generate_code
+    on the "commented" decision.
 
 The ``work_planner`` subgraph handles all planning stages (fetch, generate,
 validate, store, post to Jira).  ``await_approval`` calls interrupt() so the
@@ -13,6 +16,11 @@ graph suspends until the developer explicitly approves or rejects via CLI.
 The ``generate_code`` node invokes the Goose generate recipe to implement the
 approved WorkPlan.  ``await_pr_approval`` calls interrupt() so the
 graph suspends until the PR is approved, commented on, or rejected via CLI.
+
+Every terminal path — approved, rejected, and failed — funnels through
+``run_learning_pipeline`` before END so the ACE mining pipeline runs
+automatically at workflow completion. The node is try/except-isolated: a
+mining failure never affects the workflow's terminal status.
 """
 
 import sqlite3
@@ -24,6 +32,7 @@ from orchestrator.code_generator.builder import build_code_generator
 from orchestrator.failure import has_failure
 from orchestrator.nodes.await_approval import await_approval
 from orchestrator.nodes.await_pr_approval import await_pr_approval
+from orchestrator.nodes.run_learning_pipeline import run_learning_pipeline
 from orchestrator.state import OrchestratorState
 from orchestrator.work_planner.builder import build_work_planner
 from state.observable_sqlite_saver import ObservableSqliteSaver
@@ -32,29 +41,30 @@ from state.workflow_repository import get_db_path
 
 def _route_after_work_planner(
     state: OrchestratorState,
-) -> Literal["await_approval", "__end__"]:
+) -> Literal["await_approval", "run_learning_pipeline"]:
     """Skip approval gate if the work_planner subgraph ended with an error.
 
     Uses ``has_failure`` so a node that populated only ``failed_node`` (or
-    only ``error``) still routes to END — the alternative was to check one
-    field and silently drop the other's failures on the floor.
+    only ``error``) still routes to the learning-pipeline tail — the
+    alternative was to check one field and silently drop the other's failures
+    on the floor.
     """
     if has_failure(state):
-        return "__end__"
+        return "run_learning_pipeline"
     return "await_approval"
 
 
 def _route_after_approval(
     state: OrchestratorState,
-) -> Literal["generate_code", "__end__"]:
+) -> Literal["generate_code", "run_learning_pipeline"]:
     if state.get("approval_decision") == "approved":
         return "generate_code"
-    return "__end__"
+    return "run_learning_pipeline"
 
 
 def _route_after_generate_code(
     state: OrchestratorState,
-) -> Literal["await_pr_approval", "__end__"]:
+) -> Literal["await_pr_approval", "run_learning_pipeline"]:
     """Skip PR approval gate when code generation failed (no PR was created).
 
     Uses ``has_failure`` for symmetry with ``_route_after_work_planner`` —
@@ -62,16 +72,16 @@ def _route_after_generate_code(
     populated which key.
     """
     if has_failure(state):
-        return "__end__"
+        return "run_learning_pipeline"
     return "await_pr_approval"
 
 
 def _route_after_pr_approval(
     state: OrchestratorState,
-) -> Literal["generate_code", "__end__"]:
+) -> Literal["generate_code", "run_learning_pipeline"]:
     if state.get("pr_approval_decision") == "commented":
         return "generate_code"
-    return "__end__"
+    return "run_learning_pipeline"
 
 
 def build_orchestrator(checkpointer=None):
@@ -97,27 +107,41 @@ def build_orchestrator(checkpointer=None):
     builder.add_node("await_approval", await_approval)
     builder.add_node("generate_code", code_generator)
     builder.add_node("await_pr_approval", await_pr_approval)
+    builder.add_node("run_learning_pipeline", run_learning_pipeline)
 
     builder.set_entry_point("work_planner")
     builder.add_conditional_edges(
         "work_planner",
         _route_after_work_planner,
-        {"await_approval": "await_approval", "__end__": END},
+        {
+            "await_approval": "await_approval",
+            "run_learning_pipeline": "run_learning_pipeline",
+        },
     )
     builder.add_conditional_edges(
         "await_approval",
         _route_after_approval,
-        {"generate_code": "generate_code", "__end__": END},
+        {
+            "generate_code": "generate_code",
+            "run_learning_pipeline": "run_learning_pipeline",
+        },
     )
     builder.add_conditional_edges(
         "generate_code",
         _route_after_generate_code,
-        {"await_pr_approval": "await_pr_approval", "__end__": END},
+        {
+            "await_pr_approval": "await_pr_approval",
+            "run_learning_pipeline": "run_learning_pipeline",
+        },
     )
     builder.add_conditional_edges(
         "await_pr_approval",
         _route_after_pr_approval,
-        {"generate_code": "generate_code", "__end__": END},
+        {
+            "generate_code": "generate_code",
+            "run_learning_pipeline": "run_learning_pipeline",
+        },
     )
+    builder.add_edge("run_learning_pipeline", END)
 
     return builder.compile(checkpointer=checkpointer)
