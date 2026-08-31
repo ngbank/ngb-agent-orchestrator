@@ -25,7 +25,7 @@ jira>=3.10.5
 
 # GitHub App Authentication
 PyJWT[crypto]>=2.9.0
-requests>=2.32.0
+requests>=2.34.2
 
 # HTTP client (used by HttpWorkflowService remote-mode dispatcher transport)
 httpx>=0.28.0
