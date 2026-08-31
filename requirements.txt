@@ -52,7 +52,7 @@ gunicorn>=26.0.0
 backoff>=2.2.1
 apscheduler>=3.11.2
 fastapi-sso>=0.21.1
-boto3>=1.43.29
+boto3>=1.43.82
 
 # MCP Server
 mcp>=2.0.0
